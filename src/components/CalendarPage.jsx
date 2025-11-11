@@ -20,7 +20,9 @@ export default function CalendarPage({ user, isDark }) {
   const loadTodoListForDate = async (date) => {
     setLoading(true)
     try {
-      const dateStr = date.toISOString().split('T')[0]
+      // 日本時間で日付を取得
+      const jstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000))
+      const dateStr = jstDate.toISOString().split('T')[0]
 
       const { data, error } = await supabase
         .from('todo_lists')
@@ -45,7 +47,9 @@ export default function CalendarPage({ user, isDark }) {
   }
 
   const createTodoListForDate = async (date) => {
-    const dateStr = date.toISOString().split('T')[0]
+    // 日本時間で日付を取得
+    const jstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000))
+    const dateStr = jstDate.toISOString().split('T')[0]
     
     const { data, error } = await supabase
       .from('todo_lists')

@@ -11,3 +11,7 @@ CREATE INDEX idx_users_slack_id ON users(slack_id);
 CREATE POLICY "Users can insert own data"
   ON users FOR INSERT
   WITH CHECK (auth.uid() = id);
+-- 開発環境でのみ実行してください
+  ALTER TABLE users DISABLE ROW LEVEL SECURITY;
+
+  

@@ -10,8 +10,16 @@ function App() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [isDark, setIsDark] = useState(false)
-  const [currentPage, setCurrentPage] = useState('home') // 'home', 'calendar', 'members', or 'settings'
+  // リロード時にも現在のページを保持
+  const [currentPage, setCurrentPage] = useState(() => {
+    return localStorage.getItem('currentPage') || 'home'
+  })
   const [sidebarOpen, setSidebarOpen] = useState(true)
+
+  // currentPageが変更されたらlocalStorageに保存
+  useEffect(() => {
+    localStorage.setItem('currentPage', currentPage)
+  }, [currentPage])
   const [userMenuOpen, setUserMenuOpen] = useState(false)
 
   // 17:00以降かどうかをチェック
