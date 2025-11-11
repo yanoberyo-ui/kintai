@@ -163,8 +163,10 @@ serve(async (req) => {
 });
 
 function formatTime(date: Date): string {
-  const hours = date.getHours().toString().padStart(2, '0');
-  const minutes = date.getMinutes().toString().padStart(2, '0');
+  // UTC時刻を日本時間（JST = UTC+9）に変換
+  const jstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000));
+  const hours = jstDate.getUTCHours().toString().padStart(2, '0');
+  const minutes = jstDate.getUTCMinutes().toString().padStart(2, '0');
   return `${hours}:${minutes}`;
 }
 

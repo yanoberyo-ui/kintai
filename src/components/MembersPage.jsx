@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { supabase } from '../utils/supabase'
 import { calculateProgress } from '../utils/todo'
 
@@ -11,12 +11,70 @@ export default function MembersPage({ isDark }) {
   const [attendanceStatus, setAttendanceStatus] = useState({})
   const [taskProgress, setTaskProgress] = useState({})
   const [showModal, setShowModal] = useState(false)
+  const [birthdayNotifications, setBirthdayNotifications] = useState({ today: [], tomorrow: [] })
+  const [showBirthdayPopup, setShowBirthdayPopup] = useState(false)
+  const [currentUser, setCurrentUser] = useState(null)
 
   useEffect(() => {
+    loadCurrentUser()
     loadMembers()
     loadAttendanceStatus()
     loadAllTaskProgress()
   }, [])
+
+  useEffect(() => {
+    if (members.length > 0 && currentUser) {
+      checkBirthdays()
+    }
+  }, [members, currentUser])
+
+  const loadCurrentUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+      setCurrentUser(data)
+    }
+  }
+
+  const checkBirthdays = () => {
+    // 日本時間で今日の日付を取得
+    const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+
+    const todayBirthdays = []
+    const tomorrowBirthdays = []
+    let isCurrentUserBirthday = false
+
+    members.forEach(member => {
+      if (!member.birthday) return
+
+      const birthday = new Date(member.birthday)
+      const birthdayThisYear = new Date(today.getFullYear(), birthday.getMonth(), birthday.getDate())
+      const tomorrowDate = new Date(today.getFullYear(), tomorrow.getMonth(), tomorrow.getDate())
+
+      // 今日が誕生日
+      if (birthdayThisYear.toDateString() === today.toDateString()) {
+        if (member.id === currentUser?.id) {
+          isCurrentUserBirthday = true
+        } else {
+          todayBirthdays.push(member)
+        }
+      }
+      // 明日が誕生日
+      else if (birthdayThisYear.toDateString() === tomorrowDate.toDateString()) {
+        tomorrowBirthdays.push(member)
+      }
+    })
+
+    setBirthdayNotifications({ today: todayBirthdays, tomorrow: tomorrowBirthdays })
+    
+    // ポップアップは自動で表示しない（出勤ボタン押下時に表示）
+  }
 
   useEffect(() => {
     if (selectedMember) {
@@ -43,7 +101,11 @@ export default function MembersPage({ isDark }) {
 
   const loadAttendanceStatus = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0]
+      // 日本時間で今日の日付を取得
+      const jstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+      const today = jstDate.toISOString().split('T')[0]
+      
+      console.log('Loading attendance for date:', today)
 
       const { data, error } = await supabase
         .from('attendances')
@@ -51,15 +113,19 @@ export default function MembersPage({ isDark }) {
         .eq('date', today)
 
       if (error) throw error
+      
+      console.log('Total attendance records found:', data?.length)
 
       const statusMap = {}
       data?.forEach(record => {
+        console.log('Attendance record:', record.user_id, 'status:', record.status, 'clock_out:', record.clock_out, 'date:', record.date)
         statusMap[record.user_id] = {
           status: record.status,
           clock_in: record.clock_in,
           clock_out: record.clock_out
         }
       })
+      console.log('Final statusMap:', statusMap)
       setAttendanceStatus(statusMap)
     } catch (error) {
       console.error('Error loading attendance status:', error)
@@ -68,7 +134,9 @@ export default function MembersPage({ isDark }) {
 
   const loadAllTaskProgress = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0]
+      // 日本時間で今日の日付を取得
+      const jstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+      const today = jstDate.toISOString().split('T')[0]
 
       const { data, error } = await supabase
         .from('todo_lists')
@@ -96,7 +164,9 @@ export default function MembersPage({ isDark }) {
 
   const loadMemberTasks = async (userId) => {
     try {
-      const today = new Date().toISOString().split('T')[0]
+      // 日本時間で今日の日付を取得
+      const jstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+      const today = jstDate.toISOString().split('T')[0]
 
       const { data, error } = await supabase
         .from('todo_lists')
@@ -121,7 +191,9 @@ export default function MembersPage({ isDark }) {
 
   const loadMemberAttendance = async (userId) => {
     try {
-      const today = new Date().toISOString().split('T')[0]
+      // 日本時間で今日の日付を取得
+      const jstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+      const today = jstDate.toISOString().split('T')[0]
 
       const { data, error } = await supabase
         .from('attendances')
@@ -164,7 +236,69 @@ export default function MembersPage({ isDark }) {
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <>
+      {/* クラッカーアニメーション（本人の誕生日） */}
+      {showBirthdayPopup && isCurrentUserBirthday && <ConfettiAnimation />}
+
+      {/* 誕生日ポップアップ */}
+      {showBirthdayPopup && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => setShowBirthdayPopup(false)}
+        >
+          <div
+            className={`max-w-md w-full rounded-3xl shadow-2xl border p-8 ${
+              isDark
+                ? 'bg-gray-900/95 border-gray-800/50'
+                : 'bg-white/95 border-gray-200/50'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center">
+              <div className="text-6xl mb-4">🎉</div>
+              {isCurrentUserBirthday ? (
+                <>
+                  <h2 className={`text-3xl font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    誕生日おめでとうございます！
+                  </h2>
+                  <p className={`text-lg ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                    素敵な一年になりますように
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2 className={`text-2xl font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    今日は
+                    {birthdayNotifications.today.map((member, index) => (
+                      <span key={member.id}>
+                        {index > 0 && '、'}
+                        <span className="text-blue-500">{member.name || member.email.split('@')[0]}</span>
+                        さん
+                      </span>
+                    ))}
+                    のお誕生日です！
+                  </h2>
+                  <p className={`text-lg ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                    お祝いしましょう！
+                  </p>
+                </>
+              )}
+              <button
+                onClick={() => setShowBirthdayPopup(false)}
+                className={`mt-6 px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
+                  isDark
+                    ? 'bg-white text-gray-900 hover:bg-gray-100'
+                    : 'bg-gray-900 text-white hover:bg-gray-800'
+                }`}
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-7xl mx-auto">
       {/* ページタイトル */}
       <div className="mb-6">
         <h1 className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
@@ -174,6 +308,37 @@ export default function MembersPage({ isDark }) {
           チームメンバーと今日のタスクを確認
         </p>
       </div>
+
+      {/* 明日の誕生日通知 */}
+      {birthdayNotifications.tomorrow.length > 0 && (
+        <div className={`mb-6 backdrop-blur-xl rounded-3xl shadow-lg border p-6 transition-colors duration-500 ${
+          isDark
+            ? 'bg-gradient-to-r from-purple-900/80 to-pink-900/80 shadow-black/50 border-purple-800/50'
+            : 'bg-gradient-to-r from-purple-100/80 to-pink-100/80 shadow-purple-200/50 border-purple-200/50'
+        }`}>
+          <div className="flex items-center gap-4">
+            <div className="text-4xl">🎂</div>
+            <div>
+              <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                明日は
+                {birthdayNotifications.tomorrow.map((member, index) => (
+                  <span key={member.id}>
+                    {index > 0 && '、'}
+                    <span className={isDark ? 'text-purple-300' : 'text-purple-700'}>
+                      {member.name || member.email.split('@')[0]}
+                    </span>
+                    さん
+                  </span>
+                ))}
+                のお誕生日です！
+              </h3>
+              <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                準備をお忘れなく
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ギャラリービュー */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -251,12 +416,26 @@ export default function MembersPage({ isDark }) {
                       ? isDark
                         ? 'bg-gray-300 text-gray-900'
                         : 'bg-gray-500 text-white'
+                      : attendanceStatus[member.id].status === 'completed'
+                      ? isDark
+                        ? 'bg-blue-900/50 text-blue-300'
+                        : 'bg-blue-100 text-blue-700'
                       : isDark
                       ? 'bg-gray-700 text-gray-300'
                       : 'bg-gray-300 text-gray-700'
                   }`}>
-                    {attendanceStatus[member.id].status === 'working' ? '出勤中' :
-                     attendanceStatus[member.id].status === 'break' ? '休憩中' : '退勤済'}
+                    {(() => {
+                      const status = attendanceStatus[member.id].status
+                      const clockOut = attendanceStatus[member.id].clock_out
+                      console.log(`Member: ${member.name || member.email}, Status from DB: "${status}", Clock out: ${clockOut}`)
+                      
+                      if (status === 'working') return '出勤中'
+                      if (status === 'break') return '休憩中'
+                      if (status === 'completed') return '退勤済'
+                      
+                      console.warn(`Unknown status: "${status}" for ${member.name || member.email}`)
+                      return `不明(${status})`
+                    })()}
                   </div>
                 ) : (
                   <div className={`px-3 py-1.5 rounded-full text-xs font-bold ${
@@ -332,14 +511,17 @@ export default function MembersPage({ isDark }) {
                   <div className={`text-sm font-medium mb-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                     {memberAttendance?.status === 'working' ? '出勤中' :
                      memberAttendance?.status === 'break' ? '休憩中' :
-                     memberAttendance?.status === 'finished' ? '退勤済' : '未出勤'}
+                     memberAttendance?.status === 'completed' ? '退勤済' : '未出勤'}
                   </div>
                   <div className={`text-5xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
                     {(() => {
                       if (!memberAttendance?.clock_in) return '0:00'
                       
                       try {
-                        const today = new Date().toISOString().split('T')[0]
+                        // 日本時間で今日の日付を取得
+                        const jstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+                        const today = jstDate.toISOString().split('T')[0]
+                        
                         const clockInTime = memberAttendance.clock_in.includes('T') 
                           ? memberAttendance.clock_in.split('T')[1] 
                           : memberAttendance.clock_in
@@ -353,7 +535,7 @@ export default function MembersPage({ isDark }) {
                             : memberAttendance.clock_out
                           clockOut = new Date(`${today}T${clockOutTime}`)
                         } else {
-                          clockOut = new Date()
+                          clockOut = jstDate
                         }
                         
                         const diff = clockOut - clockIn
@@ -456,6 +638,38 @@ export default function MembersPage({ isDark }) {
           </div>
         </div>
       )}
+    </div>
+    </>
+  )
+}
+
+// クラッカーアニメーションコンポーネント（TodoListから再利用）
+function ConfettiAnimation() {
+  const confettiPieces = Array.from({ length: 50 }, (_, i) => ({
+    id: i,
+    left: Math.random() * 100,
+    delay: Math.random() * 0.5,
+    duration: 2 + Math.random() * 2,
+    rotation: Math.random() * 360,
+    color: ['#FF6B6B', '#4ECDC4', '#FFE66D', '#95E1D3', '#F38181', '#AA96DA', '#FCBAD3'][Math.floor(Math.random() * 7)]
+  }))
+
+  return (
+    <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+      {confettiPieces.map((piece) => (
+        <div
+          key={piece.id}
+          className="absolute w-3 h-3 animate-confetti-fall"
+          style={{
+            left: `${piece.left}%`,
+            top: '-5%',
+            backgroundColor: piece.color,
+            animationDelay: `${piece.delay}s`,
+            animationDuration: `${piece.duration}s`,
+            transform: `rotate(${piece.rotation}deg)`,
+          }}
+        />
+      ))}
     </div>
   )
 }

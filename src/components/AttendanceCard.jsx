@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { getTodayAttendance, clockIn, clockOut } from '../utils/attendance'
 import { sendSlackNotification } from '../utils/slack'
 import { getTodayTodoList } from '../utils/todo'
+import { supabase } from '../utils/supabase'
 
 export default function AttendanceCard({ user, isDark }) {
   const [attendance, setAttendance] = useState(null)
@@ -9,12 +10,21 @@ export default function AttendanceCard({ user, isDark }) {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [showBreakModal, setShowBreakModal] = useState(false)
   const [breakMinutes, setBreakMinutes] = useState('')
+  const [showBirthdayPopup, setShowBirthdayPopup] = useState(false)
+  const [birthdayData, setBirthdayData] = useState({ isCurrentUser: false, members: [] })
+  const [showConfetti, setShowConfetti] = useState(false)
 
   useEffect(() => {
     loadAttendance()
-    const timer = setInterval(() => {
-      setCurrentTime(new Date())
-    }, 1000)
+    
+    // 日本時間で現在時刻を更新
+    const updateJSTTime = () => {
+      const jstTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+      setCurrentTime(jstTime)
+    }
+    
+    updateJSTTime()
+    const timer = setInterval(updateJSTTime, 1000)
 
     return () => clearInterval(timer)
   }, [user])
@@ -47,10 +57,59 @@ export default function AttendanceCard({ user, isDark }) {
         result,
         todoItems
       )
+
+      // 誕生日チェック
+      await checkBirthdays()
     } catch (error) {
       console.error('Error clocking in:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const checkBirthdays = async () => {
+    try {
+      // 日本時間で今日の日付を取得
+      const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+      
+      // 全メンバー取得
+      const { data: members, error } = await supabase
+        .from('users')
+        .select('*')
+      
+      if (error) throw error
+
+      const todayBirthdays = []
+      let isCurrentUserBirthday = false
+
+      members.forEach(member => {
+        if (!member.birthday) return
+
+        const birthday = new Date(member.birthday)
+        const birthdayThisYear = new Date(today.getFullYear(), birthday.getMonth(), birthday.getDate())
+
+        if (birthdayThisYear.toDateString() === today.toDateString()) {
+          if (member.id === user.id) {
+            isCurrentUserBirthday = true
+          } else {
+            todayBirthdays.push(member)
+          }
+        }
+      })
+
+      // 誕生日がある場合のみポップアップ表示
+      if (isCurrentUserBirthday || todayBirthdays.length > 0) {
+        setBirthdayData({ isCurrentUser: isCurrentUserBirthday, members: todayBirthdays })
+        setShowBirthdayPopup(true)
+        
+        // 本人の誕生日の場合はクラッカーも表示
+        if (isCurrentUserBirthday) {
+          setShowConfetti(true)
+          setTimeout(() => setShowConfetti(false), 4000)
+        }
+      }
+    } catch (error) {
+      console.error('Error checking birthdays:', error)
     }
   }
 
@@ -101,8 +160,25 @@ export default function AttendanceCard({ user, isDark }) {
   const getWorkDuration = () => {
     if (!attendance?.clock_in) return '0:00'
 
-    const start = new Date(attendance.clock_in)
-    const end = attendance.clock_out ? new Date(attendance.clock_out) : currentTime
+    // 日本時間（JST）で今日の日付を取得
+    const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+    const today = jstNow.toISOString().split('T')[0]
+    
+    const clockInTime = attendance.clock_in.includes('T') 
+      ? attendance.clock_in.split('T')[1] 
+      : attendance.clock_in
+    const start = new Date(`${today}T${clockInTime}`)
+    
+    let end
+    if (attendance.clock_out) {
+      const clockOutTime = attendance.clock_out.includes('T')
+        ? attendance.clock_out.split('T')[1]
+        : attendance.clock_out
+      end = new Date(`${today}T${clockOutTime}`)
+    } else {
+      end = jstNow
+    }
+    
     const diff = Math.floor((end - start) / 1000 / 60) // 分
 
     const hours = Math.floor(diff / 60)
@@ -113,16 +189,83 @@ export default function AttendanceCard({ user, isDark }) {
 
   const formatTime = (dateString) => {
     if (!dateString) return '--:--'
-    const date = new Date(dateString)
-    return `${date.getHours().toString().padStart(2, '0')}:${date
-      .getMinutes()
-      .toString()
-      .padStart(2, '0')}`
+    
+    // UTC時刻を日本時間に変換
+    const utcDate = new Date(dateString)
+    const jstDate = new Date(utcDate.getTime() + (9 * 60 * 60 * 1000))
+    
+    const hours = jstDate.getUTCHours()
+    const minutes = jstDate.getUTCMinutes()
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
   }
 
   const status = getStatus()
 
   return (
+    <>
+      {/* クラッカーアニメーション（本人の誕生日） */}
+      {showConfetti && <ConfettiAnimation />}
+
+      {/* 誕生日ポップアップ */}
+      {showBirthdayPopup && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => setShowBirthdayPopup(false)}
+        >
+          <div
+            className={`max-w-md w-full rounded-3xl shadow-2xl border p-8 ${
+              isDark
+                ? 'bg-gray-900/95 border-gray-800/50'
+                : 'bg-white/95 border-gray-200/50'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center">
+              <div className="text-6xl mb-4">🎉</div>
+              {birthdayData.isCurrentUser ? (
+                <>
+                  <h2 className={`text-3xl font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    誕生日おめでとうございます！
+                  </h2>
+                  <p className={`text-lg ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                    素敵な一年になりますように
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2 className={`text-2xl font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    今日は
+                    {birthdayData.members.map((member, index) => (
+                      <span key={member.id}>
+                        {index > 0 && '、'}
+                        <span className="text-blue-500">{member.name || member.email.split('@')[0]}</span>
+                        さん
+                      </span>
+                    ))}
+                    のお誕生日です！
+                  </h2>
+                  <p className={`text-lg ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                    お祝いしましょう！
+                  </p>
+                </>
+              )}
+              <button
+                onClick={() => setShowBirthdayPopup(false)}
+                className={`mt-6 px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
+                  isDark
+                    ? 'bg-white text-gray-900 hover:bg-gray-100'
+                    : 'bg-gray-900 text-white hover:bg-gray-800'
+                }`}
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    
     <div className={`backdrop-blur-xl rounded-3xl shadow-lg border p-8 transition-colors duration-500 ${
       isDark
         ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
@@ -278,6 +421,38 @@ export default function AttendanceCard({ user, isDark }) {
           </div>
         </div>
       )}
+    </div>
+    </>
+  )
+}
+
+// クラッカーアニメーションコンポーネント
+function ConfettiAnimation() {
+  const confettiPieces = Array.from({ length: 50 }, (_, i) => ({
+    id: i,
+    left: Math.random() * 100,
+    delay: Math.random() * 0.5,
+    duration: 2 + Math.random() * 2,
+    rotation: Math.random() * 360,
+    color: ['#FF6B6B', '#4ECDC4', '#FFE66D', '#95E1D3', '#F38181', '#AA96DA', '#FCBAD3'][Math.floor(Math.random() * 7)]
+  }))
+
+  return (
+    <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+      {confettiPieces.map((piece) => (
+        <div
+          key={piece.id}
+          className="absolute w-3 h-3 animate-confetti-fall"
+          style={{
+            left: `${piece.left}%`,
+            top: '-5%',
+            backgroundColor: piece.color,
+            animationDelay: `${piece.delay}s`,
+            animationDuration: `${piece.duration}s`,
+            transform: `rotate(${piece.rotation}deg)`,
+          }}
+        />
+      ))}
     </div>
   )
 }
