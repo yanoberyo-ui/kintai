@@ -178,10 +178,10 @@ function App() {
               </div>
             </button>
 
-            {/* ユーザーアイコンボタン */}
+            {/* ユーザーアイコンボタン (モバイルのみ) */}
             <button
               onClick={() => setUserMenuOpen(!userMenuOpen)}
-              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 relative ${
+              className={`md:hidden md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 relative ${
                 userMenuOpen
                   ? isDark
                     ? 'bg-white text-gray-900'
