@@ -2,8 +2,16 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../utils/supabase'
 
 export default function SettingsPage({ user, isDark, setIsDark }) {
-  const [userData, setUserData] = useState(null)
+  const [userData, setUserData] = useState({
+    name: '',
+    slack_user_id: '',
+    department: '',
+    birthday: '',
+  })
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  const [isEditing, setIsEditing] = useState(false)
 
   useEffect(() => {
     loadUserData()
@@ -18,11 +26,44 @@ export default function SettingsPage({ user, isDark, setIsDark }) {
         .single()
 
       if (error) throw error
-      setUserData(data)
+      setUserData({
+        name: data.name || '',
+        slack_user_id: data.slack_user_id || '',
+        department: data.department || '',
+        birthday: data.birthday || '',
+      })
     } catch (error) {
       console.error('Error loading user data:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleSave = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    setMessage('')
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({
+          name: userData.name,
+          slack_user_id: userData.slack_user_id || null,
+          department: userData.department || null,
+          birthday: userData.birthday || null,
+        })
+        .eq('id', user.id)
+
+      if (error) throw error
+
+      setMessage('✅ 保存しました！')
+      setIsEditing(false)
+      setTimeout(() => setMessage(''), 3000)
+    } catch (error) {
+      setMessage('❌ エラー: ' + error.message)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -54,11 +95,25 @@ export default function SettingsPage({ user, isDark, setIsDark }) {
           ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
           : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
       }`}>
-        <h2 className={`text-xl font-bold mb-6 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-          アカウント情報
-        </h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            アカウント情報
+          </h2>
+          {!isEditing && (
+            <button
+              onClick={() => setIsEditing(true)}
+              className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                isDark
+                  ? 'bg-white text-gray-900 hover:bg-gray-100'
+                  : 'bg-gray-900 text-white hover:bg-gray-800'
+              }`}
+            >
+              ✏️ 編集
+            </button>
+          )}
+        </div>
 
-        <div className="space-y-4">
+        <form onSubmit={handleSave} className="space-y-6">
           {/* アバター */}
           <div className="flex items-center gap-4">
             <div className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold text-white ${
@@ -76,61 +131,165 @@ export default function SettingsPage({ user, isDark, setIsDark }) {
             </div>
           </div>
 
-          {/* ユーザー詳細情報 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+          {/* フィールド */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* 名前 */}
             <div>
               <label className={`block text-sm font-medium mb-2 ${
                 isDark ? 'text-gray-300' : 'text-gray-700'
               }`}>
-                氏名
+                氏名 <span className="text-red-500">*</span>
               </label>
-              <div className={`px-4 py-3 rounded-xl ${
-                isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
-              }`}>
-                {userData?.name || '-'}
-              </div>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={userData.name}
+                  onChange={(e) => setUserData({ ...userData, name: e.target.value })}
+                  required
+                  className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
+                    isDark
+                      ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
+                      : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
+                  }`}
+                  placeholder="山田太郎"
+                />
+              ) : (
+                <div className={`px-4 py-3 rounded-xl ${
+                  isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
+                }`}>
+                  {userData?.name || '-'}
+                </div>
+              )}
             </div>
 
+            {/* Slack ID */}
             <div>
               <label className={`block text-sm font-medium mb-2 ${
                 isDark ? 'text-gray-300' : 'text-gray-700'
               }`}>
                 Slack ID
               </label>
-              <div className={`px-4 py-3 rounded-xl ${
-                isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
-              }`}>
-                {userData?.slack_id || '-'}
-              </div>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={userData.slack_user_id}
+                  onChange={(e) => setUserData({ ...userData, slack_user_id: e.target.value })}
+                  className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
+                    isDark
+                      ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
+                      : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
+                  }`}
+                  placeholder="U01234ABCDE"
+                />
+              ) : (
+                <div className={`px-4 py-3 rounded-xl ${
+                  isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
+                }`}>
+                  {userData?.slack_user_id || '-'}
+                </div>
+              )}
             </div>
 
+            {/* 部署 */}
             <div>
               <label className={`block text-sm font-medium mb-2 ${
                 isDark ? 'text-gray-300' : 'text-gray-700'
               }`}>
                 部署
               </label>
-              <div className={`px-4 py-3 rounded-xl ${
-                isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
-              }`}>
-                {userData?.department || '-'}
-              </div>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={userData.department}
+                  onChange={(e) => setUserData({ ...userData, department: e.target.value })}
+                  className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
+                    isDark
+                      ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
+                      : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
+                  }`}
+                  placeholder="開発部"
+                />
+              ) : (
+                <div className={`px-4 py-3 rounded-xl ${
+                  isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
+                }`}>
+                  {userData?.department || '-'}
+                </div>
+              )}
             </div>
 
+            {/* 誕生日 */}
             <div>
               <label className={`block text-sm font-medium mb-2 ${
                 isDark ? 'text-gray-300' : 'text-gray-700'
               }`}>
-                権限
+                誕生日
               </label>
-              <div className={`px-4 py-3 rounded-xl ${
-                isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
-              }`}>
-                {userData?.role === 'admin' ? '管理者' : 'ユーザー'}
-              </div>
+              {isEditing ? (
+                <input
+                  type="date"
+                  value={userData.birthday}
+                  onChange={(e) => setUserData({ ...userData, birthday: e.target.value })}
+                  className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
+                    isDark
+                      ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
+                      : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
+                  }`}
+                />
+              ) : (
+                <div className={`px-4 py-3 rounded-xl ${
+                  isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
+                }`}>
+                  {userData?.birthday || '-'}
+                </div>
+              )}
             </div>
           </div>
-        </div>
+
+          {/* メッセージ */}
+          {message && (
+            <div className={`p-4 rounded-xl ${
+              message.includes('✅')
+                ? 'bg-green-500/10 text-green-500'
+                : 'bg-red-500/10 text-red-500'
+            }`}>
+              {message}
+            </div>
+          )}
+
+          {/* 保存・キャンセルボタン */}
+          {isEditing && (
+            <div className="flex gap-3">
+              <button
+                type="submit"
+                disabled={saving}
+                className={`flex-1 py-3 rounded-xl font-medium transition-all duration-200 ${
+                  saving
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : isDark
+                    ? 'bg-white text-gray-900 hover:bg-gray-100'
+                    : 'bg-gray-900 text-white hover:bg-gray-800'
+                }`}
+              >
+                {saving ? '保存中...' : '💾 保存'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditing(false)
+                  loadUserData()
+                }}
+                className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
+                  isDark
+                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                キャンセル
+              </button>
+            </div>
+          )}
+        </form>
       </div>
 
       {/* 表示設定 */}

@@ -365,6 +365,7 @@ function LoginScreen({ isDark }) {
   const [name, setName] = useState('')
   const [slackId, setSlackId] = useState('')
   const [department, setDepartment] = useState('')
+  const [birthday, setBirthday] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
@@ -411,6 +412,7 @@ function LoginScreen({ isDark }) {
             slack_user_id: slackId,
             role: 'user',
             department: department || null,
+            birthday: birthday || null,
           },
         ])
 
@@ -421,6 +423,7 @@ function LoginScreen({ isDark }) {
       setName('')
       setSlackId('')
       setDepartment('')
+      setBirthday('')
     } catch (error) {
       setError(error.message)
     } finally {
@@ -546,6 +549,24 @@ function LoginScreen({ isDark }) {
                         : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
                     }`}
                     placeholder="開発部"
+                  />
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${
+                    isDark ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    誕生日（任意）
+                  </label>
+                  <input
+                    type="date"
+                    value={birthday}
+                    onChange={(e) => setBirthday(e.target.value)}
+                    className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
+                      isDark
+                        ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
+                        : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
+                    }`}
                   />
                 </div>
               </>
