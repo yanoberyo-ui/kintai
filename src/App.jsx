@@ -408,7 +408,7 @@ function LoginScreen({ isDark }) {
             id: authData.user.id,
             email: email,
             name: name,
-            slack_id: slackId,
+            slack_user_id: slackId,
             role: 'user',
             department: department || null,
           },
