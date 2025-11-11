@@ -1,0 +1,622 @@
+import { supabase } from './utils/supabase.js';
+import {
+  getTodayAttendance,
+  clockIn,
+  clockOut,
+  startBreak,
+  endBreak,
+  getAttendanceStatus
+} from './utils/attendance.js';
+import {
+  getTodayTodoList,
+  createTodayTodoList,
+  updateTodoListTitle,
+  addTodoItem,
+  updateTodoItem,
+  deleteTodoItem,
+  toggleTodoItem,
+  calculateProgress
+} from './utils/todo.js';
+
+// グローバルステート
+let currentUser = null;
+let currentAttendance = null;
+let currentTodoList = null;
+let updateInterval = null;
+
+// DOM要素
+const loginScreen = document.getElementById('login-screen');
+const attendanceScreen = document.getElementById('attendance-screen');
+const loginButton = document.getElementById('login-button');
+const logoutButton = document.getElementById('logout-btn');
+const errorMessage = document.getElementById('error-message');
+const successMessage = document.getElementById('success-message');
+
+// 打刻ボタン
+const clockInBtn = document.getElementById('clock-in-btn');
+const clockOutBtn = document.getElementById('clock-out-btn');
+const breakStartBtn = document.getElementById('break-start-btn');
+const breakEndBtn = document.getElementById('break-end-btn');
+
+// TODOリスト
+const todoTitle = document.getElementById('todo-title');
+const newTodoInput = document.getElementById('new-todo-input');
+const addTodoBtn = document.getElementById('add-todo-btn');
+
+// 完了タスクの表示状態
+let isCompletedVisible = true;
+
+// 初期化
+document.addEventListener('DOMContentLoaded', async () => {
+  // 認証状態のチェック
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
+    await loadUser(session.user.id);
+    showAttendanceScreen();
+  } else {
+    showLoginScreen();
+  }
+
+  // イベントリスナーの設定
+  setupEventListeners();
+});
+
+function setupEventListeners() {
+  // ログイン
+  loginButton.addEventListener('click', handleLogin);
+  document.getElementById('login-email').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') handleLogin();
+  });
+  document.getElementById('login-password').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') handleLogin();
+  });
+
+  // ログアウト
+  logoutButton.addEventListener('click', handleLogout);
+
+  // 打刻ボタン
+  clockInBtn.addEventListener('click', handleClockIn);
+  clockOutBtn.addEventListener('click', handleClockOut);
+  breakStartBtn.addEventListener('click', handleBreakStart);
+  breakEndBtn.addEventListener('click', handleBreakEnd);
+
+  // TODO
+  addTodoBtn.addEventListener('click', handleAddTodo);
+  newTodoInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') handleAddTodo();
+  });
+  todoTitle.addEventListener('blur', handleUpdateTodoTitle);
+
+  // 完了タスクの折りたたみ
+  const toggleCompletedBtn = document.getElementById('toggle-completed-btn');
+  const completedContainer = document.getElementById('todo-items-completed');
+  const toggleIcon = document.getElementById('toggle-icon');
+
+  if (toggleCompletedBtn) {
+    toggleCompletedBtn.addEventListener('click', () => {
+      isCompletedVisible = !isCompletedVisible;
+      if (completedContainer) {
+        completedContainer.classList.toggle('hidden');
+      }
+      if (toggleIcon) {
+        toggleIcon.textContent = isCompletedVisible ? '▼' : '▶';
+      }
+    });
+  }
+}
+
+// ログイン処理
+async function handleLogin() {
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+
+  try {
+    showLoading(loginButton, 'ログイン中...');
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error) throw error;
+
+    await loadUser(data.user.id);
+    showAttendanceScreen();
+    showSuccess('ログインしました');
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    hideLoading(loginButton, 'ログイン');
+  }
+}
+
+// ログアウト処理
+async function handleLogout() {
+  try {
+    await supabase.auth.signOut();
+    currentUser = null;
+    currentAttendance = null;
+    currentTodoList = null;
+
+    if (updateInterval) {
+      clearInterval(updateInterval);
+      updateInterval = null;
+    }
+
+    showLoginScreen();
+    showSuccess('ログアウトしました');
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
+// ユーザー情報の読み込み
+async function loadUser(userId) {
+  try {
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (error) throw error;
+
+    currentUser = user;
+    document.getElementById('user-name').textContent = user.name;
+
+    // 今日の勤怠データを取得
+    await loadTodayAttendance();
+
+    // TODOリストを取得
+    await loadTodoList();
+
+    // 月次サマリーを取得
+    await loadMonthlySummary();
+
+    // 定期更新を開始
+    startPeriodicUpdate();
+  } catch (error) {
+    showError('ユーザー情報の取得に失敗しました: ' + error.message);
+  }
+}
+
+// 今日の勤怠データを読み込み
+async function loadTodayAttendance() {
+  try {
+    currentAttendance = await getTodayAttendance(currentUser.id);
+    updateAttendanceUI();
+  } catch (error) {
+    showError('勤怠データの取得に失敗しました: ' + error.message);
+  }
+}
+
+// 出勤打刻
+async function handleClockIn() {
+  try {
+    showLoading(clockInBtn, '打刻中...');
+    currentAttendance = await clockIn(currentUser.id);
+    updateAttendanceUI();
+    showSuccess('出勤しました');
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    hideLoading(clockInBtn, '🌅 出勤する');
+  }
+}
+
+// 退勤打刻
+async function handleClockOut() {
+  if (!confirm('退勤しますか？')) return;
+
+  try {
+    showLoading(clockOutBtn, '打刻中...');
+    currentAttendance = await clockOut(currentUser.id);
+    updateAttendanceUI();
+    showSuccess('退勤しました');
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    hideLoading(clockOutBtn, '🌆 退勤する');
+  }
+}
+
+// 休憩開始
+async function handleBreakStart() {
+  try {
+    showLoading(breakStartBtn, '記録中...');
+    currentAttendance = await startBreak(currentUser.id);
+    updateAttendanceUI();
+    showSuccess('休憩を開始しました');
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    hideLoading(breakStartBtn, '☕ 休憩開始');
+  }
+}
+
+// 休憩終了
+async function handleBreakEnd() {
+  try {
+    showLoading(breakEndBtn, '記録中...');
+    currentAttendance = await endBreak(currentUser.id);
+    updateAttendanceUI();
+    showSuccess('休憩を終了しました');
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    hideLoading(breakEndBtn, '🟢 休憩終了');
+  }
+}
+
+// 勤怠UIの更新
+function updateAttendanceUI() {
+  const status = getAttendanceStatus(currentAttendance);
+  const statusBadge = document.getElementById('status-badge');
+  const timeDisplay = document.getElementById('time-display');
+  const completedSummary = document.getElementById('completed-summary');
+
+  // ステータスバッジの更新
+  switch (status) {
+    case 'not_started':
+      statusBadge.textContent = '未出勤';
+      statusBadge.className = 'status-badge bg-gray-200 text-gray-800';
+      clockInBtn.classList.remove('hidden');
+      clockOutBtn.classList.add('hidden');
+      breakStartBtn.classList.add('hidden');
+      breakEndBtn.classList.add('hidden');
+      timeDisplay.classList.add('hidden');
+      completedSummary.classList.add('hidden');
+      break;
+
+    case 'working':
+      statusBadge.textContent = '出勤中';
+      statusBadge.className = 'status-badge bg-green-200 text-green-800';
+      clockInBtn.classList.add('hidden');
+      clockOutBtn.classList.remove('hidden');
+      timeDisplay.classList.remove('hidden');
+      completedSummary.classList.add('hidden');
+
+      // 休憩ボタンの状態
+      const breakUsed = currentAttendance.break_minutes_used || 0;
+      if (breakUsed >= 60) {
+        breakStartBtn.classList.add('hidden');
+      } else {
+        breakStartBtn.classList.remove('hidden');
+        document.getElementById('break-remaining').textContent = 60 - breakUsed;
+      }
+      breakEndBtn.classList.add('hidden');
+
+      updateTimeDisplay();
+      break;
+
+    case 'on_break':
+      statusBadge.textContent = '休憩中';
+      statusBadge.className = 'status-badge bg-yellow-200 text-yellow-800';
+      clockInBtn.classList.add('hidden');
+      clockOutBtn.classList.add('hidden');
+      breakStartBtn.classList.add('hidden');
+      breakEndBtn.classList.remove('hidden');
+      timeDisplay.classList.remove('hidden');
+      completedSummary.classList.add('hidden');
+
+      updateTimeDisplay();
+      break;
+
+    case 'completed':
+      statusBadge.textContent = '退勤済み';
+      statusBadge.className = 'status-badge bg-blue-200 text-blue-800';
+      clockInBtn.classList.add('hidden');
+      clockOutBtn.classList.add('hidden');
+      breakStartBtn.classList.add('hidden');
+      breakEndBtn.classList.add('hidden');
+      timeDisplay.classList.add('hidden');
+      completedSummary.classList.remove('hidden');
+
+      updateCompletedSummary();
+      break;
+  }
+}
+
+// 時刻表示の更新
+function updateTimeDisplay() {
+  if (!currentAttendance || !currentAttendance.clock_in) return;
+
+  const clockInTime = new Date(currentAttendance.clock_in);
+  const now = new Date();
+
+  document.getElementById('clock-in-time').textContent = formatTime(clockInTime);
+  document.getElementById('current-time').textContent = formatTime(now);
+
+  const minutes = Math.floor((now - clockInTime) / 60000);
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+
+  document.getElementById('work-duration').textContent = `${hours}時間${mins}分`;
+}
+
+// 退勤済みサマリーの更新
+function updateCompletedSummary() {
+  if (!currentAttendance) return;
+
+  const clockIn = new Date(currentAttendance.clock_in);
+  const clockOut = new Date(currentAttendance.clock_out);
+
+  document.getElementById('summary-times').textContent =
+    `${formatTime(clockIn)} - ${formatTime(clockOut)}`;
+
+  const breakMinutes = currentAttendance.break_minutes_used || 0;
+  const breakHours = Math.floor(breakMinutes / 60);
+  const breakMins = breakMinutes % 60;
+  document.getElementById('summary-break').textContent = `${breakHours}時間${breakMins}分`;
+
+  const workMinutes = currentAttendance.total_work_minutes || 0;
+  const workHours = Math.floor(workMinutes / 60);
+  const workMins = workMinutes % 60;
+  document.getElementById('summary-work').textContent = `${workHours}時間${workMins}分`;
+}
+
+// TODOリストの読み込み
+async function loadTodoList() {
+  try {
+    currentTodoList = await getTodayTodoList(currentUser.id);
+
+    if (!currentTodoList) {
+      currentTodoList = await createTodayTodoList(currentUser.id);
+      currentTodoList.todo_items = [];
+    }
+
+    updateTodoUI();
+  } catch (error) {
+    showError('TODOリストの取得に失敗しました: ' + error.message);
+  }
+}
+
+// TODOリストUIの更新
+function updateTodoUI() {
+  if (!currentTodoList) return;
+
+  todoTitle.value = currentTodoList.title || '今日のtodo';
+
+  const items = currentTodoList.todo_items || [];
+  const progress = calculateProgress(items);
+
+  // 未完了と完了に分ける
+  const incompleteItems = items.filter(item => !item.is_completed);
+  const completedItems = items.filter(item => item.is_completed);
+
+  document.getElementById('todo-progress').textContent = `${progress}%`;
+  document.getElementById('todo-completed').textContent = completedItems.length;
+  document.getElementById('todo-total').textContent = items.length;
+
+  // プログレスバーの更新
+  const progressBar = document.getElementById('todo-progress-bar');
+  if (progressBar) {
+    progressBar.style.width = `${progress}%`;
+
+    // 進捗に応じた色変更（白黒グラデーション）
+    if (progress === 0) {
+      progressBar.className = 'h-full rounded-full transition-all duration-500 ease-out bg-gray-300';
+    } else if (progress <= 30) {
+      progressBar.className = 'h-full rounded-full transition-all duration-500 ease-out bg-gray-500';
+    } else if (progress <= 70) {
+      progressBar.className = 'h-full rounded-full transition-all duration-500 ease-out bg-gray-700';
+    } else {
+      progressBar.className = 'h-full rounded-full transition-all duration-500 ease-out bg-gray-900';
+    }
+  }
+
+  // カウント表示
+  document.getElementById('incomplete-count').textContent = incompleteItems.length;
+  document.getElementById('completed-count').textContent = completedItems.length;
+
+  // 未完了タスクの表示
+  const incompleteContainer = document.getElementById('todo-items-incomplete');
+  const noIncompleteMsg = document.getElementById('no-incomplete-tasks');
+  incompleteContainer.innerHTML = '';
+
+  if (incompleteItems.length === 0) {
+    noIncompleteMsg.classList.remove('hidden');
+  } else {
+    noIncompleteMsg.classList.add('hidden');
+    incompleteItems.sort((a, b) => a.order_index - b.order_index).forEach(item => {
+      const itemEl = createTodoItemElement(item);
+      incompleteContainer.appendChild(itemEl);
+    });
+  }
+
+  // 完了タスクの表示
+  const completedContainer = document.getElementById('todo-items-completed');
+  completedContainer.innerHTML = '';
+  completedItems.sort((a, b) => a.order_index - b.order_index).forEach(item => {
+    const itemEl = createTodoItemElement(item);
+    completedContainer.appendChild(itemEl);
+  });
+}
+
+// TODOアイテム要素の作成
+function createTodoItemElement(item) {
+  const div = document.createElement('div');
+  div.className = 'todo-item task-appear'; // アニメーションクラス追加
+  div.innerHTML = `
+    <input
+      type="checkbox"
+      ${item.is_completed ? 'checked' : ''}
+      class="w-5 h-5 text-gray-700 rounded focus:ring-2 focus:ring-gray-500"
+      data-id="${item.id}"
+    >
+    <span class="${item.is_completed ? 'line-through text-gray-500' : 'text-gray-800'} flex-1">
+      ${escapeHtml(item.content)}
+    </span>
+    <button class="text-red-500 hover:text-red-700 delete-todo" data-id="${item.id}">
+      🗑️
+    </button>
+  `;
+
+  // チェックボックスのイベント
+  const checkbox = div.querySelector('input[type="checkbox"]');
+  checkbox.addEventListener('change', async (e) => {
+    try {
+      // チェックボックスにアニメーション追加
+      checkbox.classList.add('checkbox-animate');
+
+      // タスク全体にアニメーション追加
+      if (e.target.checked) {
+        div.classList.add('task-completing');
+      }
+
+      // 少し待ってからデータ更新
+      setTimeout(async () => {
+        await toggleTodoItem(item.id, e.target.checked);
+        await loadTodoList();
+
+        // アニメーションクラス削除
+        checkbox.classList.remove('checkbox-animate');
+      }, 300);
+
+    } catch (error) {
+      showError('TODOの更新に失敗しました');
+      e.target.checked = !e.target.checked; // チェック状態を戻す
+      checkbox.classList.remove('checkbox-animate');
+      div.classList.remove('task-completing');
+    }
+  });
+
+  // 削除ボタンのイベント
+  const deleteBtn = div.querySelector('.delete-todo');
+  deleteBtn.addEventListener('click', async () => {
+    if (!confirm('このタスクを削除しますか？')) return;
+    try {
+      await deleteTodoItem(item.id);
+      await loadTodoList();
+      showSuccess('タスクを削除しました');
+    } catch (error) {
+      showError('タスクの削除に失敗しました');
+    }
+  });
+
+  return div;
+}
+
+// TODO追加
+async function handleAddTodo() {
+  const content = newTodoInput.value.trim();
+  if (!content) return;
+
+  try {
+    await addTodoItem(currentTodoList.id, content);
+    newTodoInput.value = '';
+    await loadTodoList();
+    showSuccess('タスクを追加しました');
+  } catch (error) {
+    showError('タスクの追加に失敗しました: ' + error.message);
+  }
+}
+
+// TODOタイトル更新
+async function handleUpdateTodoTitle() {
+  const newTitle = todoTitle.value.trim();
+  if (!newTitle || newTitle === currentTodoList.title) return;
+
+  try {
+    await updateTodoListTitle(currentTodoList.id, newTitle);
+    currentTodoList.title = newTitle;
+    showSuccess('リスト名を更新しました');
+  } catch (error) {
+    showError('リスト名の更新に失敗しました');
+    todoTitle.value = currentTodoList.title;
+  }
+}
+
+// 月次サマリーの読み込み
+async function loadMonthlySummary() {
+  try {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+
+    const { data, error } = await supabase
+      .from('attendances')
+      .select('total_work_minutes')
+      .eq('user_id', currentUser.id)
+      .gte('date', firstDay)
+      .lte('date', lastDay)
+      .eq('status', 'completed');
+
+    if (error) throw error;
+
+    const totalMinutes = data.reduce((sum, record) => sum + (record.total_work_minutes || 0), 0);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    document.getElementById('monthly-days').textContent = data.length;
+    document.getElementById('monthly-hours').textContent = hours;
+    document.getElementById('monthly-minutes').textContent = minutes;
+  } catch (error) {
+    console.error('月次サマリーの取得に失敗:', error);
+  }
+}
+
+// 定期更新の開始
+function startPeriodicUpdate() {
+  if (updateInterval) clearInterval(updateInterval);
+
+  updateInterval = setInterval(() => {
+    const status = getAttendanceStatus(currentAttendance);
+    if (status === 'working' || status === 'on_break') {
+      updateTimeDisplay();
+    }
+  }, 1000);
+}
+
+// 画面切り替え
+function showLoginScreen() {
+  loginScreen.classList.remove('hidden');
+  attendanceScreen.classList.add('hidden');
+}
+
+function showAttendanceScreen() {
+  loginScreen.classList.add('hidden');
+  attendanceScreen.classList.remove('hidden');
+}
+
+// メッセージ表示
+function showError(message) {
+  errorMessage.textContent = message;
+  errorMessage.classList.remove('hidden');
+  setTimeout(() => {
+    errorMessage.classList.add('hidden');
+  }, 5000);
+}
+
+function showSuccess(message) {
+  successMessage.textContent = message;
+  successMessage.classList.remove('hidden');
+  setTimeout(() => {
+    successMessage.classList.add('hidden');
+  }, 3000);
+}
+
+// ローディング表示
+function showLoading(button, text) {
+  button.disabled = true;
+  button.dataset.originalText = button.innerHTML;
+  button.innerHTML = text;
+}
+
+function hideLoading(button, text) {
+  button.disabled = false;
+  button.innerHTML = text || button.dataset.originalText;
+}
+
+// ユーティリティ関数
+function formatTime(date) {
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}

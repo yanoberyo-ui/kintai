@@ -1,0 +1,638 @@
+import React, { useState, useEffect, useRef } from 'react'
+import {
+  getTodayTodoList,
+  createTodayTodoList,
+  addTodoItem,
+  addTodoItemAtPosition,
+  toggleTodoItem,
+  deleteTodoItem,
+  calculateProgress,
+} from '../utils/todo'
+
+export default function TodoList({ user, isDark }) {
+  const [todoList, setTodoList] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [resetKey, setResetKey] = useState(0)
+  const [newItemIndent, setNewItemIndent] = useState(0)
+  const [showNewTaskInput, setShowNewTaskInput] = useState(false)
+  const [insertAtIndex, setInsertAtIndex] = useState(null) // 挿入位置（nullは最後）
+  const [showConfetti, setShowConfetti] = useState(false)
+  const prevProgressRef = useRef(0)
+  const itemRefs = useRef({})
+
+  useEffect(() => {
+    loadTodoList()
+  }, [user])
+
+  // progressに応じて入力欄の表示を切り替え
+  useEffect(() => {
+    if (!todoList) return
+    
+    const items = todoList?.todo_items || []
+    const progress = calculateProgress(items)
+    
+    // 100%未満の時は入力欄を表示、100%の時は非表示
+    setShowNewTaskInput(progress < 100)
+  }, [todoList])
+
+  // 100%達成時のクラッカー表示
+  useEffect(() => {
+    if (!todoList) return
+    
+    const items = todoList?.todo_items || []
+    const progress = calculateProgress(items)
+    
+    // 前回が100%未満で、今回100%になった場合のみ表示
+    if (prevProgressRef.current < 100 && progress === 100 && items.length > 0) {
+      setShowConfetti(true)
+      setTimeout(() => setShowConfetti(false), 4000) // 4秒後に消す
+    }
+    
+    prevProgressRef.current = progress
+  }, [todoList])
+
+  const loadTodoList = async () => {
+    try {
+      let list = await getTodayTodoList(user.id)
+
+      if (!list) {
+        list = await createTodayTodoList(user.id)
+        list.todo_items = []
+      }
+
+      setTodoList(list)
+    } catch (error) {
+      console.error('Error loading todo list:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAddTask = async (content, indent) => {
+    console.log('handleAddTask called with:', content, 'indent:', indent, 'insertAtIndex:', insertAtIndex)
+    if (!content.trim()) {
+      console.log('Content is empty, returning')
+      return
+    }
+
+    try {
+      console.log('Adding todo item...')
+      
+      // 挿入位置が指定されている場合は、その位置に挿入
+      if (insertAtIndex !== null) {
+        const sortedItems = items.sort((a, b) => a.order_index - b.order_index)
+        const afterOrderIndex = sortedItems[insertAtIndex]?.order_index ?? null
+        await addTodoItemAtPosition(todoList.id, content.trim(), indent, afterOrderIndex)
+      } else {
+        await addTodoItem(todoList.id, content.trim(), indent)
+      }
+      
+      console.log('Todo item added, reloading list...')
+      await loadTodoList()
+      console.log('List reloaded')
+      // インデントレベルと挿入位置をリセット
+      setNewItemIndent(0)
+      setInsertAtIndex(null)
+      setResetKey(prev => prev + 1)
+    } catch (error) {
+      console.error('Error adding task:', error)
+    }
+  }
+
+  const handleToggle = async (itemId, isCompleted) => {
+    try {
+      await toggleTodoItem(itemId, isCompleted)
+      await loadTodoList()
+    } catch (error) {
+      console.error('Error toggling task:', error)
+    }
+  }
+
+  const handleDelete = async (itemId) => {
+    try {
+      await deleteTodoItem(itemId)
+      await loadTodoList()
+    } catch (error) {
+      console.error('Error deleting task:', error)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className={`backdrop-blur-xl rounded-3xl shadow-lg border p-8 transition-colors duration-500 ${
+        isDark
+          ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
+          : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
+      }`}>
+        <div className={`animate-pulse ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+          読み込み中...
+        </div>
+      </div>
+    )
+  }
+
+  const items = todoList?.todo_items || []
+  const completedItems = items.filter((item) => item.is_completed)
+  const progress = calculateProgress(items)
+
+  return (
+    <>
+      {/* クラッカーアニメーション */}
+      {showConfetti && <ConfettiAnimation />}
+      
+      <div className={`backdrop-blur-xl rounded-3xl shadow-lg border overflow-hidden transition-colors duration-500 relative ${
+      isDark
+        ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
+        : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
+    }`}>
+      {/* ヘッダー */}
+      <div className="p-8 pb-6">
+        {/* タイトルと進捗バッジ */}
+        <div className="flex items-center justify-between mb-6">
+          <h2 className={`text-2xl font-bold tracking-tight ${
+            isDark ? 'text-white' : 'text-gray-900'
+          }`}>
+            {new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/')}のToDo
+          </h2>
+          <div className={`px-4 py-2 rounded-full font-bold text-lg ${
+            progress >= 70
+              ? isDark
+                ? 'bg-white text-gray-900'
+                : 'bg-gray-900 text-white'
+              : progress >= 40
+              ? isDark
+                ? 'bg-gray-300 text-gray-900'
+                : 'bg-gray-700 text-white'
+              : isDark
+              ? 'bg-gray-700 text-gray-300'
+              : 'bg-gray-300 text-gray-700'
+          }`}>
+            {progress}%
+          </div>
+        </div>
+
+        {/* プログレスバー */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <span className={`text-sm font-semibold ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              進捗
+            </span>
+            <span className={`text-xs font-medium ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+              {completedItems.length} / {items.length} タスク完了
+            </span>
+          </div>
+          <div className={`h-3 rounded-full overflow-hidden ${
+            isDark ? 'bg-gray-800' : 'bg-gray-100'
+          }`}>
+            <div
+              className={`h-full rounded-full transition-all duration-700 ease-out ${
+                isDark ? 'bg-white' : 'bg-gray-900'
+              }`}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* タスクリスト */}
+      <div className="px-8 pb-8">
+        <div className="space-y-1">
+          {items
+            .sort((a, b) => a.order_index - b.order_index)
+            .map((item, index) => (
+              <React.Fragment key={item.id}>
+                <TaskItem
+                  item={item}
+                  isDark={isDark}
+                  onToggle={handleToggle}
+                  onDelete={handleDelete}
+                  ref={(el) => (itemRefs.current[item.id] = el)}
+                  onBackspaceEmpty={() => {
+                    // 一つ前の項目にフォーカス
+                    const sortedItems = items.sort((a, b) => a.order_index - b.order_index)
+                    if (index > 0) {
+                      const prevItem = sortedItems[index - 1]
+                      itemRefs.current[prevItem.id]?.focus()
+                    }
+                  }}
+                  onEnterPress={() => {
+                    // Enterで次の行に新しいタスクを挿入
+                    setInsertAtIndex(index)
+                    setShowNewTaskInput(true)
+                  }}
+                />
+                
+                {/* 挿入位置に入力欄を表示 */}
+                {insertAtIndex === index && showNewTaskInput && (
+                  <NewTaskItem 
+                    key={`insert-${index}-${resetKey}`}
+                    isDark={isDark} 
+                    onAdd={handleAddTask}
+                    indentLevel={0}
+                    onIndentChange={() => {}}
+                    onBackspaceEmpty={() => {
+                      setInsertAtIndex(null)
+                      setShowNewTaskInput(false)
+                    }}
+                  />
+                )}
+              </React.Fragment>
+            ))}
+          
+          {/* 新規タスク追加欄（最後の位置、条件付き表示） */}
+          {showNewTaskInput && insertAtIndex === null ? (
+            <NewTaskItem 
+            key={resetKey}
+            isDark={isDark} 
+            onAdd={handleAddTask}
+            indentLevel={newItemIndent}
+            onIndentChange={setNewItemIndent}
+            onBackspaceEmpty={() => {
+              // 一番最後のアイテムにフォーカス
+              const sortedItems = items.sort((a, b) => a.order_index - b.order_index)
+              if (sortedItems.length > 0) {
+                const lastItem = sortedItems[sortedItems.length - 1]
+                itemRefs.current[lastItem.id]?.focus()
+              }
+            }}
+          />
+          ) : (
+            <button
+              onClick={() => setShowNewTaskInput(true)}
+              className={`w-full py-3 mt-2 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 ${
+                isDark
+                  ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/30'
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100/30'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span className="text-sm font-medium">タスクを追加</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+    </>
+  )
+}
+
+// クラッカーアニメーションコンポーネント
+function ConfettiAnimation() {
+  // ランダムにメッセージを選択
+  const messages = [
+    'タスクが全部完了しました！',
+    'お疲れ様でした！',
+    '今日はこれで終わり！',
+    '素晴らしい！全て完了です！',
+    'やりきりましたね！',
+    '完璧です！',
+    '今日も頑張りました！',
+    'ミッションコンプリート！'
+  ]
+  const [message] = React.useState(() => messages[Math.floor(Math.random() * messages.length)])
+  
+  const confettiPieces = Array.from({ length: 50 }, (_, i) => ({
+    id: i,
+    left: Math.random() * 100,
+    delay: Math.random() * 0.5,
+    duration: 2 + Math.random() * 2,
+    rotation: Math.random() * 360,
+    color: ['#FF6B6B', '#4ECDC4', '#FFE66D', '#95E1D3', '#F38181', '#AA96DA', '#FCBAD3'][Math.floor(Math.random() * 7)]
+  }))
+
+  return (
+    <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+      {confettiPieces.map((piece) => (
+        <div
+          key={piece.id}
+          className="absolute w-3 h-3 animate-confetti-fall"
+          style={{
+            left: `${piece.left}%`,
+            top: '-5%',
+            backgroundColor: piece.color,
+            animationDelay: `${piece.delay}s`,
+            animationDuration: `${piece.duration}s`,
+            transform: `rotate(${piece.rotation}deg)`,
+          }}
+        />
+      ))}
+      
+      {/* お祝いメッセージ */}
+      <div className="absolute top-1/3 left-1/2 transform -translate-x-1/2 -translate-y-1/2 animate-bounce-in pointer-events-auto text-center">
+        <div className="text-7xl mb-4">🎉</div>
+        <div className="bg-white/90 backdrop-blur-xl rounded-2xl px-8 py-4 shadow-2xl border border-gray-200/50">
+          <p className="text-2xl font-bold text-gray-900 whitespace-nowrap">
+            {message}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function NewTaskItem({ isDark, onAdd, onBackspaceEmpty, indentLevel, onIndentChange, onCancel }) {
+  const [content, setContent] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [localIndent, setLocalIndent] = useState(indentLevel)
+  const inputRef = useRef(null)
+  const touchStartX = useRef(0)
+  const touchStartY = useRef(0)
+  const [isDragging, setIsDragging] = useState(false)
+
+  // コンポーネントがマウントされた時に自動的にフォーカス
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
+  console.log('NewTaskItem rendered with content:', content, 'localIndent:', localIndent)
+
+  const handleTouchStart = (e) => {
+    // 入力中は無効
+    if (document.activeElement === inputRef.current) return
+    touchStartX.current = e.touches[0].clientX
+    touchStartY.current = e.touches[0].clientY
+    setIsDragging(false)
+  }
+
+  const handleTouchMove = (e) => {
+    if (document.activeElement === inputRef.current) return
+    const deltaX = e.touches[0].clientX - touchStartX.current
+    const deltaY = Math.abs(e.touches[0].clientY - touchStartY.current)
+    
+    if (Math.abs(deltaX) > 30 && Math.abs(deltaX) > deltaY) {
+      setIsDragging(true)
+      e.preventDefault()
+    }
+  }
+
+  const handleTouchEnd = (e) => {
+    if (document.activeElement === inputRef.current || !isDragging) return
+    
+    const deltaX = e.changedTouches[0].clientX - touchStartX.current
+    
+    if (deltaX > 50 && localIndent < 3) {
+      setLocalIndent((prev) => prev + 1)
+    } else if (deltaX < -50 && localIndent > 0) {
+      setLocalIndent((prev) => prev - 1)
+    }
+    
+    setIsDragging(false)
+  }
+
+  const handleKeyDown = async (e) => {
+    console.log('Key pressed:', e.key, 'Content:', content, 'localIndent:', localIndent)
+    
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      // 内容がある場合のみ追加
+      if (content.trim() && !isSubmitting) {
+        const taskContent = content.trim()
+        console.log('Adding task:', taskContent, 'with indent:', localIndent)
+        setIsSubmitting(true)
+        setContent('') // すぐにクリア
+        
+        // 現在のインデントレベルを親に保存
+        onIndentChange?.(localIndent)
+        
+        try {
+          await onAdd(taskContent, localIndent)
+          console.log('onAdd completed')
+        } finally {
+          setIsSubmitting(false)
+        }
+      } else {
+        console.log('Content is empty or already submitting, not adding')
+      }
+    } else if (e.key === 'Backspace' && content === '') {
+      // 空の状態でBackspaceを押したら一つ上の欄にフォーカス
+      e.preventDefault()
+      console.log('Backspace on empty field, focusing previous item')
+      onBackspaceEmpty?.()
+    } else if (e.key === 'Tab') {
+      e.preventDefault()
+      if (e.shiftKey) {
+        setLocalIndent((prev) => (prev > 0 ? prev - 1 : prev))
+      } else {
+        setLocalIndent((prev) => (prev < 3 ? prev + 1 : prev))
+      }
+    }
+  }
+
+  return (
+    <div
+      className={`group flex items-center gap-3 py-2 transition-all duration-200 ${
+        isDragging ? 'scale-105' : ''
+      }`}
+      style={{ paddingLeft: `${localIndent * 24}px` }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* 新規タスク用のボタン */}
+      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-sm ${
+        isDark
+          ? 'bg-white text-gray-900'
+          : 'bg-gray-900 text-white'
+      }`}>
+        <span className="text-sm font-bold transform -rotate-90">
+          ▼
+        </span>
+      </div>
+
+      <input
+        ref={inputRef}
+        type="text"
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        onKeyDown={handleKeyDown}
+
+        placeholder=""
+        className={`flex-1 bg-transparent border-0 focus:ring-0 outline-none text-sm ${
+          isDark
+            ? 'text-white placeholder:text-gray-600'
+            : 'text-gray-900 placeholder:text-gray-400'
+        }`}
+      />
+    </div>
+  )
+}
+
+const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspaceEmpty, onEnterPress }, ref) => {
+  const [indentLevel, setIndentLevel] = useState(item.indent_level || 0)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editContent, setEditContent] = useState(item.content)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const inputRef = useRef(null)
+  const touchStartX = useRef(0)
+  const touchStartY = useRef(0)
+  const [isDragging, setIsDragging] = useState(false)
+
+  // 外部からfocusを呼べるようにする
+  React.useImperativeHandle(ref, () => ({
+    focus: () => {
+      setIsEditing(true)
+      setTimeout(() => {
+        inputRef.current?.focus()
+        // カーソルを最後に移動
+        inputRef.current?.setSelectionRange(inputRef.current.value.length, inputRef.current.value.length)
+      }, 0)
+    }
+  }))
+
+  const handleToggle = async () => {
+    await onToggle(item.id, !item.is_completed)
+  }
+
+  const handleEdit = () => {
+    setIsEditing(true)
+    setEditContent(item.content)
+  }
+
+  const handleSave = async () => {
+    if (editContent.trim() && editContent !== item.content) {
+      // TODO: タスク内容の更新API呼び出し
+      item.content = editContent.trim()
+    }
+    setIsEditing(false)
+  }
+
+  const handleTouchStart = (e) => {
+    if (isEditing) return
+    touchStartX.current = e.touches[0].clientX
+    touchStartY.current = e.touches[0].clientY
+    setIsDragging(false)
+  }
+
+  const handleTouchMove = (e) => {
+    if (isEditing) return
+    const deltaX = e.touches[0].clientX - touchStartX.current
+    const deltaY = Math.abs(e.touches[0].clientY - touchStartY.current)
+    
+    // 縦スクロールより横スワイプが大きい場合のみ反応
+    if (Math.abs(deltaX) > 30 && Math.abs(deltaX) > deltaY) {
+      setIsDragging(true)
+      e.preventDefault() // スクロールを防ぐ
+    }
+  }
+
+  const handleTouchEnd = (e) => {
+    if (isEditing || !isDragging) return
+    
+    const deltaX = e.changedTouches[0].clientX - touchStartX.current
+    
+    // 右スワイプ（インデント増加）
+    if (deltaX > 50 && indentLevel < 3) {
+      setIndentLevel((prev) => prev + 1)
+    }
+    // 左スワイプ（インデント減少）
+    else if (deltaX < -50 && indentLevel > 0) {
+      setIndentLevel((prev) => prev - 1)
+    }
+    
+    setIsDragging(false)
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSave()
+      // Enterで次の行に新しいタスクを挿入
+      onEnterPress?.()
+    } else if (e.key === 'Escape') {
+      setEditContent(item.content)
+      setIsEditing(false)
+    } else if (e.key === 'Tab') {
+      e.preventDefault()
+      if (e.shiftKey) {
+        setIndentLevel((prev) => (prev > 0 ? prev - 1 : prev))
+      } else {
+        setIndentLevel((prev) => (prev < 3 ? prev + 1 : prev))
+      }
+    } else if (e.key === 'Backspace' && isEditing && editContent === '') {
+      // 編集中で内容が空の時にBackspaceを押したら削除して上の欄にフォーカス
+      e.preventDefault()
+      setIsDeleting(true)
+      setTimeout(() => {
+        onDelete(item.id)
+        onBackspaceEmpty?.()
+      }, 200) // 200msのアニメーション後に削除
+    } else if (e.key === 'Backspace' && !isEditing) {
+      e.preventDefault()
+      setIsDeleting(true)
+      setTimeout(() => {
+        onDelete(item.id)
+        onBackspaceEmpty?.()
+      }, 200)
+    }
+  }
+
+  return (
+    <div
+      className={`group flex items-center gap-3 py-2 transition-all duration-200 ${
+        isDeleting ? 'opacity-0 -translate-x-4' : 'opacity-100 translate-x-0'
+      } ${isDragging ? 'scale-105' : ''}`}
+      style={{ paddingLeft: `${indentLevel * 24}px` }}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* チェックボタン */}
+      <button
+        onClick={handleToggle}
+        className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm hover:scale-110 ${
+          item.is_completed
+            ? isDark
+              ? 'bg-gray-700 text-white'
+              : 'bg-gray-300 text-gray-700'
+            : isDark
+            ? 'bg-white text-gray-900 hover:bg-gray-100'
+            : 'bg-gray-900 text-white hover:bg-gray-800'
+        }`}
+      >
+        {item.is_completed ? (
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+        ) : (
+          <span className="text-sm font-bold transform -rotate-90">
+            ▼
+          </span>
+        )}
+      </button>
+
+      {isEditing ? (
+        <input
+          ref={inputRef}
+          type="text"
+          value={editContent}
+          onChange={(e) => setEditContent(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+          autoFocus
+          className={`flex-1 bg-transparent border-0 focus:ring-0 outline-none text-sm ${
+            isDark
+              ? 'text-white'
+              : 'text-gray-900'
+          }`}
+        />
+      ) : (
+        <span
+          onClick={handleEdit}
+          className={`flex-1 text-sm transition-all duration-200 cursor-text ${
+            item.is_completed
+              ? isDark ? 'text-gray-600 line-through' : 'text-gray-400 line-through'
+              : isDark ? 'text-gray-100' : 'text-gray-900'
+          }`}
+        >
+          {item.content}
+        </span>
+      )}
+    </div>
+  )
+})
+
+TaskItem.displayName = 'TaskItem'
