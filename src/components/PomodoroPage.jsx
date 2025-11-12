@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { getTodayTodoList } from '../utils/todo'
 import { supabase } from '../utils/supabase'
 
@@ -29,7 +29,7 @@ export default function PomodoroPage({ user, isDark }) {
   }, [user])
 
   useEffect(() => {
-    if (timerState !== 'idle' && timeLeft > 0) {
+    if (timerState !== 'idle') {
       intervalRef.current = setInterval(() => {
         setTimeLeft(prev => {
           if (prev <= 1) {
@@ -45,8 +45,12 @@ export default function PomodoroPage({ user, isDark }) {
           clearInterval(intervalRef.current)
         }
       }
+    } else {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+      }
     }
-  }, [timerState, timeLeft])
+  }, [timerState, handleTimerComplete])
 
   const loadTodoList = async () => {
     try {
@@ -63,58 +67,24 @@ export default function PomodoroPage({ user, isDark }) {
     setTodayTotal(0)
   }
 
-  const handleTimerComplete = () => {
-    playSound()
-    sendNotification()
+  const playSound = () => {
+    // Web Audio APIで音を再生（後で実装）
+    if (audioRef.current) {
+      audioRef.current.play()
+    }
+  }
 
-    if (timerState === 'working') {
-      // 作業完了
-      setPomodoroCount(prev => prev + 1)
-      setTodayTotal(prev => prev + 1)
-
-      // タスクのポモドーロカウントを更新
-      if (selectedTask) {
-        updateTaskPomodoroCount(selectedTask.id)
-      }
-
-      // 4ポモドーロ完了したら長い休憩、そうでなければ短い休憩
-      if ((pomodoroCount + 1) % 4 === 0) {
-        startBreak('long_break')
+  const sendNotification = () => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      if (timerState === 'working') {
+        new Notification('作業完了！', {
+          body: '素晴らしい！5分間休憩しましょう。'
+        })
       } else {
-        startBreak('short_break')
+        new Notification('休憩終了！', {
+          body: '次のセッションを始めましょう。'
+        })
       }
-    } else {
-      // 休憩終了
-      setTimerState('idle')
-    }
-  }
-
-  const startWork = (task = null) => {
-    if (task) {
-      setSelectedTask(task)
-    }
-    setTimerState('working')
-    setTimeLeft(WORK_TIME)
-  }
-
-  const startBreak = (type) => {
-    setTimerState(type)
-    setTimeLeft(type === 'long_break' ? LONG_BREAK : SHORT_BREAK)
-  }
-
-  const pauseTimer = () => {
-    setTimerState('idle')
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
-    }
-  }
-
-  const resetTimer = () => {
-    setTimerState('idle')
-    setTimeLeft(WORK_TIME)
-    setSelectedTask(null)
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
     }
   }
 
@@ -141,24 +111,59 @@ export default function PomodoroPage({ user, isDark }) {
     }
   }
 
-  const playSound = () => {
-    // Web Audio APIで音を再生（後で実装）
-    if (audioRef.current) {
-      audioRef.current.play()
+  const startBreak = (type) => {
+    setTimerState(type)
+    setTimeLeft(type === 'long_break' ? LONG_BREAK : SHORT_BREAK)
+  }
+
+  const handleTimerComplete = useCallback(() => {
+    playSound()
+    sendNotification()
+
+    if (timerState === 'working') {
+      // 作業完了
+      setPomodoroCount(prev => prev + 1)
+      setTodayTotal(prev => prev + 1)
+
+      // タスクのポモドーロカウントを更新
+      if (selectedTask) {
+        updateTaskPomodoroCount(selectedTask.id)
+      }
+
+      // 4ポモドーロ完了したら長い休憩、そうでなければ短い休憩
+      const newCount = pomodoroCount + 1
+      if (newCount % 4 === 0) {
+        startBreak('long_break')
+      } else {
+        startBreak('short_break')
+      }
+    } else {
+      // 休憩終了
+      setTimerState('idle')
+    }
+  }, [timerState, selectedTask, pomodoroCount])
+
+  const startWork = (task = null) => {
+    if (task) {
+      setSelectedTask(task)
+    }
+    setTimerState('working')
+    setTimeLeft(WORK_TIME)
+  }
+
+  const pauseTimer = () => {
+    setTimerState('idle')
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
     }
   }
 
-  const sendNotification = () => {
-    if ('Notification' in window && Notification.permission === 'granted') {
-      if (timerState === 'working') {
-        new Notification('作業完了！', {
-          body: '素晴らしい！5分間休憩しましょう。'
-        })
-      } else {
-        new Notification('休憩終了！', {
-          body: '次のセッションを始めましょう。'
-        })
-      }
+  const resetTimer = () => {
+    setTimerState('idle')
+    setTimeLeft(WORK_TIME)
+    setSelectedTask(null)
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
     }
   }
 
