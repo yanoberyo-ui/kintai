@@ -463,10 +463,10 @@ export default function MembersPage({ isDark }) {
             selectedDepartments.includes(member.department)
           )
           .sort((a, b) => {
-            // 出勤状態の優先順位: 出勤中 > 休憩中 > 退勤済 > 未出勤
+            // 1. 出勤状態の優先順位: 出勤中 > 休憩中 > 退勤済 > 未出勤
             const statusA = attendanceStatus[a.id]
             const statusB = attendanceStatus[b.id]
-            
+
             const getPriority = (status) => {
               if (!status) return 3 // 未出勤
               if (status.clock_out) return 2 // 退勤済
@@ -474,11 +474,20 @@ export default function MembersPage({ isDark }) {
               if (status.status === 'break') return 1 // 休憩中
               return 3
             }
-            
+
             const priorityA = getPriority(statusA)
             const priorityB = getPriority(statusB)
-            
-            return priorityA - priorityB
+
+            // 出勤状態が異なる場合は出勤状態で並び替え
+            if (priorityA !== priorityB) {
+              return priorityA - priorityB
+            }
+
+            // 2. 出勤状態が同じ場合はタスク達成率で並び替え（高い順）
+            const progressA = taskProgress[a.id] ?? 0
+            const progressB = taskProgress[b.id] ?? 0
+
+            return progressB - progressA
           })
           .map((member) => {
           const progress = taskProgress[member.id] ?? 0
