@@ -16,6 +16,7 @@ export default function MembersPage({ isDark }) {
   const [currentUser, setCurrentUser] = useState(null)
   const [departments, setDepartments] = useState([])
   const [selectedDepartments, setSelectedDepartments] = useState([])
+  const [showAllDepartments, setShowAllDepartments] = useState(false)
 
   useEffect(() => {
     loadCurrentUser()
@@ -336,12 +337,13 @@ export default function MembersPage({ isDark }) {
             <div className={`text-sm font-medium mb-3 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
               部署で絞り込み
             </div>
-            <div className="flex flex-wrap gap-3">
-              {departments.map((dept) => (
+            <div className="flex flex-wrap gap-2">
+              {/* 最初の3つを表示 */}
+              {departments.slice(0, 3).map((dept) => (
                 <button
                   key={dept}
                   onClick={() => toggleDepartment(dept)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                     selectedDepartments.includes(dept)
                       ? isDark
                         ? 'bg-white text-gray-900'
@@ -351,7 +353,7 @@ export default function MembersPage({ isDark }) {
                       : 'bg-gray-100/50 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
                   }`}
                 >
-                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                  <div className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center ${
                     selectedDepartments.includes(dept)
                       ? isDark
                         ? 'border-gray-900 bg-gray-900'
@@ -361,7 +363,7 @@ export default function MembersPage({ isDark }) {
                       : 'border-gray-400'
                   }`}>
                     {selectedDepartments.includes(dept) && (
-                      <svg className={`w-3 h-3 ${isDark ? 'text-white' : 'text-gray-900'}`} fill="currentColor" viewBox="0 0 20 20">
+                      <svg className={`w-2.5 h-2.5 ${isDark ? 'text-white' : 'text-gray-900'}`} fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
                     )}
@@ -369,6 +371,54 @@ export default function MembersPage({ isDark }) {
                   <span>{dept}</span>
                 </button>
               ))}
+              
+              {/* 残りの部署を展開表示 */}
+              {showAllDepartments && departments.slice(3).map((dept) => (
+                <button
+                  key={dept}
+                  onClick={() => toggleDepartment(dept)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                    selectedDepartments.includes(dept)
+                      ? isDark
+                        ? 'bg-white text-gray-900'
+                        : 'bg-gray-900 text-white'
+                      : isDark
+                      ? 'bg-gray-800/50 text-gray-400 hover:bg-gray-800 hover:text-white'
+                      : 'bg-gray-100/50 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
+                  }`}
+                >
+                  <div className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center ${
+                    selectedDepartments.includes(dept)
+                      ? isDark
+                        ? 'border-gray-900 bg-gray-900'
+                        : 'border-white bg-white'
+                      : isDark
+                      ? 'border-gray-600'
+                      : 'border-gray-400'
+                  }`}>
+                    {selectedDepartments.includes(dept) && (
+                      <svg className={`w-2.5 h-2.5 ${isDark ? 'text-white' : 'text-gray-900'}`} fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                  <span>{dept}</span>
+                </button>
+              ))}
+              
+              {/* 展開ボタン（3つより多い場合のみ表示） */}
+              {departments.length > 3 && (
+                <button
+                  onClick={() => setShowAllDepartments(!showAllDepartments)}
+                  className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                    isDark
+                      ? 'bg-gray-800/50 text-gray-400 hover:bg-gray-800 hover:text-white'
+                      : 'bg-gray-100/50 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
+                  }`}
+                >
+                  {showAllDepartments ? '閉じる' : `...他${departments.length - 3}件`}
+                </button>
+              )}
             </div>
           </div>
         )}
