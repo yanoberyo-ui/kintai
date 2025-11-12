@@ -14,6 +14,8 @@ export default function MembersPage({ isDark }) {
   const [birthdayNotifications, setBirthdayNotifications] = useState({ today: [], tomorrow: [] })
   const [showBirthdayPopup, setShowBirthdayPopup] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
+  const [departments, setDepartments] = useState([])
+  const [selectedDepartments, setSelectedDepartments] = useState([])
 
   useEffect(() => {
     loadCurrentUser()
@@ -93,6 +95,10 @@ export default function MembersPage({ isDark }) {
 
       if (error) throw error
       setMembers(data || [])
+      
+      // 部署一覧を抽出（重複を除く）
+      const uniqueDepartments = [...new Set(data?.map(m => m.department).filter(d => d))]
+      setDepartments(uniqueDepartments.sort())
     } catch (error) {
       console.error('Error loading members:', error)
     } finally {
@@ -106,39 +112,18 @@ export default function MembersPage({ isDark }) {
       const now = new Date()
       const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000)) // UTC + 9時間
       const today = jstDate.toISOString().split('T')[0]
-      
-      console.log('========== ATTENDANCE STATUS DEBUG ==========')
-      console.log('Current UTC time:', now.toISOString())
-      console.log('JST time calculated:', jstDate.toISOString())
-      console.log('Today date string:', today)
-      console.log('Date type:', typeof today)
 
       const { data, error } = await supabase
         .from('attendances')
         .select('user_id, status, clock_in, clock_out, date')
 
       if (error) throw error
-      
-      console.log('All attendance records:', JSON.stringify(data, null, 2))
-      console.log('Total records:', data?.length)
 
       const statusMap = {}
-      data?.forEach((record, index) => {
-        console.log(`
---- Record ${index + 1} ---`)
-        console.log('  date:', record.date, 'type:', typeof record.date)
-        console.log('  today:', today, 'type:', typeof today)
-        console.log('  strict match (===):', record.date === today)
-        console.log('  loose match (==):', record.date == today)
-        console.log('  includes today:', record.date?.includes?.(today))
-        
-        // より柔軟なマッチング
+      data?.forEach((record) => {
         const recordDateStr = String(record.date).split('T')[0]
-        console.log('  record date (normalized):', recordDateStr)
-        console.log('  normalized match:', recordDateStr === today)
-        
+
         if (recordDateStr === today) {
-          console.log('  ✓ MATCH! Adding to statusMap')
           statusMap[record.user_id] = {
             status: record.status,
             clock_in: record.clock_in,
@@ -146,10 +131,6 @@ export default function MembersPage({ isDark }) {
           }
         }
       })
-      console.log('Final statusMap:', statusMap)
-      console.log('StatusMap keys:', Object.keys(statusMap))
-      console.log('StatusMap entries:', Object.entries(statusMap))
-      console.log('========== END DEBUG ==========')
       setAttendanceStatus(statusMap)
     } catch (error) {
       console.error('Error loading attendance status:', error)
@@ -252,6 +233,14 @@ export default function MembersPage({ isDark }) {
     setMemberAttendance(null)
   }
 
+  const toggleDepartment = (dept) => {
+    setSelectedDepartments(prev => 
+      prev.includes(dept)
+        ? prev.filter(d => d !== dept)
+        : [...prev, dept]
+    )
+  }
+
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto">
@@ -326,14 +315,63 @@ export default function MembersPage({ isDark }) {
       )}
 
       <div className="max-w-7xl mx-auto">
-      {/* ページタイトル */}
-      <div className="mb-6">
-        <h1 className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-          メンバー
-        </h1>
-        <p className={`mt-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-          チームメンバーと今日のタスクを確認
-        </p>
+      {/* ページタイトルと部署フィルタ */}
+      <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            メンバー
+          </h1>
+          <p className={`mt-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+            チームメンバーと今日のタスクを確認
+          </p>
+        </div>
+
+        {/* 部署フィルタ */}
+        {departments.length > 0 && (
+          <div className={`backdrop-blur-xl rounded-2xl shadow-lg border p-4 ${
+            isDark
+              ? 'bg-gray-900/80 border-gray-800/50'
+              : 'bg-white/80 border-gray-200/50'
+          }`}>
+            <div className={`text-sm font-medium mb-3 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              部署で絞り込み
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {departments.map((dept) => (
+                <button
+                  key={dept}
+                  onClick={() => toggleDepartment(dept)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+                    selectedDepartments.includes(dept)
+                      ? isDark
+                        ? 'bg-white text-gray-900'
+                        : 'bg-gray-900 text-white'
+                      : isDark
+                      ? 'bg-gray-800/50 text-gray-400 hover:bg-gray-800 hover:text-white'
+                      : 'bg-gray-100/50 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
+                  }`}
+                >
+                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                    selectedDepartments.includes(dept)
+                      ? isDark
+                        ? 'border-gray-900 bg-gray-900'
+                        : 'border-white bg-white'
+                      : isDark
+                      ? 'border-gray-600'
+                      : 'border-gray-400'
+                  }`}>
+                    {selectedDepartments.includes(dept) && (
+                      <svg className={`w-3 h-3 ${isDark ? 'text-white' : 'text-gray-900'}`} fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                  <span>{dept}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 明日の誕生日通知 */}
@@ -369,13 +407,13 @@ export default function MembersPage({ isDark }) {
 
       {/* ギャラリービュー */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {members.map((member) => {
+        {members
+          .filter(member => 
+            selectedDepartments.length === 0 || 
+            selectedDepartments.includes(member.department)
+          )
+          .map((member) => {
           const progress = taskProgress[member.id] ?? 0
-          const attendance = attendanceStatus[member.id]
-          console.log('Rendering member:', member.id, member.email, 'attendance:', attendance)
-          if (attendance) {
-            console.log('  -> status:', attendance.status, 'clock_out:', attendance.clock_out)
-          }
           return (
             <button
               key={member.id}
