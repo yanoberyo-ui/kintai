@@ -151,14 +151,12 @@ export default function PomodoroPage({ user, isDark }) {
   const sendNotification = () => {
     if ('Notification' in window && Notification.permission === 'granted') {
       if (timerState === 'working') {
-        new Notification('🍅 ポモドーロ完了！', {
-          body: '素晴らしい！5分間休憩しましょう。',
-          icon: '/tomato.png'
+        new Notification('作業完了！', {
+          body: '素晴らしい！5分間休憩しましょう。'
         })
       } else {
-        new Notification('☕ 休憩終了！', {
-          body: '次のポモドーロを始めましょう。',
-          icon: '/coffee.png'
+        new Notification('休憩終了！', {
+          body: '次のセッションを始めましょう。'
         })
       }
     }
@@ -186,9 +184,9 @@ export default function PomodoroPage({ user, isDark }) {
   }
 
   const getTimerColor = () => {
-    if (timerState === 'working') return isDark ? '#EF4444' : '#DC2626' // Red
-    if (timerState === 'long_break') return isDark ? '#3B82F6' : '#2563EB' // Blue
-    if (timerState === 'short_break') return isDark ? '#10B981' : '#059669' // Green
+    if (timerState === 'working') return isDark ? '#FFFFFF' : '#111827' // White/Black
+    if (timerState === 'long_break') return isDark ? '#9CA3AF' : '#6B7280' // Gray
+    if (timerState === 'short_break') return isDark ? '#D1D5DB' : '#4B5563' // Light Gray
     return isDark ? '#6B7280' : '#9CA3AF' // Gray
   }
 
@@ -197,7 +195,7 @@ export default function PomodoroPage({ user, isDark }) {
       <div className="max-w-4xl mx-auto p-6 space-y-8">
         {/* ヘッダー */}
         <div className="text-center">
-          <h1 className="text-4xl font-bold mb-2">🍅 ポモドーロタイマー</h1>
+          <h1 className="text-4xl font-bold mb-2">集中タイマー</h1>
           <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
             25分集中 → 5分休憩のサイクルで生産性UP！
           </p>
@@ -241,9 +239,9 @@ export default function PomodoroPage({ user, isDark }) {
                 {formatTime(timeLeft)}
               </div>
               <div className={`text-lg font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                {timerState === 'working' && '🍅 集中タイム'}
-                {timerState === 'short_break' && '☕ 短い休憩'}
-                {timerState === 'long_break' && '🌴 長い休憩'}
+                {timerState === 'working' && '集中タイム'}
+                {timerState === 'short_break' && '短い休憩'}
+                {timerState === 'long_break' && '長い休憩'}
                 {timerState === 'idle' && '待機中'}
               </div>
             </div>
@@ -266,10 +264,14 @@ export default function PomodoroPage({ user, isDark }) {
             {timerState === 'idle' && (
               <button
                 onClick={() => startWork(selectedTask)}
-                className="px-8 py-4 rounded-xl font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors shadow-lg"
+                className={`px-8 py-4 rounded-xl font-semibold transition-colors shadow-lg ${
+                  isDark
+                    ? 'bg-white text-gray-900 hover:bg-gray-100'
+                    : 'bg-gray-900 text-white hover:bg-gray-800'
+                }`}
                 disabled={!selectedTask}
               >
-                🍅 開始
+                開始
               </button>
             )}
             {timerState !== 'idle' && (
@@ -282,7 +284,7 @@ export default function PomodoroPage({ user, isDark }) {
                       : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
                   }`}
                 >
-                  ⏸️ 一時停止
+                  一時停止
                 </button>
                 <button
                   onClick={resetTimer}
@@ -292,7 +294,7 @@ export default function PomodoroPage({ user, isDark }) {
                       : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
                   }`}
                 >
-                  🔄 リセット
+                  リセット
                 </button>
               </>
             )}
@@ -301,11 +303,11 @@ export default function PomodoroPage({ user, isDark }) {
           {/* 統計 */}
           <div className="grid grid-cols-2 gap-4 text-center">
             <div className={`p-4 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-              <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>今日の🍅</p>
+              <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>今日の完了数</p>
               <p className="text-3xl font-bold">{todayTotal}</p>
             </div>
             <div className={`p-4 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-              <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>連続ポモドーロ</p>
+              <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>連続セッション</p>
               <p className="text-3xl font-bold">{pomodoroCount % 4} / 4</p>
             </div>
           </div>
@@ -325,7 +327,7 @@ export default function PomodoroPage({ user, isDark }) {
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              🔔 通知を有効にする
+              通知を有効にする
             </button>
           </div>
 
@@ -357,8 +359,8 @@ export default function PomodoroPage({ user, isDark }) {
                       </span>
                     </div>
                     {task.pomodoro_count > 0 && (
-                      <span className="text-sm font-semibold">
-                        🍅 × {task.pomodoro_count}
+                      <span className={`text-sm font-semibold ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                        {task.pomodoro_count} セッション
                       </span>
                     )}
                   </div>
