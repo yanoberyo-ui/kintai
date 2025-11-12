@@ -23,7 +23,7 @@ export default async function handler(req, res) {
 
     // AIにフィードバックを生成させる
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'chatgpt-4o-latest',
       messages: [
         {
           role: 'system',
