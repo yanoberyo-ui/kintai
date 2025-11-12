@@ -13,9 +13,11 @@ export default function AttendanceCard({ user, isDark }) {
   const [showBirthdayPopup, setShowBirthdayPopup] = useState(false)
   const [birthdayData, setBirthdayData] = useState({ isCurrentUser: false, members: [] })
   const [showConfetti, setShowConfetti] = useState(false)
+  const [userProfile, setUserProfile] = useState(null)
 
   useEffect(() => {
     loadAttendance()
+    loadUserProfile()
     
     // 日本時間で現在時刻を更新
     const updateJSTTime = () => {
@@ -40,6 +42,21 @@ export default function AttendanceCard({ user, isDark }) {
     }
   }
 
+  const loadUserProfile = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+      
+      if (error) throw error
+      setUserProfile(data)
+    } catch (error) {
+      console.error('Error loading user profile:', error)
+    }
+  }
+
   const handleClockIn = async () => {
     try {
       setLoading(true)
@@ -53,7 +70,7 @@ export default function AttendanceCard({ user, isDark }) {
       // Slack通知を送信
       await sendSlackNotification(
         'clock_in',
-        { id: user.id, name: user.name || user.email },
+        { id: user.id, name: userProfile?.name || user.email },
         result,
         todoItems
       )
@@ -133,7 +150,7 @@ export default function AttendanceCard({ user, isDark }) {
       // Slack通知を送信（TODOリスト付き）
       await sendSlackNotification(
         'clock_out',
-        { id: user.id, name: user.name || user.email },
+        { id: user.id, name: userProfile?.name || user.email },
         result,
         todoItems
       )

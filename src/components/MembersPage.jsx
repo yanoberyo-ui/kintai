@@ -41,8 +41,9 @@ export default function MembersPage({ isDark }) {
   }
 
   const checkBirthdays = () => {
-    // 日本時間で今日の日付を取得
-    const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+    // attendance.jsと同じ方法で日付を取得
+    const now = new Date()
+    const today = new Date(now.getTime() + (9 * 60 * 60 * 1000)) // UTC + 9時間
     const tomorrow = new Date(today)
     tomorrow.setDate(tomorrow.getDate() + 1)
 
@@ -101,28 +102,32 @@ export default function MembersPage({ isDark }) {
 
   const loadAttendanceStatus = async () => {
     try {
-      // 日本時間で今日の日付を取得
-      const jstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+      // attendance.jsと同じ方法で日付を取得
+      const now = new Date()
+      const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000)) // UTC + 9時間
       const today = jstDate.toISOString().split('T')[0]
       
       console.log('Loading attendance for date:', today)
 
       const { data, error } = await supabase
         .from('attendances')
-        .select('user_id, status, clock_in, clock_out')
-        .eq('date', today)
+        .select('user_id, status, clock_in, clock_out, date')
 
       if (error) throw error
       
-      console.log('Total attendance records found:', data?.length)
+      console.log('All attendance records:', data)
+      console.log('Filtering for date:', today)
 
       const statusMap = {}
       data?.forEach(record => {
-        console.log('Attendance record:', record.user_id, 'status:', record.status, 'clock_out:', record.clock_out, 'date:', record.date)
-        statusMap[record.user_id] = {
-          status: record.status,
-          clock_in: record.clock_in,
-          clock_out: record.clock_out
+        console.log('Checking record - date:', record.date, 'vs today:', today, 'match:', record.date === today)
+        if (record.date === today) {
+          console.log('✓ Match found for user:', record.user_id, 'status:', record.status, 'clock_out:', record.clock_out)
+          statusMap[record.user_id] = {
+            status: record.status,
+            clock_in: record.clock_in,
+            clock_out: record.clock_out
+          }
         }
       })
       console.log('Final statusMap:', statusMap)
@@ -134,8 +139,9 @@ export default function MembersPage({ isDark }) {
 
   const loadAllTaskProgress = async () => {
     try {
-      // 日本時間で今日の日付を取得
-      const jstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+      // attendance.jsと同じ方法で日付を取得
+      const now = new Date()
+      const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000)) // UTC + 9時間
       const today = jstDate.toISOString().split('T')[0]
 
       const { data, error } = await supabase
@@ -164,8 +170,9 @@ export default function MembersPage({ isDark }) {
 
   const loadMemberTasks = async (userId) => {
     try {
-      // 日本時間で今日の日付を取得
-      const jstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+      // attendance.jsと同じ方法で日付を取得
+      const now = new Date()
+      const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000)) // UTC + 9時間
       const today = jstDate.toISOString().split('T')[0]
 
       const { data, error } = await supabase
@@ -191,8 +198,9 @@ export default function MembersPage({ isDark }) {
 
   const loadMemberAttendance = async (userId) => {
     try {
-      // 日本時間で今日の日付を取得
-      const jstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+      // attendance.jsと同じ方法で日付を取得
+      const now = new Date()
+      const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000)) // UTC + 9時間
       const today = jstDate.toISOString().split('T')[0]
 
       const { data, error } = await supabase
@@ -553,8 +561,9 @@ export default function MembersPage({ isDark }) {
                       if (!memberAttendance?.clock_in) return '0:00'
                       
                       try {
-                        // 日本時間で今日の日付を取得
-                        const jstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+                        // attendance.jsと同じ方法で日付を取得
+                        const now = new Date()
+                        const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000)) // UTC + 9時間
                         const today = jstDate.toISOString().split('T')[0]
                         
                         const clockInTime = memberAttendance.clock_in.includes('T') 
