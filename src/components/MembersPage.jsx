@@ -371,7 +371,11 @@ export default function MembersPage({ isDark }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {members.map((member) => {
           const progress = taskProgress[member.id] ?? 0
-          console.log('Rendering member:', member.id, member.email, 'attendance:', attendanceStatus[member.id])
+          const attendance = attendanceStatus[member.id]
+          console.log('Rendering member:', member.id, member.email, 'attendance:', attendance)
+          if (attendance) {
+            console.log('  -> status:', attendance.status, 'clock_out:', attendance.clock_out)
+          }
           return (
             <button
               key={member.id}
