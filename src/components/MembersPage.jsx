@@ -530,7 +530,11 @@ export default function MembersPage({ isDark }) {
               key={member.id}
               onClick={() => handleMemberClick(member)}
               className={`backdrop-blur-xl rounded-3xl shadow-lg border p-6 transition-all duration-200 hover:scale-105 ${
-                isDark
+                medal
+                  ? isDark
+                    ? 'bg-gradient-to-br from-yellow-600/30 via-yellow-500/20 to-amber-600/30 shadow-yellow-900/50 border-yellow-500/50 hover:shadow-yellow-500/50 hover:scale-110 ring-2 ring-yellow-500/30 animate-pulse'
+                    : 'bg-gradient-to-br from-yellow-50 via-amber-50 to-yellow-100 shadow-yellow-200/70 border-yellow-300/70 hover:shadow-yellow-300/80 hover:scale-110 ring-2 ring-yellow-400/40 animate-pulse'
+                  : isDark
                   ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50 hover:bg-gray-800/80'
                   : 'bg-white/80 shadow-gray-200/50 border-gray-200/50 hover:bg-white/90'
               }`}
@@ -553,7 +557,7 @@ export default function MembersPage({ isDark }) {
                     cx="48"
                     cy="48"
                     r="44"
-                    stroke={isDark ? '#FFFFFF' : '#111827'}
+                    stroke={medal ? (isDark ? '#FCD34D' : '#F59E0B') : (isDark ? '#FFFFFF' : '#111827')}
                     strokeWidth="6"
                     fill="none"
                     strokeDasharray={`${2 * Math.PI * 44}`}
@@ -563,20 +567,32 @@ export default function MembersPage({ isDark }) {
                   />
                 </svg>
                 {/* アバター */}
-                <div className={`absolute inset-2 rounded-full flex items-center justify-center text-2xl font-bold text-white ${
-                  isDark ? 'bg-gradient-to-br from-gray-700 to-gray-600' : 'bg-gradient-to-br from-gray-800 to-gray-700'
+                <div className={`absolute inset-2 rounded-full flex items-center justify-center text-2xl font-bold ${
+                  medal
+                    ? 'bg-gradient-to-br from-yellow-400 via-amber-500 to-yellow-600 text-white shadow-lg shadow-yellow-500/50'
+                    : isDark
+                    ? 'bg-gradient-to-br from-gray-700 to-gray-600 text-white'
+                    : 'bg-gradient-to-br from-gray-800 to-gray-700 text-white'
                 }`}>
                   {member.email.charAt(0).toUpperCase()}
                 </div>
               </div>
 
               {/* 進捗パーセント */}
-              <div className={`text-xs font-bold mb-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              <div className={`text-xs font-bold mb-2 ${
+                medal
+                  ? 'text-yellow-600 dark:text-yellow-400'
+                  : isDark ? 'text-gray-400' : 'text-gray-600'
+              }`}>
                 {progress}%
               </div>
 
               {/* 名前 */}
-              <h3 className={`text-lg font-bold mb-1 truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              <h3 className={`text-lg font-bold mb-1 truncate ${
+                medal
+                  ? 'text-yellow-700 dark:text-yellow-300'
+                  : isDark ? 'text-white' : 'text-gray-900'
+              }`}>
                 {medal && <span className="mr-1">{medal}</span>}
                 {member.name || member.email.split('@')[0]}
               </h3>
