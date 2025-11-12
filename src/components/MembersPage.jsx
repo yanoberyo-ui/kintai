@@ -107,7 +107,11 @@ export default function MembersPage({ isDark }) {
       const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000)) // UTC + 9時間
       const today = jstDate.toISOString().split('T')[0]
       
-      console.log('Loading attendance for date:', today)
+      console.log('========== ATTENDANCE STATUS DEBUG ==========')
+      console.log('Current UTC time:', now.toISOString())
+      console.log('JST time calculated:', jstDate.toISOString())
+      console.log('Today date string:', today)
+      console.log('Date type:', typeof today)
 
       const { data, error } = await supabase
         .from('attendances')
@@ -115,14 +119,26 @@ export default function MembersPage({ isDark }) {
 
       if (error) throw error
       
-      console.log('All attendance records:', data)
-      console.log('Filtering for date:', today)
+      console.log('All attendance records:', JSON.stringify(data, null, 2))
+      console.log('Total records:', data?.length)
 
       const statusMap = {}
-      data?.forEach(record => {
-        console.log('Checking record - date:', record.date, 'vs today:', today, 'match:', record.date === today)
-        if (record.date === today) {
-          console.log('✓ Match found for user:', record.user_id, 'status:', record.status, 'clock_out:', record.clock_out)
+      data?.forEach((record, index) => {
+        console.log(`
+--- Record ${index + 1} ---`)
+        console.log('  date:', record.date, 'type:', typeof record.date)
+        console.log('  today:', today, 'type:', typeof today)
+        console.log('  strict match (===):', record.date === today)
+        console.log('  loose match (==):', record.date == today)
+        console.log('  includes today:', record.date?.includes?.(today))
+        
+        // より柔軟なマッチング
+        const recordDateStr = String(record.date).split('T')[0]
+        console.log('  record date (normalized):', recordDateStr)
+        console.log('  normalized match:', recordDateStr === today)
+        
+        if (recordDateStr === today) {
+          console.log('  ✓ MATCH! Adding to statusMap')
           statusMap[record.user_id] = {
             status: record.status,
             clock_in: record.clock_in,
@@ -131,6 +147,7 @@ export default function MembersPage({ isDark }) {
         }
       })
       console.log('Final statusMap:', statusMap)
+      console.log('========== END DEBUG ==========')
       setAttendanceStatus(statusMap)
     } catch (error) {
       console.error('Error loading attendance status:', error)
