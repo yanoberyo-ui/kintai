@@ -182,13 +182,13 @@ export default function PomodoroPage({ user, isDark }) {
         </div>
 
         {/* タイマー本体 */}
-        <div className={`rounded-3xl shadow-2xl p-12 ${
+        <div className={`rounded-3xl shadow-2xl p-6 md:p-12 ${
           isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white'
         }`}>
           {/* 円形タイマー */}
-          <div className="relative w-80 h-80 mx-auto mb-8">
+          <div className="relative w-full max-w-80 aspect-square mx-auto mb-8">
             {/* 進捗円 */}
-            <svg className="absolute inset-0 w-full h-full transform -rotate-90">
+            <svg className="absolute inset-0 w-full h-full transform -rotate-90" viewBox="0 0 320 320">
               {/* 背景円 */}
               <circle
                 cx="160"
@@ -215,10 +215,10 @@ export default function PomodoroPage({ user, isDark }) {
 
             {/* 時間表示 */}
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <div className="text-7xl font-bold mb-2" style={{ color: getTimerColor() }}>
+              <div className="text-5xl md:text-7xl font-bold mb-2" style={{ color: getTimerColor() }}>
                 {formatTime(timeLeft)}
               </div>
-              <div className={`text-lg font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              <div className={`text-sm md:text-lg font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                 {timerState === 'working' && '集中タイム'}
                 {timerState === 'short_break' && '短い休憩'}
                 {timerState === 'long_break' && '長い休憩'}

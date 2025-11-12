@@ -6,6 +6,9 @@ import CalendarPage from './components/CalendarPage'
 import SettingsPage from './components/SettingsPage'
 import MembersPage from './components/MembersPage'
 import PomodoroPage from './components/PomodoroPage'
+import ReservationsPage from './components/ReservationsPage'
+import { getStreaks } from './utils/streaks'
+import { getHeatmapData } from './utils/heatmap'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -16,6 +19,8 @@ function App() {
     return localStorage.getItem('currentPage') || 'home'
   })
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [streaks, setStreaks] = useState({ attendanceStreak: 0, todoStreak: 0 })
+  const [heatmapData, setHeatmapData] = useState([])
 
   // currentPageが変更されたらlocalStorageに保存
   useEffect(() => {
@@ -41,6 +46,12 @@ function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       setLoading(false)
+      
+      // ユーザーがいる場合はストリークとヒートマップを読み込む
+      if (session?.user) {
+        loadStreaks(session.user.id)
+        loadHeatmapData(session.user.id)
+      }
     })
 
     // 認証状態の変更を監視
@@ -52,6 +63,24 @@ function App() {
 
     return () => subscription.unsubscribe()
   }, [])
+
+  const loadStreaks = async (userId) => {
+    try {
+      const data = await getStreaks(userId)
+      setStreaks(data)
+    } catch (error) {
+      console.error('Error loading streaks:', error)
+    }
+  }
+
+  const loadHeatmapData = async (userId) => {
+    try {
+      const data = await getHeatmapData(userId)
+      setHeatmapData(data)
+    } catch (error) {
+      console.error('Error loading heatmap data:', error)
+    }
+  }
 
   if (loading) {
     return (
@@ -110,6 +139,32 @@ function App() {
               isDark ? '' : 'invert'
             }`}
           />
+
+          {/* ストリークバッジ */}
+          {user && (streaks.attendanceStreak > 0 || streaks.todoStreak > 0) && (
+            <div className="ml-auto flex items-center gap-2">
+              {streaks.attendanceStreak > 0 && (
+                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                  isDark
+                    ? 'bg-gray-800/80 text-gray-300'
+                    : 'bg-gray-100/80 text-gray-700'
+                }`}>
+                  <span className="text-sm">📅</span>
+                  <span>{streaks.attendanceStreak}</span>
+                </div>
+              )}
+              {streaks.todoStreak > 0 && (
+                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                  isDark
+                    ? 'bg-gray-800/80 text-gray-300'
+                    : 'bg-gray-100/80 text-gray-700'
+                }`}>
+                  <span className="text-sm">🎯</span>
+                  <span>{streaks.todoStreak}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
@@ -207,6 +262,26 @@ function App() {
               </div>
             </button>
 
+            <button
+              onClick={() => setCurrentPage('reservations')}
+              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+                currentPage === 'reservations'
+                  ? isDark
+                    ? 'bg-white text-gray-900'
+                    : 'bg-gray-900 text-white'
+                  : isDark
+                  ? 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/50'
+              }`}
+            >
+              <div className="flex md:flex-row flex-col items-center md:gap-3 gap-1">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="md:inline text-xs md:text-base">予約</span>
+              </div>
+            </button>
+
             {/* ユーザーアイコンボタン (モバイルのみ) */}
             <button
               onClick={() => setUserMenuOpen(!userMenuOpen)}
@@ -236,6 +311,8 @@ function App() {
               </div>
             </button>
           </nav>
+
+          {/* ヒートマップ (PC only) - 一旦非表示 */}
 
           {/* ユーザーセクション (PC only) */}
           <div className={`hidden md:block border-t pt-4 space-y-3 ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
@@ -298,7 +375,7 @@ function App() {
         {currentPage === 'home' ? (
           <div className="max-w-3xl mx-auto space-y-6">
             {/* 勤怠カード */}
-            <AttendanceCard user={user} isDark={isDark} />
+            <AttendanceCard user={user} isDark={isDark} onStreakUpdate={setStreaks} />
 
             {/* TODOリスト */}
             <TodoList user={user} isDark={isDark} />
@@ -309,6 +386,8 @@ function App() {
           <MembersPage user={user} isDark={isDark} />
         ) : currentPage === 'pomodoro' ? (
           <PomodoroPage user={user} isDark={isDark} />
+        ) : currentPage === 'reservations' ? (
+          <ReservationsPage user={user} isDark={isDark} />
         ) : (
           <SettingsPage user={user} isDark={isDark} setIsDark={setIsDark} />
         )}

@@ -789,10 +789,9 @@ export default function MembersPage({ isDark }) {
                       if (!memberAttendance?.clock_in) return '0:00'
                       
                       try {
-                        // attendance.jsと同じ方法で日付を取得
-                        const now = new Date()
-                        const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000)) // UTC + 9時間
-                        const today = jstDate.toISOString().split('T')[0]
+                        // 日本時間（JST）で現在時刻と今日の日付を取得
+                        const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+                        const today = jstNow.toISOString().split('T')[0]
                         
                         const clockInTime = memberAttendance.clock_in.includes('T') 
                           ? memberAttendance.clock_in.split('T')[1] 
@@ -807,14 +806,14 @@ export default function MembersPage({ isDark }) {
                             : memberAttendance.clock_out
                           clockOut = new Date(`${today}T${clockOutTime}`)
                         } else {
-                          clockOut = jstDate
+                          clockOut = jstNow
                         }
                         
-                        const diff = clockOut - clockIn
+                        const diff = Math.floor((clockOut - clockIn) / 1000 / 60) // 分単位で計算
                         if (diff < 0 || isNaN(diff)) return '0:00'
                         
-                        const hours = Math.floor(diff / 3600000)
-                        const minutes = Math.floor((diff % 3600000) / 60000)
+                        const hours = Math.floor(diff / 60)
+                        const minutes = diff % 60
                         return `${hours}:${minutes.toString().padStart(2, '0')}`
                       } catch (e) {
                         console.error('Error calculating work time:', e)

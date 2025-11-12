@@ -4,8 +4,9 @@ import { sendSlackNotification } from '../utils/slack'
 import { getTodayTodoList } from '../utils/todo'
 import { supabase } from '../utils/supabase'
 import { getAIFeedback } from '../utils/ranking'
+import { getStreaks } from '../utils/streaks'
 
-export default function AttendanceCard({ user, isDark }) {
+export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
   const [attendance, setAttendance] = useState(null)
   const [loading, setLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(new Date())
@@ -17,6 +18,11 @@ export default function AttendanceCard({ user, isDark }) {
   const [userProfile, setUserProfile] = useState(null)
   const [aiFeedback, setAiFeedback] = useState(null)
   const [loadingFeedback, setLoadingFeedback] = useState(false)
+  const [showStreakNotification, setShowStreakNotification] = useState(false)
+  const [streakNotificationType, setStreakNotificationType] = useState(null) // 'clockin' or 'clockout'
+  const [streakValue, setStreakValue] = useState(0)
+  const [showOvertimeAlert, setShowOvertimeAlert] = useState(false)
+  const [overtimeAlertShown, setOvertimeAlertShown] = useState(false)
 
   useEffect(() => {
     loadAttendance()
@@ -33,6 +39,36 @@ export default function AttendanceCard({ user, isDark }) {
 
     return () => clearInterval(timer)
   }, [user])
+
+  // 15時間超過チェック
+  useEffect(() => {
+    if (!attendance?.clock_in || attendance?.clock_out || overtimeAlertShown) return
+
+    const checkOvertime = () => {
+      const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+      const today = jstNow.toISOString().split('T')[0]
+      
+      const clockInTime = attendance.clock_in.includes('T') 
+        ? attendance.clock_in.split('T')[1] 
+        : attendance.clock_in
+      const start = new Date(`${today}T${clockInTime}`)
+      
+      const diffMinutes = Math.floor((jstNow - start) / 1000 / 60)
+      const diffHours = diffMinutes / 60
+
+      // 15時間（900分）を超えたらアラート表示
+      if (diffHours >= 15) {
+        setShowOvertimeAlert(true)
+        setOvertimeAlertShown(true) // 一度表示したら再表示しない
+      }
+    }
+
+    // 1分ごとにチェック
+    const overtimeTimer = setInterval(checkOvertime, 60000)
+    checkOvertime() // 初回実行
+
+    return () => clearInterval(overtimeTimer)
+  }, [attendance, overtimeAlertShown])
 
   const loadAttendance = async () => {
     try {
@@ -87,6 +123,20 @@ export default function AttendanceCard({ user, isDark }) {
 
       // 誕生日チェック
       await checkBirthdays()
+
+      // ストリーク通知を表示
+      const streaks = await getStreaks(user.id)
+      if (streaks.attendanceStreak > 0) {
+        setStreakValue(streaks.attendanceStreak)
+        setStreakNotificationType('clockin')
+        setShowStreakNotification(true)
+        setTimeout(() => setShowStreakNotification(false), 3500)
+      }
+      
+      // ヘッダーのストリークバッジを更新
+      if (onStreakUpdate) {
+        onStreakUpdate(streaks)
+      }
     } catch (error) {
       console.error('Error clocking in:', error)
     } finally {
@@ -186,6 +236,20 @@ export default function AttendanceCard({ user, isDark }) {
       )
 
       setBreakMinutes('')
+
+      // ストリーク通知を表示（TODO達成）
+      const streaks = await getStreaks(user.id)
+      if (streaks.todoStreak > 0) {
+        setStreakValue(streaks.todoStreak)
+        setStreakNotificationType('clockout')
+        setShowStreakNotification(true)
+        setTimeout(() => setShowStreakNotification(false), 3500)
+      }
+      
+      // ヘッダーのストリークバッジを更新
+      if (onStreakUpdate) {
+        onStreakUpdate(streaks)
+      }
     } catch (error) {
       console.error('Error clocking out:', error)
     } finally {
@@ -343,6 +407,73 @@ export default function AttendanceCard({ user, isDark }) {
         </div>
       )}
 
+      {/* ストリーク通知アニメーション */}
+      {showStreakNotification && (
+        <div className="fixed top-8 right-8 z-50 pointer-events-none animate-slide-in-right">
+          <div
+            className={`rounded-2xl shadow-2xl border p-6 flex items-center gap-4 ${
+              isDark
+                ? 'bg-gray-900/95 border-gray-800/50 backdrop-blur-xl'
+                : 'bg-white/95 border-gray-200/50 backdrop-blur-xl'
+            }`}
+            style={{
+              animation: 'slideInRight 0.5s ease-out, pulse 0.3s ease-in-out 0.5s 2'
+            }}
+          >
+            <div className="text-5xl animate-bounce">
+              {streakNotificationType === 'clockin' ? '🔥' : '🎯'}
+            </div>
+            <div>
+              <div className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                {streakNotificationType === 'clockin' ? '連続出勤' : 'TODO達成'}
+              </div>
+              <div className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                {streakValue}日目！
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 残業アラート */}
+      {showOvertimeAlert && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => setShowOvertimeAlert(false)}
+        >
+          <div
+            className={`max-w-md w-full rounded-3xl shadow-2xl border p-8 ${
+              isDark
+                ? 'bg-gray-900/95 border-red-900/50'
+                : 'bg-white/95 border-red-200/50'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center">
+              <div className="text-6xl mb-4">⚠️</div>
+              <h2 className={`text-3xl font-bold mb-4 ${isDark ? 'text-red-400' : 'text-red-600'}`}>
+                長時間労働アラート
+              </h2>
+              <p className={`text-lg mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                勤務時間が15時間を超えています
+              </p>
+              <p className={`text-base ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                健康のため、早めに退勤することをおすすめします
+              </p>
+              <button
+                onClick={() => setShowOvertimeAlert(false)}
+                className={`mt-6 px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
+                  isDark
+                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    : 'bg-red-500 text-white hover:bg-red-600'
+                }`}
+              >
+                確認しました
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     
     <div className={`backdrop-blur-xl rounded-3xl shadow-lg border p-8 transition-colors duration-500 ${
       isDark
