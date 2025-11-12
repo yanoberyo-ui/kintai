@@ -491,11 +491,19 @@ export default function MembersPage({ isDark }) {
               return priorityA - priorityB
             }
 
-            // 2. 出勤状態が同じ場合はタスク達成率で並び替え（高い順）
+            // 2. 出勤状態が同じ場合は頑張り度スコアで並び替え（高い順）
             const progressA = taskProgress[a.id] ?? 0
             const progressB = taskProgress[b.id] ?? 0
+            const countA = taskCounts[a.id] ?? 0
+            const countB = taskCounts[b.id] ?? 0
 
-            return progressB - progressA
+            // 頑張り度スコア = 完了したタスク数 + 達成率ボーナス
+            const completedA = Math.round(countA * (progressA / 100))
+            const completedB = Math.round(countB * (progressB / 100))
+            const scoreA = completedA + (progressA / 100)
+            const scoreB = completedB + (progressB / 100)
+
+            return scoreB - scoreA
           })
           
           // 出勤中のメンバーを取得して頑張り度でソート
@@ -515,10 +523,12 @@ export default function MembersPage({ isDark }) {
             })
             .sort((a, b) => b.score - a.score)
 
-          // メダルマッピング（トップ1のみ）
+          // メダルマッピング（トップ3：金銀銅）
           const getMedal = (member) => {
             const index = workingMembers.findIndex(item => item.member.id === member.id)
-            if (index === 0) return '🎖️'
+            if (index === 0) return { emoji: '🥇', rank: 1 } // Gold
+            if (index === 1) return { emoji: '🥈', rank: 2 } // Silver
+            if (index === 2) return { emoji: '🥉', rank: 3 } // Bronze
             return null
           }
           
@@ -530,10 +540,18 @@ export default function MembersPage({ isDark }) {
               key={member.id}
               onClick={() => handleMemberClick(member)}
               className={`backdrop-blur-xl rounded-3xl shadow-lg border p-6 transition-all duration-200 hover:scale-105 ${
-                medal
+                medal?.rank === 1
                   ? isDark
                     ? 'bg-gradient-to-br from-yellow-600/30 via-yellow-500/20 to-amber-600/30 shadow-yellow-900/50 border-yellow-500/50 hover:shadow-yellow-500/50 hover:scale-110 ring-2 ring-yellow-500/30 animate-pulse'
                     : 'bg-gradient-to-br from-yellow-50 via-amber-50 to-yellow-100 shadow-yellow-200/70 border-yellow-300/70 hover:shadow-yellow-300/80 hover:scale-110 ring-2 ring-yellow-400/40 animate-pulse'
+                  : medal?.rank === 2
+                  ? isDark
+                    ? 'bg-gradient-to-br from-gray-500/30 via-slate-400/20 to-gray-600/30 shadow-gray-900/50 border-gray-400/50 hover:shadow-gray-400/50 hover:scale-110 ring-2 ring-gray-400/30 animate-pulse'
+                    : 'bg-gradient-to-br from-gray-100 via-slate-50 to-gray-200 shadow-gray-300/70 border-gray-300/70 hover:shadow-gray-400/80 hover:scale-110 ring-2 ring-gray-300/40 animate-pulse'
+                  : medal?.rank === 3
+                  ? isDark
+                    ? 'bg-gradient-to-br from-orange-700/30 via-amber-600/20 to-orange-800/30 shadow-orange-900/50 border-orange-600/50 hover:shadow-orange-600/50 hover:scale-110 ring-2 ring-orange-600/30 animate-pulse'
+                    : 'bg-gradient-to-br from-orange-100 via-amber-50 to-orange-200 shadow-orange-300/70 border-orange-300/70 hover:shadow-orange-400/80 hover:scale-110 ring-2 ring-orange-300/40 animate-pulse'
                   : isDark
                   ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50 hover:bg-gray-800/80'
                   : 'bg-white/80 shadow-gray-200/50 border-gray-200/50 hover:bg-white/90'
@@ -557,7 +575,15 @@ export default function MembersPage({ isDark }) {
                     cx="48"
                     cy="48"
                     r="44"
-                    stroke={medal ? (isDark ? '#FCD34D' : '#F59E0B') : (isDark ? '#FFFFFF' : '#111827')}
+                    stroke={
+                      medal?.rank === 1
+                        ? (isDark ? '#FCD34D' : '#F59E0B') // Gold
+                        : medal?.rank === 2
+                        ? (isDark ? '#D1D5DB' : '#6B7280') // Silver
+                        : medal?.rank === 3
+                        ? (isDark ? '#FB923C' : '#EA580C') // Bronze
+                        : (isDark ? '#FFFFFF' : '#111827') // Default
+                    }
                     strokeWidth="6"
                     fill="none"
                     strokeDasharray={`${2 * Math.PI * 44}`}
@@ -568,8 +594,12 @@ export default function MembersPage({ isDark }) {
                 </svg>
                 {/* アバター */}
                 <div className={`absolute inset-2 rounded-full flex items-center justify-center text-2xl font-bold ${
-                  medal
+                  medal?.rank === 1
                     ? 'bg-gradient-to-br from-yellow-400 via-amber-500 to-yellow-600 text-white shadow-lg shadow-yellow-500/50'
+                    : medal?.rank === 2
+                    ? 'bg-gradient-to-br from-gray-300 via-slate-400 to-gray-500 text-white shadow-lg shadow-gray-400/50'
+                    : medal?.rank === 3
+                    ? 'bg-gradient-to-br from-orange-400 via-amber-600 to-orange-700 text-white shadow-lg shadow-orange-500/50'
                     : isDark
                     ? 'bg-gradient-to-br from-gray-700 to-gray-600 text-white'
                     : 'bg-gradient-to-br from-gray-800 to-gray-700 text-white'
@@ -580,8 +610,12 @@ export default function MembersPage({ isDark }) {
 
               {/* 進捗パーセント */}
               <div className={`text-xs font-bold mb-2 ${
-                medal
+                medal?.rank === 1
                   ? 'text-yellow-600 dark:text-yellow-400'
+                  : medal?.rank === 2
+                  ? 'text-gray-600 dark:text-gray-300'
+                  : medal?.rank === 3
+                  ? 'text-orange-600 dark:text-orange-400'
                   : isDark ? 'text-gray-400' : 'text-gray-600'
               }`}>
                 {progress}%
@@ -589,11 +623,15 @@ export default function MembersPage({ isDark }) {
 
               {/* 名前 */}
               <h3 className={`text-lg font-bold mb-1 truncate ${
-                medal
+                medal?.rank === 1
                   ? 'text-yellow-700 dark:text-yellow-300'
+                  : medal?.rank === 2
+                  ? 'text-gray-700 dark:text-gray-200'
+                  : medal?.rank === 3
+                  ? 'text-orange-700 dark:text-orange-300'
                   : isDark ? 'text-white' : 'text-gray-900'
               }`}>
-                {medal && <span className="mr-1">{medal}</span>}
+                {medal && <span className="mr-1">{medal.emoji}</span>}
                 {member.name || member.email.split('@')[0]}
               </h3>
 

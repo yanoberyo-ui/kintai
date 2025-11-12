@@ -63,6 +63,13 @@ export default function AttendanceCard({ user, isDark }) {
       const result = await clockIn(user.id)
       await loadAttendance()
 
+      // ユーザー情報を取得（最新のデータを確実に取得）
+      const { data: userData } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', user.id)
+        .single()
+
       // TODOリストを取得
       const todoList = await getTodayTodoList(user.id)
       const todoItems = todoList?.todo_items || []
@@ -70,7 +77,7 @@ export default function AttendanceCard({ user, isDark }) {
       // Slack通知を送信
       await sendSlackNotification(
         'clock_in',
-        { id: user.id, name: userProfile?.name || user.email },
+        { id: user.id, name: userData?.name || user.email },
         result,
         todoItems
       )
@@ -143,6 +150,13 @@ export default function AttendanceCard({ user, isDark }) {
       const result = await clockOut(user.id, minutes)
       await loadAttendance()
 
+      // ユーザー情報を取得（最新のデータを確実に取得）
+      const { data: userData } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', user.id)
+        .single()
+
       // TODOリストを取得
       const todoList = await getTodayTodoList(user.id)
       const todoItems = todoList?.todo_items || []
@@ -150,7 +164,7 @@ export default function AttendanceCard({ user, isDark }) {
       // Slack通知を送信（TODOリスト付き）
       await sendSlackNotification(
         'clock_out',
-        { id: user.id, name: userProfile?.name || user.email },
+        { id: user.id, name: userData?.name || user.email },
         result,
         todoItems
       )
