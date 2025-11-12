@@ -9,6 +9,7 @@
 - TODOリスト管理
 - Slack通知連携
 - スプレッドシート自動出力
+- **退勤時AIフィードバック**: タスク達成度と順位に応じたパーソナライズされた励ましメッセージ
 
 ## 技術スタック
 
@@ -26,12 +27,15 @@ npm install
 
 ### 2. 環境変数の設定
 
-`.env`ファイルを作成し、Supabaseの認証情報を設定:
+`.env`ファイルを作成し、以下の認証情報を設定:
 
 ```
 VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+OPENAI_API_KEY=your_openai_api_key
 ```
+
+**注意**: `OPENAI_API_KEY`は退勤時のAIフィードバック機能で使用します。Vercelにデプロイする際は、Vercelの環境変数にも同様に設定してください。
 
 ### 3. データベースのマイグレーション
 

@@ -3,6 +3,7 @@ import { getTodayAttendance, clockIn, clockOut } from '../utils/attendance'
 import { sendSlackNotification } from '../utils/slack'
 import { getTodayTodoList } from '../utils/todo'
 import { supabase } from '../utils/supabase'
+import { getAIFeedback } from '../utils/ranking'
 
 export default function AttendanceCard({ user, isDark }) {
   const [attendance, setAttendance] = useState(null)
@@ -14,6 +15,8 @@ export default function AttendanceCard({ user, isDark }) {
   const [birthdayData, setBirthdayData] = useState({ isCurrentUser: false, members: [] })
   const [showConfetti, setShowConfetti] = useState(false)
   const [userProfile, setUserProfile] = useState(null)
+  const [aiFeedback, setAiFeedback] = useState(null)
+  const [loadingFeedback, setLoadingFeedback] = useState(false)
 
   useEffect(() => {
     loadAttendance()
@@ -137,8 +140,21 @@ export default function AttendanceCard({ user, isDark }) {
     }
   }
 
-  const handleClockOut = () => {
+  const handleClockOut = async () => {
     setShowBreakModal(true)
+    setLoadingFeedback(true)
+    setAiFeedback(null)
+
+    try {
+      // AIフィードバックを取得
+      const feedback = await getAIFeedback(user.id, userProfile?.name || user.email)
+      setAiFeedback(feedback)
+    } catch (error) {
+      console.error('Error getting AI feedback:', error)
+      // エラーが出てもモーダルは表示する
+    } finally {
+      setLoadingFeedback(false)
+    }
   }
 
   const confirmClockOut = async () => {
@@ -393,15 +409,76 @@ export default function AttendanceCard({ user, isDark }) {
 
       {/* 休憩時間入力モーダル */}
       {showBreakModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className={`rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 ${
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`rounded-2xl shadow-2xl p-8 max-w-lg w-full ${
             isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white'
           }`}>
             <h3 className={`text-2xl font-semibold mb-4 ${
               isDark ? 'text-white' : 'text-gray-900'
             }`}>
-              退勤確認
+              お疲れ様でした！
             </h3>
+
+            {/* AIフィードバック表示エリア */}
+            {loadingFeedback && (
+              <div className={`mb-6 p-4 rounded-xl ${
+                isDark ? 'bg-gray-800' : 'bg-gray-50'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-400 border-t-transparent"></div>
+                  <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>
+                    今日の頑張りを分析中...
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {aiFeedback && !loadingFeedback && (
+              <div className={`mb-6 p-5 rounded-xl ${
+                aiFeedback.stats.rank === 1
+                  ? isDark
+                    ? 'bg-gradient-to-br from-yellow-600/20 via-yellow-500/10 to-amber-600/20 border border-yellow-500/30'
+                    : 'bg-gradient-to-br from-yellow-50 via-amber-50 to-yellow-100 border border-yellow-300/50'
+                  : aiFeedback.stats.rank === 2
+                  ? isDark
+                    ? 'bg-gradient-to-br from-gray-500/20 via-slate-400/10 to-gray-600/20 border border-gray-400/30'
+                    : 'bg-gradient-to-br from-gray-100 via-slate-50 to-gray-200 border border-gray-300/50'
+                  : aiFeedback.stats.rank === 3
+                  ? isDark
+                    ? 'bg-gradient-to-br from-orange-700/20 via-amber-600/10 to-orange-800/20 border border-orange-600/30'
+                    : 'bg-gradient-to-br from-orange-100 via-amber-50 to-orange-200 border border-orange-300/50'
+                  : isDark
+                  ? 'bg-gray-800 border border-gray-700'
+                  : 'bg-gray-50 border border-gray-200'
+              }`}>
+                {/* ランキング情報 */}
+                <div className={`text-sm font-semibold mb-3 ${
+                  aiFeedback.stats.rank <= 3
+                    ? aiFeedback.stats.rank === 1
+                      ? 'text-yellow-600 dark:text-yellow-400'
+                      : aiFeedback.stats.rank === 2
+                      ? 'text-gray-600 dark:text-gray-300'
+                      : 'text-orange-600 dark:text-orange-400'
+                    : isDark ? 'text-gray-400' : 'text-gray-600'
+                }`}>
+                  今日の頑張り度: {aiFeedback.stats.rank}位 / {aiFeedback.stats.totalMembers}人中
+                </div>
+
+                {/* タスク統計 */}
+                <div className={`text-xs mb-3 space-y-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  <div>タスク: {aiFeedback.stats.completedTasks} / {aiFeedback.stats.taskCount}個完了</div>
+                  <div>達成率: {aiFeedback.stats.completionRate}%</div>
+                </div>
+
+                {/* AIメッセージ */}
+                <p className={`text-base leading-relaxed whitespace-pre-wrap ${
+                  isDark ? 'text-white' : 'text-gray-900'
+                }`}>
+                  {aiFeedback.message}
+                </p>
+              </div>
+            )}
+
             <p className={`mb-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
               今日の休憩時間を入力してください
             </p>
