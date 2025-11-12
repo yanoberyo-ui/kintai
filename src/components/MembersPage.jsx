@@ -10,6 +10,7 @@ export default function MembersPage({ isDark }) {
   const [memberAttendance, setMemberAttendance] = useState(null)
   const [attendanceStatus, setAttendanceStatus] = useState({})
   const [taskProgress, setTaskProgress] = useState({})
+  const [taskCounts, setTaskCounts] = useState({})
   const [showModal, setShowModal] = useState(false)
   const [birthdayNotifications, setBirthdayNotifications] = useState({ today: [], tomorrow: [] })
   const [showBirthdayPopup, setShowBirthdayPopup] = useState(false)
@@ -156,14 +157,19 @@ export default function MembersPage({ isDark }) {
       if (error) throw error
 
       const progressMap = {}
+      const countMap = {}
       data?.forEach(list => {
-        if (list.todo_items && list.todo_items.length > 0) {
+        const taskCount = list.todo_items?.length || 0
+        countMap[list.user_id] = taskCount
+        
+        if (list.todo_items && taskCount > 0) {
           progressMap[list.user_id] = calculateProgress(list.todo_items)
         } else {
           progressMap[list.user_id] = 0
         }
       })
       setTaskProgress(progressMap)
+      setTaskCounts(countMap)
     } catch (error) {
       console.error('Error loading task progress:', error)
     }
@@ -457,12 +463,14 @@ export default function MembersPage({ isDark }) {
 
       {/* ギャラリービュー */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {members
-          .filter(member => 
-            selectedDepartments.length === 0 || 
-            selectedDepartments.includes(member.department)
-          )
-          .sort((a, b) => {
+        {(() => {
+          // フィルタリングとソート
+          const sortedMembers = members
+            .filter(member => 
+              selectedDepartments.length === 0 || 
+              selectedDepartments.includes(member.department)
+            )
+            .sort((a, b) => {
             // 1. 出勤状態の優先順位: 出勤中 > 休憩中 > 退勤済 > 未出勤
             const statusA = attendanceStatus[a.id]
             const statusB = attendanceStatus[b.id]
@@ -489,8 +497,37 @@ export default function MembersPage({ isDark }) {
 
             return progressB - progressA
           })
-          .map((member) => {
+          
+          // 出勤中のメンバーを取得して頑張り度でソート
+          const workingMembers = sortedMembers
+            .filter(member => {
+              const status = attendanceStatus[member.id]
+              return status && !status.clock_out && status.status === 'working'
+            })
+            .map(member => {
+              const progress = taskProgress[member.id] ?? 0
+              const count = taskCounts[member.id] ?? 0
+              // 頑張り度スコア = タスク数 × (達成率 / 100)
+              // 完了したタスク数を評価
+              const completedTasks = Math.round(count * (progress / 100))
+              const score = completedTasks + (progress / 100) // 完了数 + 達成率のボーナス
+              return { member, score }
+            })
+            .sort((a, b) => b.score - a.score)
+
+          // メダルマッピング
+          const getMedal = (member) => {
+            const index = workingMembers.findIndex(item => item.member.id === member.id)
+            if (index === 0) return '🎖️'
+            if (index === 1) return '🥇'
+            if (index === 2) return '🥈'
+            if (index === 3) return '🥉'
+            return null
+          }
+          
+          return sortedMembers.map((member) => {
           const progress = taskProgress[member.id] ?? 0
+          const medal = getMedal(member)
           return (
             <button
               key={member.id}
@@ -543,6 +580,7 @@ export default function MembersPage({ isDark }) {
 
               {/* 名前 */}
               <h3 className={`text-lg font-bold mb-1 truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                {medal && <span className="mr-1">{medal}</span>}
                 {member.name || member.email.split('@')[0]}
               </h3>
 
@@ -629,7 +667,7 @@ export default function MembersPage({ isDark }) {
               </div>
             </button>
           )
-        })}
+        })})()}
       </div>
 
       {/* モーダル */}
