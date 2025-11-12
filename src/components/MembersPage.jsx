@@ -462,6 +462,24 @@ export default function MembersPage({ isDark }) {
             selectedDepartments.length === 0 || 
             selectedDepartments.includes(member.department)
           )
+          .sort((a, b) => {
+            // 出勤状態の優先順位: 出勤中 > 休憩中 > 退勤済 > 未出勤
+            const statusA = attendanceStatus[a.id]
+            const statusB = attendanceStatus[b.id]
+            
+            const getPriority = (status) => {
+              if (!status) return 3 // 未出勤
+              if (status.clock_out) return 2 // 退勤済
+              if (status.status === 'working') return 0 // 出勤中
+              if (status.status === 'break') return 1 // 休憩中
+              return 3
+            }
+            
+            const priorityA = getPriority(statusA)
+            const priorityB = getPriority(statusB)
+            
+            return priorityA - priorityB
+          })
           .map((member) => {
           const progress = taskProgress[member.id] ?? 0
           return (
