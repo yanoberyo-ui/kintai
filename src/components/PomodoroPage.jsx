@@ -74,20 +74,6 @@ export default function PomodoroPage({ user, isDark }) {
     }
   }
 
-  const sendNotification = () => {
-    if ('Notification' in window && Notification.permission === 'granted') {
-      if (timerState === 'working') {
-        new Notification('作業完了！', {
-          body: '素晴らしい！5分間休憩しましょう。'
-        })
-      } else {
-        new Notification('休憩終了！', {
-          body: '次のセッションを始めましょう。'
-        })
-      }
-    }
-  }
-
   const updateTaskPomodoroCount = async (taskId) => {
     try {
       // タスクのポモドーロカウントを+1
@@ -111,16 +97,17 @@ export default function PomodoroPage({ user, isDark }) {
     }
   }
 
-  const startBreak = (type) => {
-    setTimerState(type)
-    setTimeLeft(type === 'long_break' ? LONG_BREAK : SHORT_BREAK)
-  }
-
   const handleTimerComplete = useCallback(() => {
     playSound()
-    sendNotification()
 
     if (timerState === 'working') {
+      // 通知
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('作業完了！', {
+          body: '素晴らしい！5分間休憩しましょう。'
+        })
+      }
+
       // 作業完了
       setPomodoroCount(prev => prev + 1)
       setTodayTotal(prev => prev + 1)
@@ -133,15 +120,24 @@ export default function PomodoroPage({ user, isDark }) {
       // 4ポモドーロ完了したら長い休憩、そうでなければ短い休憩
       const newCount = pomodoroCount + 1
       if (newCount % 4 === 0) {
-        startBreak('long_break')
+        setTimerState('long_break')
+        setTimeLeft(LONG_BREAK)
       } else {
-        startBreak('short_break')
+        setTimerState('short_break')
+        setTimeLeft(SHORT_BREAK)
       }
     } else {
+      // 通知
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('休憩終了！', {
+          body: '次のセッションを始めましょう。'
+        })
+      }
+
       // 休憩終了
       setTimerState('idle')
     }
-  }, [timerState, selectedTask, pomodoroCount])
+  }, [timerState, selectedTask, pomodoroCount, LONG_BREAK, SHORT_BREAK])
 
   const startWork = (task = null) => {
     if (task) {
