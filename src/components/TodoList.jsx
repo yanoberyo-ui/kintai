@@ -7,7 +7,24 @@ import {
   toggleTodoItem,
   deleteTodoItem,
   calculateProgress,
+  reorderTodoItems,
+  getChildTasks,
+  updateTodoItem,
 } from '../utils/todo'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 export default function TodoList({ user, isDark }) {
   const [todoList, setTodoList] = useState(null)
@@ -19,6 +36,14 @@ export default function TodoList({ user, isDark }) {
   const [showConfetti, setShowConfetti] = useState(false)
   const prevProgressRef = useRef(0)
   const itemRefs = useRef({})
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  )
 
   useEffect(() => {
     loadTodoList()
@@ -50,6 +75,67 @@ export default function TodoList({ user, isDark }) {
     
     prevProgressRef.current = progress
   }, [todoList])
+
+  const handleDragEnd = async (event) => {
+    const { active, over } = event
+
+    if (!over || active.id === over.id) {
+      return
+    }
+
+    const sortedItems = [...items].sort((a, b) => a.order_index - b.order_index)
+    const oldIndex = sortedItems.findIndex((item) => item.id === active.id)
+    const newIndex = sortedItems.findIndex((item) => item.id === over.id)
+
+    const draggedItem = sortedItems[oldIndex]
+
+    // 子タスクを取得
+    const childTasks = getChildTasks(sortedItems, draggedItem.id)
+
+    // 親タスクを移動
+    let reorderedItems = arrayMove(sortedItems, oldIndex, newIndex)
+
+    // 子タスクがある場合、親の直後に配置
+    if (childTasks.length > 0) {
+      // 子タスクを除いた配列を作成
+      const itemsWithoutChildren = reorderedItems.filter(
+        (item) => !childTasks.find((child) => child.id === item.id)
+      )
+
+      // 親タスクの新しい位置を見つける
+      const parentNewIndex = itemsWithoutChildren.findIndex(
+        (item) => item.id === draggedItem.id
+      )
+
+      // 親の直後に子タスクを挿入
+      reorderedItems = [
+        ...itemsWithoutChildren.slice(0, parentNewIndex + 1),
+        ...childTasks,
+        ...itemsWithoutChildren.slice(parentNewIndex + 1),
+      ]
+    }
+
+    // 各アイテムに新しいorder_indexを設定して、新しいオブジェクトとして作成
+    const updatedItems = reorderedItems.map((item, index) => ({
+      ...item,
+      order_index: index
+    }))
+
+    // 楽観的更新: UIを即座に更新
+    setTodoList({
+      ...todoList,
+      todo_items: updatedItems,
+    })
+
+    try {
+      await reorderTodoItems(reorderedItems)
+      // 成功した場合は再取得しない（UIは既に更新済み）
+    } catch (error) {
+      console.error('Error reordering tasks:', error)
+      // エラーが発生した場合のみ元に戻す
+      await loadTodoList()
+    }
+  }
 
   const loadTodoList = async () => {
     try {
@@ -196,12 +282,21 @@ export default function TodoList({ user, isDark }) {
 
       {/* タスクリスト */}
       <div className="px-8 pb-8">
-        <div className="space-y-1">
-          {items
-            .sort((a, b) => a.order_index - b.order_index)
-            .map((item, index) => (
-              <React.Fragment key={item.id}>
-                <TaskItem
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={items.map((item) => item.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-1">
+              {items
+                .sort((a, b) => a.order_index - b.order_index)
+                .map((item, index) => (
+                  <React.Fragment key={item.id}>
+                    <SortableTaskItem
                   item={item}
                   isDark={isDark}
                   onToggle={handleToggle}
@@ -271,10 +366,36 @@ export default function TodoList({ user, isDark }) {
               <span className="text-sm font-medium">タスクを追加</span>
             </button>
           )}
-        </div>
+            </div>
+          </SortableContext>
+        </DndContext>
       </div>
     </div>
     </>
+  )
+}
+
+// Sortable wrapper component for TaskItem
+function SortableTaskItem(props) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: props.item.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes}>
+      <TaskItem {...props} dragHandleProps={listeners} />
+    </div>
   )
 }
 
@@ -345,8 +466,6 @@ function NewTaskItem({ isDark, onAdd, onBackspaceEmpty, indentLevel, onIndentCha
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
-
-  console.log('NewTaskItem rendered with content:', content, 'localIndent:', localIndent)
 
   const handleTouchStart = (e) => {
     // 入力中は無効
@@ -459,8 +578,22 @@ function NewTaskItem({ isDark, onAdd, onBackspaceEmpty, indentLevel, onIndentCha
   )
 }
 
-const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspaceEmpty, onEnterPress }, ref) => {
+const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspaceEmpty, onEnterPress, dragHandleProps }, ref) => {
   const [indentLevel, setIndentLevel] = useState(item.indent_level || 0)
+  
+  // indent_levelが変更されたらデータベースを更新
+  useEffect(() => {
+    const updateIndent = async () => {
+      if (indentLevel !== (item.indent_level || 0)) {
+        try {
+          await updateTodoItem(item.id, { indent_level: indentLevel })
+        } catch (error) {
+          console.error('Error updating indent level:', error)
+        }
+      }
+    }
+    updateIndent()
+  }, [indentLevel, item.id, item.indent_level])
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(item.content)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -580,10 +713,11 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* チェックボタン */}
+      {/* チェックボタン（ドラッグハンドル兼用） */}
       <button
+        {...(dragHandleProps || {})}
         onClick={handleToggle}
-        className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm hover:scale-110 ${
+        className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm hover:scale-110 cursor-grab active:cursor-grabbing ${
           item.is_completed
             ? isDark
               ? 'bg-gray-700 text-white'
