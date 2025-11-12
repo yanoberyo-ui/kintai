@@ -406,44 +406,79 @@ export default function MembersPage({ isDark }) {
 
               {/* 出勤ステータス */}
               <div className="flex justify-center">
-                {attendanceStatus[member.id] ? (
-                  <div className={`px-3 py-1.5 rounded-full text-xs font-bold ${
-                    attendanceStatus[member.id].status === 'working'
-                      ? isDark
-                        ? 'bg-white text-gray-900'
-                        : 'bg-gray-900 text-white'
-                      : attendanceStatus[member.id].status === 'break'
-                      ? isDark
-                        ? 'bg-gray-300 text-gray-900'
-                        : 'bg-gray-500 text-white'
-                      : attendanceStatus[member.id].status === 'completed'
-                      ? isDark
-                        ? 'bg-blue-900/50 text-blue-300'
-                        : 'bg-blue-100 text-blue-700'
-                      : isDark
-                      ? 'bg-gray-700 text-gray-300'
-                      : 'bg-gray-300 text-gray-700'
-                  }`}>
-                    {(() => {
-                      const status = attendanceStatus[member.id].status
-                      const clockOut = attendanceStatus[member.id].clock_out
-                      console.log(`Member: ${member.name || member.email}, Status from DB: "${status}", Clock out: ${clockOut}`)
-                      
-                      if (status === 'working') return '出勤中'
-                      if (status === 'break') return '休憩中'
-                      if (status === 'completed') return '退勤済'
-                      
-                      console.warn(`Unknown status: "${status}" for ${member.name || member.email}`)
-                      return `不明(${status})`
-                    })()}
-                  </div>
-                ) : (
-                  <div className={`px-3 py-1.5 rounded-full text-xs font-bold ${
-                    isDark ? 'bg-gray-800 text-gray-500' : 'bg-gray-200 text-gray-500'
-                  }`}>
-                    未出勤
-                  </div>
-                )}
+                {(() => {
+                  const attendance = attendanceStatus[member.id]
+                  
+                  // 勤怠レコードがない場合
+                  if (!attendance) {
+                    return (
+                      <div className={`px-3 py-1.5 rounded-full text-xs font-bold ${
+                        isDark ? 'bg-gray-800 text-gray-500' : 'bg-gray-200 text-gray-500'
+                      }`}>
+                        未出勤
+                      </div>
+                    )
+                  }
+                  
+                  // clock_outがある場合は退勤済
+                  if (attendance.clock_out) {
+                    return (
+                      <div className={`px-3 py-1.5 rounded-full text-xs font-bold ${
+                        isDark
+                          ? 'bg-blue-900/50 text-blue-300'
+                          : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        退勤済
+                      </div>
+                    )
+                  }
+                  
+                  // statusで判定
+                  if (attendance.status === 'working') {
+                    return (
+                      <div className={`px-3 py-1.5 rounded-full text-xs font-bold ${
+                        isDark
+                          ? 'bg-white text-gray-900'
+                          : 'bg-gray-900 text-white'
+                      }`}>
+                        出勤中
+                      </div>
+                    )
+                  }
+                  
+                  if (attendance.status === 'break') {
+                    return (
+                      <div className={`px-3 py-1.5 rounded-full text-xs font-bold ${
+                        isDark
+                          ? 'bg-gray-300 text-gray-900'
+                          : 'bg-gray-500 text-white'
+                      }`}>
+                        休憩中
+                      </div>
+                    )
+                  }
+                  
+                  if (attendance.status === 'completed') {
+                    return (
+                      <div className={`px-3 py-1.5 rounded-full text-xs font-bold ${
+                        isDark
+                          ? 'bg-blue-900/50 text-blue-300'
+                          : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        退勤済
+                      </div>
+                    )
+                  }
+                  
+                  // 不明なステータス
+                  return (
+                    <div className={`px-3 py-1.5 rounded-full text-xs font-bold ${
+                      isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-300 text-gray-700'
+                    }`}>
+                      不明({attendance.status})
+                    </div>
+                  )
+                })()}
               </div>
             </button>
           )

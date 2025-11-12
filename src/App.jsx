@@ -77,7 +77,7 @@ function App() {
         : 'bg-gradient-to-br from-gray-50 via-white to-gray-50'
     }`}>
       {/* ヘッダー */}
-      <header className={`fixed top-0 left-0 right-0 z-50 backdrop-blur-xl border-b transition-colors duration-500 ${
+      <header className={`fixed top-0 left-0 right-0 z-50 backdrop-blur-xl border-b transition-colors duration-500 safe-top ${
         isDark
           ? 'bg-gray-900/70 border-gray-800/50'
           : 'bg-white/70 border-gray-200/50'
@@ -113,7 +113,7 @@ function App() {
       </header>
 
       {/* サイドバー (PC) / フッターバー (Mobile - 常に表示) */}
-      <aside className={`fixed backdrop-blur-xl border transition-all duration-300 z-50
+      <aside className={`fixed backdrop-blur-xl border transition-all duration-300 z-50 safe-bottom
         md:left-0 md:top-16 md:bottom-0 md:w-64 md:border-r md:border-b-0
         left-0 right-0 bottom-0 border-t translate-y-0
         ${sidebarOpen ? 'md:translate-x-0' : 'md:-translate-x-64'}
@@ -409,22 +409,42 @@ function LoginScreen({ isDark }) {
 
       if (authError) throw authError
 
-      // 2. usersテーブルにデータを挿入
-      const { error: insertError } = await supabase
-        .from('users')
-        .insert([
-          {
-            id: authData.user.id,
-            email: email,
-            name: name,
-            slack_user_id: slackId,
-            role: 'user',
-            department: department || null,
-            birthday: birthday || null,
-          },
-        ])
+      // authDataが正しく返されているか確認
+      if (!authData?.user?.id) {
+        throw new Error('ユーザー登録に失敗しました。もう一度お試しください。')
+      }
 
-      if (insertError) throw insertError
+      // 2. 既存のユーザーレコードをチェック
+      const { data: existingUser, error: selectError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', authData.user.id)
+        .maybeSingle()
+
+      // SELECTエラーがある場合はスルー（RLSでブロックされている可能性）
+      // 3. ユーザーレコードが存在しない場合のみ挿入
+      if (!existingUser) {
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert([
+            {
+              id: authData.user.id,
+              email: email,
+              name: name,
+              slack_user_id: slackId,
+              role: 'user',
+              department: department || null,
+              birthday: birthday || null,
+            },
+          ])
+
+        if (insertError) {
+          // 既に存在する場合のエラーは無視（別のタブで登録完了した可能性）
+          if (!insertError.message.includes('duplicate') && !insertError.message.includes('already exists')) {
+            throw insertError
+          }
+        }
+      }
 
       alert('登録完了！ログインしてください。')
       setIsSignUp(false)
@@ -433,6 +453,7 @@ function LoginScreen({ isDark }) {
       setDepartment('')
       setBirthday('')
     } catch (error) {
+      console.error('Sign up error:', error)
       setError(error.message)
     } finally {
       setLoading(false)

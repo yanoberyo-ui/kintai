@@ -65,6 +65,39 @@ html {
   scroll-behavior: smooth;
 }
 
+/* モバイルでヘッダー・フッターを確実に固定 */
+@supports (-webkit-touch-callout: none) {
+  /* iOS Safari用 */
+  .safe-top {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+  }
+  
+  .safe-bottom {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    bottom: 0 !important;
+  }
+}
+
+/* 全モバイルブラウザ共通 */
+@media (max-width: 768px) {
+  header {
+    position: fixed !important;
+    top: 0 !important;
+    transform: translateZ(0) !important;
+    -webkit-transform: translateZ(0) !important;
+  }
+  
+  aside {
+    position: fixed !important;
+    bottom: 0 !important;
+    transform: translateZ(0) !important;
+    -webkit-transform: translateZ(0) !important;
+  }
+}
+
 /* クラッカーアニメーション */
 @keyframes confetti-fall {
   0% {
