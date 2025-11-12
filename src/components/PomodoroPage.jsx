@@ -249,7 +249,6 @@ export default function PomodoroPage({ user, isDark }) {
                     ? 'bg-white text-gray-900 hover:bg-gray-100'
                     : 'bg-gray-900 text-white hover:bg-gray-800'
                 }`}
-                disabled={!selectedTask}
               >
                 開始
               </button>
