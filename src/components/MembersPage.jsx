@@ -515,13 +515,10 @@ export default function MembersPage({ isDark }) {
             })
             .sort((a, b) => b.score - a.score)
 
-          // メダルマッピング
+          // メダルマッピング（トップ1のみ）
           const getMedal = (member) => {
             const index = workingMembers.findIndex(item => item.member.id === member.id)
             if (index === 0) return '🎖️'
-            if (index === 1) return '🥇'
-            if (index === 2) return '🥈'
-            if (index === 3) return '🥉'
             return null
           }
           
