@@ -52,14 +52,14 @@ export default function PomodoroPage({ user, isDark }) {
     }
   }, [timerState, handleTimerComplete])
 
-  const loadTodoList = async () => {
+  const loadTodoList = useCallback(async () => {
     try {
       const data = await getTodayTodoList(user.id)
       setTodoList(data)
     } catch (error) {
       console.error('Error loading todo list:', error)
     }
-  }
+  }, [user.id])
 
   const loadTodayPomodoroCount = async () => {
     // TODO: 今日の合計ポモドーロ数を取得
@@ -71,29 +71,6 @@ export default function PomodoroPage({ user, isDark }) {
     // Web Audio APIで音を再生（後で実装）
     if (audioRef.current) {
       audioRef.current.play()
-    }
-  }
-
-  const updateTaskPomodoroCount = async (taskId) => {
-    try {
-      // タスクのポモドーロカウントを+1
-      const { data: task } = await supabase
-        .from('todo_items')
-        .select('pomodoro_count')
-        .eq('id', taskId)
-        .single()
-
-      const newCount = (task?.pomodoro_count || 0) + 1
-
-      await supabase
-        .from('todo_items')
-        .update({ pomodoro_count: newCount })
-        .eq('id', taskId)
-
-      // リスト再読み込み
-      await loadTodoList()
-    } catch (error) {
-      console.error('Error updating pomodoro count:', error)
     }
   }
 
@@ -114,7 +91,21 @@ export default function PomodoroPage({ user, isDark }) {
 
       // タスクのポモドーロカウントを更新
       if (selectedTask) {
-        updateTaskPomodoroCount(selectedTask.id)
+        // タスクのポモドーロカウントを+1
+        supabase
+          .from('todo_items')
+          .select('pomodoro_count')
+          .eq('id', selectedTask.id)
+          .single()
+          .then(({ data: task }) => {
+            const newCount = (task?.pomodoro_count || 0) + 1
+            return supabase
+              .from('todo_items')
+              .update({ pomodoro_count: newCount })
+              .eq('id', selectedTask.id)
+          })
+          .then(() => loadTodoList())
+          .catch(error => console.error('Error updating pomodoro count:', error))
       }
 
       // 4ポモドーロ完了したら長い休憩、そうでなければ短い休憩
@@ -137,7 +128,7 @@ export default function PomodoroPage({ user, isDark }) {
       // 休憩終了
       setTimerState('idle')
     }
-  }, [timerState, selectedTask, pomodoroCount, LONG_BREAK, SHORT_BREAK])
+  }, [timerState, selectedTask, pomodoroCount, LONG_BREAK, SHORT_BREAK, loadTodoList])
 
   const startWork = (task = null) => {
     if (task) {
