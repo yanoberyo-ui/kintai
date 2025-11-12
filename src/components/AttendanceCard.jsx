@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getTodayAttendance, clockIn, clockOut } from '../utils/attendance'
+import { getTodayAttendance, clockIn, clockOut, reClockIn } from '../utils/attendance'
 import { sendSlackNotification } from '../utils/slack'
 import { getTodayTodoList } from '../utils/todo'
 import { supabase } from '../utils/supabase'
@@ -198,6 +198,37 @@ export default function AttendanceCard({ user, isDark }) {
     setBreakMinutes('')
   }
 
+  const handleReClockIn = async () => {
+    try {
+      setLoading(true)
+      const result = await reClockIn(user.id)
+      await loadAttendance()
+
+      // ユーザー情報を取得
+      const { data: userData } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', user.id)
+        .single()
+
+      // TODOリストを取得
+      const todoList = await getTodayTodoList(user.id)
+      const todoItems = todoList?.todo_items || []
+
+      // Slack通知を送信
+      await sendSlackNotification(
+        'clock_in',
+        { id: user.id, name: userData?.name || user.email },
+        result,
+        todoItems
+      )
+    } catch (error) {
+      console.error('Error re-clocking in:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const getStatus = () => {
     if (!attendance || !attendance.clock_in) return 'not_started'
     if (attendance.clock_out) return 'completed'
@@ -393,15 +424,30 @@ export default function AttendanceCard({ user, isDark }) {
           )}
 
           {status === 'completed' && (
-            <div className={`rounded-xl p-6 space-y-2 ${
-              isDark ? 'bg-gray-800' : 'bg-gray-50'
-            }`}>
-              <p className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                本日の勤務は終了しました
-              </p>
-              <p className={`text-sm font-light ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                お疲れ様でした！
-              </p>
+            <div className="space-y-4">
+              <div className={`rounded-xl p-6 space-y-2 ${
+                isDark ? 'bg-gray-800' : 'bg-gray-50'
+              }`}>
+                <p className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  本日の勤務は終了しました
+                </p>
+                <p className={`text-sm font-light ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  お疲れ様でした！
+                </p>
+              </div>
+
+              {/* 再出勤ボタン */}
+              <button
+                onClick={handleReClockIn}
+                disabled={loading}
+                className={`w-full font-medium py-4 rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg ${
+                  isDark
+                    ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-600/20'
+                    : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20'
+                }`}
+              >
+                🔄 再出勤する
+              </button>
             </div>
           )}
         </div>

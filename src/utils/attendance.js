@@ -55,6 +55,42 @@ export async function clockIn(userId) {
 }
 
 /**
+ * 再出勤（退勤後に再度出勤する）
+ */
+export async function reClockIn(userId) {
+  // 日本時間で今日の日付と現在時刻を取得
+  const currentTime = new Date()
+  const jstDate = new Date(currentTime.getTime() + (9 * 60 * 60 * 1000)) // UTC + 9時間
+  const today = jstDate.toISOString().split('T')[0];
+  const now = currentTime.toISOString();
+
+  // 既存の勤怠データを取得
+  const existingAttendance = await getTodayAttendance(userId);
+
+  const { data, error } = await supabase
+    .from('attendances')
+    .update({
+      clock_in: now,
+      clock_out: null,
+      status: 'working',
+      // 前回の勤務記録は保持
+      break_minutes_used: existingAttendance?.break_minutes_used || 0,
+      total_work_minutes: existingAttendance?.total_work_minutes || 0
+    })
+    .eq('user_id', userId)
+    .eq('date', today)
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  // ログ記録
+  await logAttendanceAction(data.id, 'clock_in', userId, existingAttendance, data);
+
+  return data;
+}
+
+/**
  * 退勤打刻
  */
 export async function clockOut(userId, breakMinutes = 0) {
