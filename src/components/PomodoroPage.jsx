@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { getTodayTodoList } from '../utils/todo'
 import { supabase } from '../utils/supabase'
 
@@ -17,9 +17,19 @@ export default function PomodoroPage({ user, isDark }) {
   const SHORT_BREAK = 5 * 60
   const LONG_BREAK = 15 * 60
 
+  const loadTodoList = async () => {
+    try {
+      const data = await getTodayTodoList(user.id)
+      setTodoList(data)
+    } catch (error) {
+      console.error('Error loading todo list:', error)
+    }
+  }
+
   useEffect(() => {
     loadTodoList()
-    loadTodayPomodoroCount()
+    // 今日の合計ポモドーロ数を取得
+    setTodayTotal(0)
 
     return () => {
       if (intervalRef.current) {
@@ -33,7 +43,63 @@ export default function PomodoroPage({ user, isDark }) {
       intervalRef.current = setInterval(() => {
         setTimeLeft(prev => {
           if (prev <= 1) {
-            handleTimerComplete()
+            // タイマー完了処理
+            if (audioRef.current) {
+              audioRef.current.play()
+            }
+
+            if (timerState === 'working') {
+              // 通知
+              if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('作業完了！', {
+                  body: '素晴らしい！5分間休憩しましょう。'
+                })
+              }
+
+              // 作業完了
+              setPomodoroCount(c => c + 1)
+              setTodayTotal(t => t + 1)
+
+              // タスクのポモドーロカウントを更新
+              if (selectedTask) {
+                supabase
+                  .from('todo_items')
+                  .select('pomodoro_count')
+                  .eq('id', selectedTask.id)
+                  .single()
+                  .then(({ data: task }) => {
+                    const newCount = (task?.pomodoro_count || 0) + 1
+                    return supabase
+                      .from('todo_items')
+                      .update({ pomodoro_count: newCount })
+                      .eq('id', selectedTask.id)
+                  })
+                  .then(() => loadTodoList())
+                  .catch(error => console.error('Error updating pomodoro count:', error))
+              }
+
+              // 次の状態へ
+              setPomodoroCount(c => {
+                const newCount = c + 1
+                if (newCount % 4 === 0) {
+                  setTimerState('long_break')
+                  setTimeLeft(LONG_BREAK)
+                } else {
+                  setTimerState('short_break')
+                  setTimeLeft(SHORT_BREAK)
+                }
+                return c
+              })
+            } else {
+              // 休憩終了通知
+              if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('休憩終了！', {
+                  body: '次のセッションを始めましょう。'
+                })
+              }
+              setTimerState('idle')
+            }
+
             return 0
           }
           return prev - 1
@@ -50,85 +116,7 @@ export default function PomodoroPage({ user, isDark }) {
         clearInterval(intervalRef.current)
       }
     }
-  }, [timerState, handleTimerComplete])
-
-  const loadTodoList = useCallback(async () => {
-    try {
-      const data = await getTodayTodoList(user.id)
-      setTodoList(data)
-    } catch (error) {
-      console.error('Error loading todo list:', error)
-    }
-  }, [user.id])
-
-  const loadTodayPomodoroCount = async () => {
-    // TODO: 今日の合計ポモドーロ数を取得
-    // pomodoro_sessionsテーブルから取得する（後で実装）
-    setTodayTotal(0)
-  }
-
-  const playSound = () => {
-    // Web Audio APIで音を再生（後で実装）
-    if (audioRef.current) {
-      audioRef.current.play()
-    }
-  }
-
-  const handleTimerComplete = useCallback(() => {
-    playSound()
-
-    if (timerState === 'working') {
-      // 通知
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('作業完了！', {
-          body: '素晴らしい！5分間休憩しましょう。'
-        })
-      }
-
-      // 作業完了
-      setPomodoroCount(prev => prev + 1)
-      setTodayTotal(prev => prev + 1)
-
-      // タスクのポモドーロカウントを更新
-      if (selectedTask) {
-        // タスクのポモドーロカウントを+1
-        supabase
-          .from('todo_items')
-          .select('pomodoro_count')
-          .eq('id', selectedTask.id)
-          .single()
-          .then(({ data: task }) => {
-            const newCount = (task?.pomodoro_count || 0) + 1
-            return supabase
-              .from('todo_items')
-              .update({ pomodoro_count: newCount })
-              .eq('id', selectedTask.id)
-          })
-          .then(() => loadTodoList())
-          .catch(error => console.error('Error updating pomodoro count:', error))
-      }
-
-      // 4ポモドーロ完了したら長い休憩、そうでなければ短い休憩
-      const newCount = pomodoroCount + 1
-      if (newCount % 4 === 0) {
-        setTimerState('long_break')
-        setTimeLeft(LONG_BREAK)
-      } else {
-        setTimerState('short_break')
-        setTimeLeft(SHORT_BREAK)
-      }
-    } else {
-      // 通知
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('休憩終了！', {
-          body: '次のセッションを始めましょう。'
-        })
-      }
-
-      // 休憩終了
-      setTimerState('idle')
-    }
-  }, [timerState, selectedTask, pomodoroCount, LONG_BREAK, SHORT_BREAK, loadTodoList])
+  }, [timerState, selectedTask, LONG_BREAK, SHORT_BREAK])
 
   const startWork = (task = null) => {
     if (task) {
