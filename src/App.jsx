@@ -113,8 +113,8 @@ function App() {
       </header>
 
       {/* サイドバー (PC) / フッターバー (Mobile - 常に表示) */}
-      <aside className={`fixed backdrop-blur-xl border transition-all duration-300 z-50 safe-bottom
-        md:left-0 md:top-16 md:bottom-0 md:w-64 md:border-r md:border-b-0
+      <aside className={`fixed backdrop-blur-xl border transition-all duration-300 z-40 safe-bottom
+        md:left-0 md:top-[72px] md:bottom-0 md:w-64 md:border-r md:border-b-0
         left-0 right-0 bottom-0 border-t translate-y-0
         ${sidebarOpen ? 'md:translate-x-0' : 'md:-translate-x-64'}
         ${isDark
