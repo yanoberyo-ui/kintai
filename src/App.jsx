@@ -5,6 +5,7 @@ import AttendanceCard from './components/AttendanceCard'
 import CalendarPage from './components/CalendarPage'
 import SettingsPage from './components/SettingsPage'
 import MembersPage from './components/MembersPage'
+import PomodoroPage from './components/PomodoroPage'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -186,6 +187,24 @@ function App() {
               </div>
             </button>
 
+            <button
+              onClick={() => setCurrentPage('pomodoro')}
+              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+                currentPage === 'pomodoro'
+                  ? isDark
+                    ? 'bg-white text-gray-900'
+                    : 'bg-gray-900 text-white'
+                  : isDark
+                  ? 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/50'
+              }`}
+            >
+              <div className="flex md:flex-row flex-col items-center md:gap-3 gap-1">
+                <span className="text-xl">🍅</span>
+                <span className="md:inline text-xs md:text-base">集中</span>
+              </div>
+            </button>
+
             {/* ユーザーアイコンボタン (モバイルのみ) */}
             <button
               onClick={() => setUserMenuOpen(!userMenuOpen)}
@@ -286,6 +305,8 @@ function App() {
           <CalendarPage user={user} isDark={isDark} />
         ) : currentPage === 'members' ? (
           <MembersPage user={user} isDark={isDark} />
+        ) : currentPage === 'pomodoro' ? (
+          <PomodoroPage user={user} isDark={isDark} />
         ) : (
           <SettingsPage user={user} isDark={isDark} setIsDark={setIsDark} />
         )}
