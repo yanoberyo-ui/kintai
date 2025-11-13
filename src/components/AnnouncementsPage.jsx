@@ -22,7 +22,6 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
   const [showVotersModal, setShowVotersModal] = useState(false) // 投票者表示モーダル
   const [selectedDateOption, setSelectedDateOption] = useState(null) // 選択された日程候補
   const [showParticipantsModal, setShowParticipantsModal] = useState(false) // 参加者表示モーダル
-  const [selectedAnnouncement, setSelectedAnnouncement] = useState(null) // 選択されたイベント
 
   // 投稿作成フォーム
   const [formData, setFormData] = useState({
