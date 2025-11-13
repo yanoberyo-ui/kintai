@@ -26,6 +26,70 @@ export async function getTodayTodoList(userId) {
 /**
  * 今日のTODOリストを作成
  */
+/**
+ * 前日のTODOリストを取得
+ */
+export async function getYesterdayTodoList(userId) {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('todo_lists')
+    .select(`
+      *,
+      todo_items (*)
+    `)
+    .eq('user_id', userId)
+    .eq('date', yesterdayStr)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * 前日の未完了TODOを引き継ぐ
+ */
+export async function carryOverUncompletedTodos(userId, newListId) {
+  const yesterdayList = await getYesterdayTodoList(userId);
+  
+  if (!yesterdayList || !yesterdayList.todo_items) {
+    return 0; // 引き継ぎなし
+  }
+
+  // 未完了のアイテムのみフィルタ
+  const uncompletedItems = yesterdayList.todo_items
+    .filter(item => !item.is_completed)
+    .sort((a, b) => a.order_index - b.order_index);
+
+  if (uncompletedItems.length === 0) {
+    return 0;
+  }
+
+  // 新しいリストに未完了アイテムをコピー
+  for (let i = 0; i < uncompletedItems.length; i++) {
+    const item = uncompletedItems[i];
+    await supabase
+      .from('todo_items')
+      .insert({
+        todo_list_id: newListId,
+        content: item.content,
+        order_index: i,
+        indent_level: item.indent_level || 0,
+        is_completed: false
+      });
+  }
+
+  return uncompletedItems.length;
+}
+
+/**
+ * 今日のTODOリストを作成
+ */
 export async function createTodayTodoList(userId, title = '今日のtodo') {
   const today = new Date().toISOString().split('T')[0];
 

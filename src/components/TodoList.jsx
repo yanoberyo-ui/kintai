@@ -10,6 +10,7 @@ import {
   reorderTodoItems,
   getChildTasks,
   updateTodoItem,
+  carryOverUncompletedTodos,
 } from '../utils/todo'
 import {
   DndContext,
@@ -142,8 +143,18 @@ export default function TodoList({ user, isDark }) {
       let list = await getTodayTodoList(user.id)
 
       if (!list) {
+        // 新しいリストを作成
         list = await createTodayTodoList(user.id)
         list.todo_items = []
+        
+        // 前日の未完了TODOを引き継ぐ
+        const carriedOverCount = await carryOverUncompletedTodos(user.id, list.id)
+        
+        if (carriedOverCount > 0) {
+          // 引き継ぎ後、リストを再取得
+          list = await getTodayTodoList(user.id)
+          console.log(`${carriedOverCount}件のTODOを前日から引き継ぎました`)
+        }
       }
 
       setTodoList(list)
@@ -310,9 +321,10 @@ export default function TodoList({ user, isDark }) {
                       itemRefs.current[prevItem.id]?.focus()
                     }
                   }}
-                  onEnterPress={() => {
-                    // Enterで次の行に新しいタスクを挿入
+                  onEnterPress={(currentIndent) => {
+                    // Enterで次の行に新しいタスクを挿入（同じインデントレベルで）
                     setInsertAtIndex(index)
+                    setNewItemIndent(currentIndent || 0)
                     setShowNewTaskInput(true)
                   }}
                 />
@@ -323,7 +335,7 @@ export default function TodoList({ user, isDark }) {
                     key={`insert-${index}-${resetKey}`}
                     isDark={isDark} 
                     onAdd={handleAddTask}
-                    indentLevel={0}
+                    indentLevel={newItemIndent}
                     onIndentChange={() => {}}
                     onBackspaceEmpty={() => {
                       setInsertAtIndex(null)
@@ -671,8 +683,8 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSave()
-      // Enterで次の行に新しいタスクを挿入
-      onEnterPress?.()
+      // Enterで次の行に新しいタスクを挿入（現在のインデントレベルを渡す）
+      onEnterPress?.(indentLevel)
     } else if (e.key === 'Escape') {
       setEditContent(item.content)
       setIsEditing(false)
