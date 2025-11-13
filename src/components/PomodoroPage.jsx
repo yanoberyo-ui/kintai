@@ -369,7 +369,6 @@ export default function PomodoroPage({ user, isDark }) {
               </>
             )}
           </div>
-          </div>
 
           {/* 統計 */}
           <div className="grid grid-cols-2 gap-4 text-center">
