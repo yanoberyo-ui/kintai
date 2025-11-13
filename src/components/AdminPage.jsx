@@ -19,9 +19,16 @@ export default function AdminPage({ isDark }) {
     loadCurrentUser()
   }, [])
 
+  // ユーザー一覧は初回のみ読み込み
   useEffect(() => {
     if (currentUser?.role === 'admin') {
       loadUsers()
+    }
+  }, [currentUser])
+
+  // タブやyear/month変更時にデータ読み込み
+  useEffect(() => {
+    if (currentUser?.role === 'admin') {
       if (activeTab === 'dashboard') {
         loadDashboard()
       } else if (activeTab === 'attendance') {
@@ -75,44 +82,51 @@ export default function AdminPage({ isDark }) {
       const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
       const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0]
 
-      // 勤怠データ取得
-      const { data: attendanceData } = await supabase
-        .from('attendances')
-        .select(`
-          *,
-          user:users (
-            id,
-            name,
-            department
-          )
-        `)
-        .gte('date', startDate)
-        .lte('date', endDate)
-        .eq('status', 'completed')
-
-      // 粗利データ取得
-      const { data: revenueData } = await supabase
-        .from('revenues')
-        .select('*')
-        .eq('year', selectedYear)
-        .eq('month', selectedMonth)
-
-      // TODOデータ取得
-      const { data: todoData } = await supabase
-        .from('todo_lists')
-        .select(`
-          *,
-          user:users (
-            id,
-            name,
-            department
-          ),
-          todo_items (
-            is_completed
-          )
-        `)
-        .gte('date', startDate)
-        .lte('date', endDate)
+      // 3つのクエリを並列実行
+      const [
+        { data: attendanceData },
+        { data: revenueData },
+        { data: todoData }
+      ] = await Promise.all([
+        // 勤怠データ取得
+        supabase
+          .from('attendances')
+          .select(`
+            *,
+            user:users (
+              id,
+              name,
+              department
+            )
+          `)
+          .gte('date', startDate)
+          .lte('date', endDate)
+          .eq('status', 'completed'),
+        
+        // 粗利データ取得
+        supabase
+          .from('revenues')
+          .select('*')
+          .eq('year', selectedYear)
+          .eq('month', selectedMonth),
+        
+        // TODOデータ取得
+        supabase
+          .from('todo_lists')
+          .select(`
+            *,
+            user:users (
+              id,
+              name,
+              department
+            ),
+            todo_items (
+              is_completed
+            )
+          `)
+          .gte('date', startDate)
+          .lte('date', endDate)
+      ])
 
       // ユニーク部署リストを取得
       const allDepartments = [...new Set(attendanceData?.map(a => a.user.department).filter(Boolean))]
