@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../utils/supabase'
 
-export default function AnnouncementsPage({ isDark }) {
+export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
   const [announcements, setAnnouncements] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all') // all, announcement, event
@@ -18,6 +18,7 @@ export default function AnnouncementsPage({ isDark }) {
     targetType: 'all_participants',
     dateOptionId: null
   })
+  const [openMenuId, setOpenMenuId] = useState(null) // 3点メニューの開閉状態
 
   // 投稿作成フォーム
   const [formData, setFormData] = useState({
@@ -43,6 +44,47 @@ export default function AnnouncementsPage({ isDark }) {
     loadCurrentUser()
     loadAnnouncements()
   }, [])
+
+  // ページを開いた時に全て既読にする
+  useEffect(() => {
+    const markAllAsRead = async () => {
+      if (!currentUser || announcements.length === 0) return
+
+      try {
+        // 既読情報を確認
+        const { data: existingReads } = await supabase
+          .from('announcement_reads')
+          .select('announcement_id')
+          .eq('user_id', currentUser.id)
+
+        const readIds = new Set(existingReads?.map(r => r.announcement_id) || [])
+
+        // 未読の投稿を既読にする
+        const unreadAnnouncements = announcements.filter(a => !readIds.has(a.id))
+
+        if (unreadAnnouncements.length > 0) {
+          const readsToInsert = unreadAnnouncements.map(a => ({
+            user_id: currentUser.id,
+            announcement_id: a.id
+          }))
+
+          await supabase
+            .from('announcement_reads')
+            .insert(readsToInsert)
+
+          // 未読カウントを0にする
+          setUnreadCount(0)
+          if (onUnreadCountChange) {
+            onUnreadCountChange(0)
+          }
+        }
+      } catch (error) {
+        console.error('Error marking announcements as read:', error)
+      }
+    }
+
+    markAllAsRead()
+  }, [currentUser, announcements])
 
   useEffect(() => {
     if (currentUser) {
@@ -115,6 +157,9 @@ export default function AnnouncementsPage({ isDark }) {
       const readIds = new Set(reads?.map(r => r.announcement_id) || [])
       const unread = announcements.filter(a => !readIds.has(a.id)).length
       setUnreadCount(unread)
+      if (onUnreadCountChange) {
+        onUnreadCountChange(unread)
+      }
     } catch (error) {
       console.error('Error loading unread count:', error)
     }
@@ -578,21 +623,82 @@ export default function AnnouncementsPage({ isDark }) {
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  {/* 削除ボタン（投稿者本人または管理者のみ） - 右上に配置 */}
+                  {/* 3点メニュー（投稿者本人または管理者のみ） - 右上に配置 */}
                   {currentUser && (currentUser.id === announcement.author_id || currentUser.role === 'admin') && (
-                    <button
-                      onClick={(e) => handleDelete(announcement.id, e)}
-                      className={`float-right p-2 rounded-full transition-colors ${
-                        isDark
-                          ? 'text-gray-500 hover:text-red-400 hover:bg-red-400/10'
-                          : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
-                      }`}
-                      title="削除"
-                    >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
+                    <div className="float-right relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setOpenMenuId(openMenuId === announcement.id ? null : announcement.id)
+                        }}
+                        className={`p-2 rounded-full transition-colors ${
+                          isDark
+                            ? 'text-gray-400 hover:text-white hover:bg-gray-800'
+                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                        }`}
+                        title="メニュー"
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                        </svg>
+                      </button>
+
+                      {/* ドロップダウンメニュー */}
+                      {openMenuId === announcement.id && (
+                        <>
+                          {/* オーバーレイ */}
+                          <div
+                            className="fixed inset-0 z-10"
+                            onClick={() => setOpenMenuId(null)}
+                          />
+
+                          {/* メニュー */}
+                          <div className={`absolute right-0 top-10 z-20 w-56 rounded-xl shadow-lg border overflow-hidden ${
+                            isDark
+                              ? 'bg-gray-900 border-gray-800'
+                              : 'bg-white border-gray-200'
+                          }`}>
+                            {/* フォローアップメッセージ（イベント投稿者のみ） */}
+                            {announcement.category === 'event' && currentUser?.id === announcement.author_id && (
+                              <button
+                                onClick={(e) => {
+                                  handleFollowUpClick(announcement, e)
+                                  setOpenMenuId(null)
+                                }}
+                                className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${
+                                  isDark
+                                    ? 'hover:bg-gray-800 text-gray-300'
+                                    : 'hover:bg-gray-50 text-gray-700'
+                                }`}
+                              >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                                </svg>
+                                <span>フォローアップメッセージ</span>
+                              </button>
+                            )}
+
+                            {/* 削除 */}
+                            <button
+                              onClick={(e) => {
+                                handleDelete(announcement.id, e)
+                                setOpenMenuId(null)
+                              }}
+                              className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${
+                                isDark
+                                  ? 'hover:bg-red-900/20 text-red-400'
+                                  : 'hover:bg-red-50 text-red-600'
+                              }`}
+                            >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                              <span>投稿を削除</span>
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   )}
                   {/* 名前と日時 */}
                   <div className="flex items-center gap-2 mb-1">
@@ -608,7 +714,9 @@ export default function AnnouncementsPage({ isDark }) {
                       })}
                     </span>
                     {announcement.category === 'event' && (
-                      <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                        isDark ? 'bg-white text-gray-900' : 'bg-gray-900 text-white'
+                      }`}>
                         イベント
                       </span>
                     )}
@@ -867,23 +975,6 @@ export default function AnnouncementsPage({ isDark }) {
                       </div>
                       <span>{announcement.likes?.length || 0}</span>
                     </button>
-
-                    {/* フォローアップメッセージボタン（投稿者のみ） */}
-                    {announcement.category === 'event' && currentUser?.id === announcement.author_id && (
-                      <button
-                        onClick={(e) => handleFollowUpClick(announcement, e)}
-                        className={`ml-auto px-4 py-2 rounded-full text-sm font-bold transition-all duration-200 flex items-center gap-2 ${
-                          isDark
-                            ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700'
-                            : 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600'
-                        }`}
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                        </svg>
-                        メッセージ送信
-                      </button>
-                    )}
 
                     {/* イベント参加ボタン */}
                     {announcement.category === 'event' && currentUser?.id !== announcement.author_id && (

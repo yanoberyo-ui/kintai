@@ -5,10 +5,29 @@ import { supabase } from '../utils/supabase'
 export default function PomodoroPage({ user, isDark }) {
   const [todoList, setTodoList] = useState(null)
   const [selectedTask, setSelectedTask] = useState(null)
-  const [timerState, setTimerState] = useState('idle') // idle, working, short_break, long_break
-  const [timeLeft, setTimeLeft] = useState(25 * 60) // 秒単位
+
+  // localStorageからタイマー状態を復元
+  const [timerState, setTimerState] = useState(() => {
+    const saved = localStorage.getItem('pomodoroTimerState')
+    return saved ? JSON.parse(saved).state : 'idle'
+  })
+  const [timeLeft, setTimeLeft] = useState(() => {
+    const saved = localStorage.getItem('pomodoroTimerState')
+    if (saved) {
+      const { state, startTime } = JSON.parse(saved)
+      const totalTime = state === 'working' ? 25 * 60 : state === 'short_break' ? 5 * 60 : 15 * 60
+      const elapsed = Math.floor((Date.now() - startTime) / 1000)
+      return Math.max(0, totalTime - elapsed)
+    }
+    return 25 * 60
+  })
   const [pomodoroCount, setPomodoroCount] = useState(0) // 連続ポモドーロ数
   const [todayTotal, setTodayTotal] = useState(0) // 今日の合計ポモドーロ数
+  const [startTime, setStartTime] = useState(() => {
+    const saved = localStorage.getItem('pomodoroTimerState')
+    return saved ? JSON.parse(saved).startTime : null
+  })
+
   const intervalRef = useRef(null)
   const audioRef = useRef(null)
 
@@ -25,6 +44,18 @@ export default function PomodoroPage({ user, isDark }) {
       console.error('Error loading todo list:', error)
     }
   }
+
+  // タイマー状態をlocalStorageに保存
+  useEffect(() => {
+    if (timerState === 'idle') {
+      localStorage.removeItem('pomodoroTimerState')
+    } else if (startTime) {
+      localStorage.setItem('pomodoroTimerState', JSON.stringify({
+        state: timerState,
+        startTime: startTime
+      }))
+    }
+  }, [timerState, startTime])
 
   useEffect(() => {
     loadTodoList()
@@ -124,10 +155,12 @@ export default function PomodoroPage({ user, isDark }) {
     }
     setTimerState('working')
     setTimeLeft(WORK_TIME)
+    setStartTime(Date.now())
   }
 
   const pauseTimer = () => {
     setTimerState('idle')
+    setStartTime(null)
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
     }
@@ -137,6 +170,7 @@ export default function PomodoroPage({ user, isDark }) {
     setTimerState('idle')
     setTimeLeft(WORK_TIME)
     setSelectedTask(null)
+    setStartTime(null)
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
     }

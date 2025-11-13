@@ -23,16 +23,56 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [streaks, setStreaks] = useState({ attendanceStreak: 0, todoStreak: 0 })
   const [heatmapData, setHeatmapData] = useState([])
-
-  // currentPageが変更されたらlocalStorageに保存
-  useEffect(() => {
-    localStorage.setItem('currentPage', currentPage)
-  }, [currentPage])
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [othersMenuOpen, setOthersMenuOpen] = useState(false)
   const [eventNotification, setEventNotification] = useState(null)
   const [todayEventNotification, setTodayEventNotification] = useState(null)
   const [followUpNotification, setFollowUpNotification] = useState(null)
+  const [announcementsUnreadCount, setAnnouncementsUnreadCount] = useState(0)
+  const [pomodoroTimer, setPomodoroTimer] = useState(null) // { timeLeft, totalTime, state }
+
+  // Pomodoroタイマーの状態を監視
+  useEffect(() => {
+    const checkPomodoroTimer = () => {
+      const saved = localStorage.getItem('pomodoroTimerState')
+      if (saved) {
+        const { state, timeLeft: savedTimeLeft, startTime } = JSON.parse(saved)
+        if (state !== 'idle') {
+          // startTimeからの経過時間を計算
+          const elapsed = Math.floor((Date.now() - startTime) / 1000)
+          // 最初に保存された時間から経過時間を引く
+          const totalTime = state === 'working' ? 25 * 60 : state === 'short_break' ? 5 * 60 : 15 * 60
+          const currentTimeLeft = Math.max(0, totalTime - elapsed)
+
+          setPomodoroTimer({
+            timeLeft: currentTimeLeft,
+            totalTime,
+            state
+          })
+
+          // 時間が0になったらタイマー停止
+          if (currentTimeLeft === 0) {
+            localStorage.removeItem('pomodoroTimerState')
+            setPomodoroTimer(null)
+          }
+        } else {
+          setPomodoroTimer(null)
+        }
+      } else {
+        setPomodoroTimer(null)
+      }
+    }
+
+    checkPomodoroTimer()
+    const interval = setInterval(checkPomodoroTimer, 1000)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // currentPageが変更されたらlocalStorageに保存
+  useEffect(() => {
+    localStorage.setItem('currentPage', currentPage)
+  }, [currentPage])
 
   // データ読み込み関数（useEffectより前に定義）
   const loadStreaks = async (userId) => {
@@ -53,6 +93,26 @@ function App() {
     }
   }
 
+  // 通知を閉じる関数
+  const dismissNotification = (notificationId, notificationType) => {
+    if (!notificationId) {
+      console.error('dismissNotification called with null notificationId')
+      return
+    }
+    // localStorageに記録
+    const dismissedKey = `dismissed_${notificationType}_notifications`
+    const dismissed = JSON.parse(localStorage.getItem(dismissedKey) || '[]')
+    if (!dismissed.includes(notificationId)) {
+      dismissed.push(notificationId)
+      localStorage.setItem(dismissedKey, JSON.stringify(dismissed))
+    }
+    
+    // 通知を閉じる
+    if (notificationType === 'event') setEventNotification(null)
+    if (notificationType === 'today') setTodayEventNotification(null)
+    if (notificationType === 'followup') setFollowUpNotification(null)
+  }
+
   // 17:00以降かどうかをチェック
   useEffect(() => {
     const checkTime = () => {
@@ -67,50 +127,117 @@ function App() {
   }, [])
 
   useEffect(() => {
-    // セッションチェック
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      console.log('Session check:', session?.user ? 'User found' : 'No user')
-      if (session?.user) {
-        // usersテーブルから完全なユーザー情報を取得
-        const { data: userData, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single()
-        
-        console.log('User data:', userData, 'Error:', error)
-        setUser(userData || session.user)
-        loadStreaks(session.user.id)
-        loadHeatmapData(session.user.id)
-      } else {
-        setUser(null)
-      }
-      console.log('Setting loading to false')
-      setLoading(false)
-    }).catch(err => {
-      console.error('Session error:', err)
-      setLoading(false)
-    })
+    let mounted = true
+    let initialCheckDone = false
 
-    // 認証状態の変更を監視
+    // 認証状態の変更を監視（ログイン/ログアウト時に反応）
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        // usersテーブルから完全なユーザー情報を取得
-        const { data: userData } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single()
-        
-        setUser(userData || session.user)
-      } else {
-        setUser(null)
+      if (!mounted) return
+
+      initialCheckDone = true // onAuthStateChangeが発火したら初期チェック完了とみなす
+
+      try {
+        if (session?.user) {
+          // タイムアウト付きでユーザーデータを取得
+          const fetchWithTimeout = Promise.race([
+            supabase.from('users').select('*').eq('id', session.user.id).single(),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('User data fetch timeout')), 2000)
+            )
+          ])
+
+          try {
+            const { data: userData } = await fetchWithTimeout
+            setUser(userData || session.user)
+            if (userData || session.user) {
+              loadStreaks(session.user.id)
+              loadHeatmapData(session.user.id)
+            }
+          } catch (timeoutErr) {
+            // タイムアウトした場合は session.user を使用
+            setUser(session.user)
+            loadStreaks(session.user.id)
+            loadHeatmapData(session.user.id)
+          }
+        } else {
+          setUser(null)
+        }
+      } catch (err) {
+        console.error('Error in onAuthStateChange:', err)
+        setUser(session?.user || null)
+      } finally {
+        setLoading(false)
       }
     })
 
-    return () => subscription.unsubscribe()
+    // 初回のセッションチェック（バックグラウンドで実行、タイムアウトは無視）
+    const checkSession = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession()
+
+        if (!mounted || initialCheckDone) return // すでにonAuthStateChangeで処理済みならスキップ
+
+        if (error) {
+          console.error('Session error:', error)
+          setLoading(false)
+          return
+        }
+
+        const session = data?.session
+
+        if (session?.user) {
+          // タイムアウト付きでユーザーデータを取得
+          const fetchWithTimeout = Promise.race([
+            supabase.from('users').select('*').eq('id', session.user.id).single(),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('User data fetch timeout')), 2000)
+            )
+          ])
+
+          try {
+            const { data: userData } = await fetchWithTimeout
+            setUser(userData || session.user)
+            if (userData || session.user) {
+              loadStreaks(session.user.id)
+              loadHeatmapData(session.user.id)
+            }
+          } catch (timeoutErr) {
+            console.warn('⚠️ User data fetch timeout in checkSession, using session user')
+            setUser(session.user)
+            loadStreaks(session.user.id)
+            loadHeatmapData(session.user.id)
+          }
+        } else {
+          setUser(null)
+        }
+
+        setLoading(false)
+      } catch (err) {
+        console.error('Session check error:', err)
+        if (mounted && !initialCheckDone) {
+          setLoading(false)
+        }
+      }
+    }
+
+    // onAuthStateChangeは即座に発火するので、それを待つ
+    // 500ms経ってもonAuthStateChangeが発火しなければログイン画面を表示
+    const timeoutId = setTimeout(() => {
+      if (mounted && !initialCheckDone) {
+        setLoading(false)
+      }
+    }, 500)
+
+    // getSessionは非同期でバックグラウンド実行
+    checkSession()
+
+    return () => {
+      mounted = false
+      clearTimeout(timeoutId)
+      subscription.unsubscribe()
+    }
   }, [])
 
   // イベント作成のリアルタイム監視
@@ -132,6 +259,10 @@ function App() {
 
           // 投票期限があり、かつ日程投票がある場合のみ通知
           if (newEvent.voting_deadline) {
+            // 既に閉じた通知かチェック
+            const dismissed = JSON.parse(localStorage.getItem('dismissed_event_notifications') || '[]')
+            if (dismissed.includes(newEvent.id)) return
+
             // イベント作成者の情報を取得
             const { data: author } = await supabase
               .from('users')
@@ -318,20 +449,69 @@ function App() {
             }`}
           />
 
-          {/* ストリークバッジ */}
-          {user && (streaks.attendanceStreak > 0 || streaks.todoStreak > 0) && (
+          {/* Pomodoroタイマー & ストリークバッジ */}
+          {user && (
             <div className="ml-auto flex items-center gap-2">
-              {streaks.attendanceStreak > 0 && (
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-white text-gray-600">
-                  <span className="text-sm">📅</span>
-                  <span>{streaks.attendanceStreak}</span>
+              {/* アナログタイマー表示 */}
+              {pomodoroTimer && (
+                <div
+                  className="flex items-center gap-2.5 px-3 py-1.5 rounded-full text-sm font-medium bg-white text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => setCurrentPage('pomodoro')}
+                  title="集中タイマー"
+                >
+                  {/* 円形プログレスバー（アナログ時計風） */}
+                  <div className="relative w-8 h-8">
+                    <svg className="w-8 h-8 transform -rotate-90" viewBox="0 0 32 32">
+                      {/* 背景の円 */}
+                      <circle
+                        cx="16"
+                        cy="16"
+                        r="14"
+                        fill="none"
+                        stroke="#e5e7eb"
+                        strokeWidth="2.5"
+                      />
+                      {/* プログレスの円 */}
+                      <circle
+                        cx="16"
+                        cy="16"
+                        r="14"
+                        fill="none"
+                        stroke={pomodoroTimer.state === 'working' ? '#ef4444' : '#22c55e'}
+                        strokeWidth="2.5"
+                        strokeDasharray={`${2 * Math.PI * 14}`}
+                        strokeDashoffset={`${2 * Math.PI * 14 * (1 - pomodoroTimer.timeLeft / pomodoroTimer.totalTime)}`}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    {/* 中央の時計アイコン */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-sm">🍅</span>
+                    </div>
+                  </div>
+                  {/* 残り時間 */}
+                  <span className="font-mono font-semibold">
+                    {Math.floor(pomodoroTimer.timeLeft / 60)}:{String(pomodoroTimer.timeLeft % 60).padStart(2, '0')}
+                  </span>
                 </div>
               )}
-              {streaks.todoStreak > 0 && (
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-white text-gray-600">
-                  <span className="text-sm">🎯</span>
-                  <span>{streaks.todoStreak}</span>
-                </div>
+
+              {/* ストリークバッジ */}
+              {(streaks.attendanceStreak > 0 || streaks.todoStreak > 0) && (
+                <>
+                  {streaks.attendanceStreak > 0 && (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-white text-gray-600">
+                      <span className="text-sm">📅</span>
+                      <span>{streaks.attendanceStreak}</span>
+                    </div>
+                  )}
+                  {streaks.todoStreak > 0 && (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-white text-gray-600">
+                      <span className="text-sm">🎯</span>
+                      <span>{streaks.todoStreak}</span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -414,8 +594,11 @@ function App() {
             </button>
 
             <button
-              onClick={() => setCurrentPage('announcements')}
-              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+              onClick={() => {
+                setCurrentPage('announcements')
+                setAnnouncementsUnreadCount(0) // タイムラインを開いたら未読カウントをクリア
+              }}
+              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 relative ${
                 currentPage === 'announcements'
                   ? isDark
                     ? 'bg-white text-gray-900'
@@ -429,7 +612,12 @@ function App() {
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
                 </svg>
-                <span className="md:inline text-xs md:text-base">タイムライン</span>
+                <span className="md:inline text-xs md:text-base relative inline-flex items-center">
+                  タイムライン
+                  {announcementsUnreadCount > 0 && (
+                    <span className="ml-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                  )}
+                </span>
               </div>
             </button>
 
@@ -593,7 +781,7 @@ function App() {
         ) : currentPage === 'members' ? (
           <MembersPage user={user} isDark={isDark} />
         ) : currentPage === 'announcements' ? (
-          <AnnouncementsPage user={user} isDark={isDark} />
+          <AnnouncementsPage user={user} isDark={isDark} onUnreadCountChange={setAnnouncementsUnreadCount} />
         ) : currentPage === 'admin' ? (
           <AdminPage isDark={isDark} />
         ) : currentPage === 'pomodoro' ? (
@@ -728,7 +916,7 @@ function App() {
         <>
           {/* オーバーレイ */}
           <div
-            onClick={() => setEventNotification(null)}
+            onClick={() => dismissNotification(eventNotification.id, 'event')}
             className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm animate-fade-in"
           />
 
@@ -753,7 +941,7 @@ function App() {
                   </div>
                 </div>
                 <button
-                  onClick={() => setEventNotification(null)}
+                  onClick={() => dismissNotification(eventNotification.id, 'event')}
                   className={`p-2 rounded-full transition-colors ${
                     isDark
                       ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
@@ -805,7 +993,7 @@ function App() {
             {/* アクション */}
             <div className={`px-6 py-4 border-t flex gap-3 ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
               <button
-                onClick={() => setEventNotification(null)}
+                onClick={() => dismissNotification(eventNotification.id, 'event')}
                 className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
                   isDark
                     ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
@@ -816,8 +1004,8 @@ function App() {
               </button>
               <button
                 onClick={() => {
+                  dismissNotification(eventNotification.id, 'event')
                   setCurrentPage('announcements')
-                  setEventNotification(null)
                 }}
                 className={`flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-200 ${
                   isDark
@@ -1079,9 +1267,9 @@ function LoginScreen({ isDark }) {
 
     if (error) {
       setError(error.message)
+      setLoading(false)
     }
-
-    setLoading(false)
+    // ログイン成功時はonAuthStateChangeが発火するのでloadingはそこで解除
   }
 
   const handleSignUp = async (e) => {
