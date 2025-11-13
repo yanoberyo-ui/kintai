@@ -4,7 +4,7 @@ import { supabase } from '../utils/supabase'
 export default function AdminPage({ isDark }) {
   const [currentUser, setCurrentUser] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('dashboard') // dashboard, attendance, salary, users, todo_achievement, revenue
+  const [activeTab, setActiveTab] = useState('dashboard') // dashboard, attendance, salary, users, todo_achievement
   const [users, setUsers] = useState([])
   const [attendances, setAttendances] = useState([])
   const [salaries, setSalaries] = useState([])
@@ -12,8 +12,8 @@ export default function AdminPage({ isDark }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
   const [dashboardData, setDashboardData] = useState([])
   const [todoAchievementData, setTodoAchievementData] = useState([])
-  const [revenueData, setRevenueData] = useState([])
   const [departments, setDepartments] = useState([])
+  const [selectedDepartment, setSelectedDepartment] = useState('all') // ユニットフィルター
 
   useEffect(() => {
     loadCurrentUser()
@@ -30,8 +30,6 @@ export default function AdminPage({ isDark }) {
         loadSalaries()
       } else if (activeTab === 'todo_achievement') {
         loadTodoAchievement()
-      } else if (activeTab === 'revenue') {
-        loadRevenue()
       }
     }
   }, [currentUser, activeTab, selectedYear, selectedMonth])
@@ -79,7 +77,7 @@ export default function AdminPage({ isDark }) {
       const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
       const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0]
 
-      const { data, error } = await supabase
+      const { data: attendanceData, error: attendanceError } = await supabase
         .from('attendances')
         .select(`
           *,
@@ -87,15 +85,81 @@ export default function AdminPage({ isDark }) {
             id,
             name,
             email,
-            employee_id
+            department
           )
         `)
         .gte('date', startDate)
         .lte('date', endDate)
         .order('date', { ascending: false })
 
-      if (error) throw error
-      setAttendances(data || [])
+      if (attendanceError) throw attendanceError
+      
+      // TODOデータも同時に取得
+      const { data: todoData, error: todoError } = await supabase
+        .from('todo_lists')
+        .select(`
+          *,
+          user_id,
+          todo_items (
+            is_completed
+          )
+        `)
+        .gte('date', startDate)
+        .lte('date', endDate)
+
+      if (todoError) throw todoError
+      
+      // 社員ごとに集計
+      const userSummary = {}
+      attendanceData?.forEach(record => {
+        const userId = record.user.id
+        if (!userSummary[userId]) {
+          userSummary[userId] = {
+            name: record.user.name,
+            department: record.user.department || '未設定',
+            attendanceDays: 0,
+            totalWorkMinutes: 0,
+            avgWorkMinutes: 0,
+            lateCount: 0,
+            todoTotal: 0,
+            todoCompleted: 0
+          }
+        }
+        
+        if (record.status === 'completed') {
+          userSummary[userId].attendanceDays++
+          userSummary[userId].totalWorkMinutes += record.total_work_minutes || 0
+          
+          // 9:00以降の出勤を遅刻としてカウント
+          if (record.clock_in) {
+            const clockInTime = new Date(record.clock_in)
+            const hour = clockInTime.getHours()
+            const minute = clockInTime.getMinutes()
+            if (hour > 9 || (hour === 9 && minute > 0)) {
+              userSummary[userId].lateCount++
+            }
+          }
+        }
+      })
+      
+      // TODOデータを集計
+      todoData?.forEach(list => {
+        const userId = list.user_id
+        if (userSummary[userId]) {
+          const items = list.todo_items || []
+          userSummary[userId].todoTotal += items.length
+          userSummary[userId].todoCompleted += items.filter(item => item.is_completed).length
+        }
+      })
+      
+      // 平均を計算
+      const summaryArray = Object.values(userSummary).map(user => ({
+        ...user,
+        avgWorkMinutes: user.attendanceDays > 0 ? Math.floor(user.totalWorkMinutes / user.attendanceDays) : 0,
+        todoRate: user.todoTotal > 0 ? Math.round((user.todoCompleted / user.todoTotal) * 100) : 0
+      }))
+      
+      setAttendances(summaryArray)
     } catch (error) {
       console.error('Error loading attendances:', error)
     }
@@ -110,8 +174,7 @@ export default function AdminPage({ isDark }) {
           user:users (
             id,
             name,
-            email,
-            employee_id
+            email
           )
         `)
         .eq('year', selectedYear)
@@ -225,6 +288,52 @@ export default function AdminPage({ isDark }) {
     }
   }
 
+  const handleUpdateRevenue = async (department, year, month, grossProfit) => {
+    try {
+      // 既存の粗利レコードを検索
+      const { data: existingRevenue, error: fetchError } = await supabase
+        .from('revenues')
+        .select('id')
+        .eq('department', department)
+        .eq('year', year)
+        .eq('month', month)
+        .single()
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        // PGRST116 は "not found" エラー（新規作成時は正常）
+        throw fetchError
+      }
+
+      if (existingRevenue) {
+        // 既存レコードを更新
+        const { error: updateError } = await supabase
+          .from('revenues')
+          .update({ gross_profit: parseFloat(grossProfit) || 0 })
+          .eq('id', existingRevenue.id)
+
+        if (updateError) throw updateError
+      } else {
+        // 新規レコードを作成
+        const { error: insertError } = await supabase
+          .from('revenues')
+          .insert({
+            department,
+            year,
+            month,
+            gross_profit: parseFloat(grossProfit) || 0
+          })
+
+        if (insertError) throw insertError
+      }
+
+      // ダッシュボードデータを再読み込み
+      loadDashboard()
+    } catch (error) {
+      console.error('Error updating revenue:', error)
+      alert('粗利の更新に失敗しました')
+    }
+  }
+
   const loadDashboard = async () => {
     try {
       const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
@@ -247,10 +356,10 @@ export default function AdminPage({ isDark }) {
 
       // 粗利データ取得
       const { data: revenueData } = await supabase
-        .from('daily_unit_revenue')
+        .from('revenues')
         .select('*')
-        .gte('date', startDate)
-        .lte('date', endDate)
+        .eq('year', selectedYear)
+        .eq('month', selectedMonth)
 
       // TODOデータ取得
       const { data: todoData } = await supabase
@@ -268,6 +377,10 @@ export default function AdminPage({ isDark }) {
         `)
         .gte('date', startDate)
         .lte('date', endDate)
+
+      // ユニーク部署リストを取得
+      const allDepartments = [...new Set(attendanceData?.map(a => a.user.department).filter(Boolean))]
+      setDepartments(allDepartments)
 
       // ユニット（部署）ごとに集計
       const unitSummary = {}
@@ -368,87 +481,6 @@ export default function AdminPage({ isDark }) {
     }
   }
 
-  const loadRevenue = async () => {
-    try {
-      const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
-      const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0]
-
-      const { data, error } = await supabase
-        .from('daily_unit_revenue')
-        .select('*')
-        .gte('date', startDate)
-        .lte('date', endDate)
-        .order('date', { ascending: false })
-
-      if (error) throw error
-      setRevenueData(data || [])
-
-      // ユニーク部署リストを取得
-      const { data: usersData } = await supabase
-        .from('users')
-        .select('department')
-
-      const uniqueDepts = [...new Set(usersData?.map(u => u.department).filter(Boolean))]
-      setDepartments(uniqueDepts)
-    } catch (error) {
-      console.error('Error loading revenue:', error)
-    }
-  }
-
-  const handleCreateRevenue = async (e) => {
-    e.preventDefault()
-    const formData = new FormData(e.target)
-    const date = formData.get('date')
-    const department = formData.get('department')
-    const grossProfit = parseFloat(formData.get('gross_profit'))
-
-    try {
-      const { error } = await supabase
-        .from('daily_unit_revenue')
-        .insert({
-          date,
-          department,
-          gross_profit: grossProfit
-        })
-
-      if (error) throw error
-      loadRevenue()
-      e.target.reset()
-    } catch (error) {
-      console.error('Error creating revenue:', error)
-      alert('粗利の登録に失敗しました')
-    }
-  }
-
-  const handleUpdateRevenue = async (id, field, value) => {
-    try {
-      const { error } = await supabase
-        .from('daily_unit_revenue')
-        .update({ [field]: parseFloat(value) || 0 })
-        .eq('id', id)
-
-      if (error) throw error
-      loadRevenue()
-    } catch (error) {
-      console.error('Error updating revenue:', error)
-    }
-  }
-
-  const handleDeleteRevenue = async (id) => {
-    if (!window.confirm('この粗利データを削除しますか？')) return
-
-    try {
-      const { error } = await supabase
-        .from('daily_unit_revenue')
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
-      loadRevenue()
-    } catch (error) {
-      console.error('Error deleting revenue:', error)
-    }
-  }
 
   if (loading) {
     return (
@@ -496,7 +528,6 @@ export default function AdminPage({ isDark }) {
             { value: 'dashboard', label: 'ダッシュボード', icon: '📈' },
             { value: 'attendance', label: '出勤管理', icon: '📊' },
             { value: 'salary', label: '給料管理', icon: '💰' },
-            { value: 'revenue', label: '粗利管理', icon: '💵' },
             { value: 'todo_achievement', label: 'TODO達成率', icon: '✅' },
             { value: 'users', label: 'ユーザー管理', icon: '👥' }
           ].map(({ value, label, icon }) => (
@@ -525,7 +556,7 @@ export default function AdminPage({ isDark }) {
         </div>
       </div>
 
-      {/* 年月選択 */}
+      {/* 年月選択とユニット選択 */}
       <div className="mb-6 flex gap-3">
         <select
           value={selectedYear}
@@ -553,6 +584,22 @@ export default function AdminPage({ isDark }) {
             <option key={month} value={month}>{month}月</option>
           ))}
         </select>
+        {activeTab === 'dashboard' && (
+          <select
+            value={selectedDepartment}
+            onChange={(e) => setSelectedDepartment(e.target.value)}
+            className={`px-4 py-2 rounded-xl transition-colors ${
+              isDark
+                ? 'bg-gray-800 text-white border border-gray-700'
+                : 'bg-white text-gray-900 border border-gray-300'
+            } focus:outline-none`}
+          >
+            <option value="all">全ユニット</option>
+            {departments.map(dept => (
+              <option key={dept} value={dept}>{dept}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* コンテンツ */}
@@ -567,27 +614,37 @@ export default function AdminPage({ isDark }) {
                   <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
                     isDark ? 'text-gray-400' : 'text-gray-500'
                   }`}>
-                    日付
+                    名前
                   </th>
                   <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
                     isDark ? 'text-gray-400' : 'text-gray-500'
                   }`}>
-                    社員
+                    ユニット
                   </th>
                   <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
                     isDark ? 'text-gray-400' : 'text-gray-500'
                   }`}>
-                    出勤
+                    出勤日数
                   </th>
                   <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
                     isDark ? 'text-gray-400' : 'text-gray-500'
                   }`}>
-                    退勤
+                    合計勤務時間
                   </th>
                   <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
                     isDark ? 'text-gray-400' : 'text-gray-500'
                   }`}>
-                    勤務時間
+                    平均勤務時間
+                  </th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+                    isDark ? 'text-gray-400' : 'text-gray-500'
+                  }`}>
+                    遅刻回数
+                  </th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+                    isDark ? 'text-gray-400' : 'text-gray-500'
+                  }`}>
+                    TODO達成率
                   </th>
                   <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
                     isDark ? 'text-gray-400' : 'text-gray-500'
@@ -597,36 +654,31 @@ export default function AdminPage({ isDark }) {
                 </tr>
               </thead>
               <tbody className={`divide-y ${isDark ? 'divide-gray-800' : 'divide-gray-200'}`}>
-                {attendances.map((attendance) => (
-                  <tr key={attendance.id} className={isDark ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'}>
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
-                      {new Date(attendance.date).toLocaleDateString('ja-JP')}
+                {attendances.map((user, index) => (
+                  <tr key={index} className={isDark ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'}>
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      {user.name}
                     </td>
                     <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
-                      <div className="font-medium">{attendance.user.name}</div>
-                      <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                        {attendance.user.employee_id}
-                      </div>
+                      {user.department}
                     </td>
                     <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
-                      {attendance.clock_in ? new Date(attendance.clock_in).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                      {user.attendanceDays}
                     </td>
                     <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
-                      {attendance.clock_out ? new Date(attendance.clock_out).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                      {Math.floor(user.totalWorkMinutes / 60)}:{String(user.totalWorkMinutes % 60).padStart(2, '0')}
                     </td>
                     <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
-                      {Math.floor(attendance.total_work_minutes / 60)}時間{attendance.total_work_minutes % 60}分
+                      {Math.floor(user.avgWorkMinutes / 60)}:{String(user.avgWorkMinutes % 60).padStart(2, '0')}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        attendance.status === 'completed'
-                          ? 'bg-green-100 text-green-800'
-                          : attendance.status === 'working'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {attendance.status === 'completed' ? '完了' : attendance.status === 'working' ? '勤務中' : '欠勤'}
-                      </span>
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
+                      {user.lateCount}
+                    </td>
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
+                      {user.todoTotal > 0 ? `${user.todoRate}%` : '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center text-xl">
+                      {user.lateCount > 0 ? '⚠️' : '✅'}
                     </td>
                   </tr>
                 ))}
@@ -725,9 +777,6 @@ export default function AdminPage({ isDark }) {
                     <tr key={salary.id} className={isDark ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'}>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
                         <div className="font-medium">{salary.user.name}</div>
-                        <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                          {salary.user.employee_id}
-                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <input
@@ -827,7 +876,9 @@ export default function AdminPage({ isDark }) {
                 </tr>
               </thead>
               <tbody className={`divide-y ${isDark ? 'divide-gray-800' : 'divide-gray-200'}`}>
-                {dashboardData.map((unit, index) => (
+                {dashboardData
+                  .filter(unit => selectedDepartment === 'all' || unit.department === selectedDepartment)
+                  .map((unit, index) => (
                   <tr key={index} className={isDark ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'}>
                     <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                       {unit.department}
@@ -838,8 +889,20 @@ export default function AdminPage({ isDark }) {
                     <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
                       {unit.totalHours}:{String(unit.totalMinutes).padStart(2, '0')}
                     </td>
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${isDark ? 'text-green-400' : 'text-green-600'}`}>
-                      ¥{unit.totalRevenue.toLocaleString()}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>¥</span>
+                        <input
+                          type="number"
+                          value={unit.totalRevenue}
+                          onChange={(e) => handleUpdateRevenue(unit.department, selectedYear, selectedMonth, e.target.value)}
+                          className={`w-32 px-2 py-1 text-sm rounded font-medium ${
+                            isDark
+                              ? 'bg-gray-800 text-green-400 border border-gray-700'
+                              : 'bg-white text-green-600 border border-gray-300'
+                          } focus:outline-none focus:ring-2 focus:ring-green-500`}
+                        />
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-3 py-1 rounded-full text-sm font-bold ${
@@ -925,125 +988,6 @@ export default function AdminPage({ isDark }) {
         </div>
       )}
 
-      {activeTab === 'revenue' && (
-        <div className="space-y-6">
-          {/* 粗利登録フォーム */}
-          <div className={`p-6 rounded-xl ${isDark ? 'bg-gray-800/50' : 'bg-gray-50'}`}>
-            <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              粗利登録
-            </h3>
-            <form onSubmit={handleCreateRevenue} className="flex gap-3">
-              <input
-                type="date"
-                name="date"
-                required
-                className={`px-4 py-2 rounded-xl ${
-                  isDark
-                    ? 'bg-gray-800 text-white border border-gray-700'
-                    : 'bg-white text-gray-900 border border-gray-300'
-                } focus:outline-none`}
-              />
-              <select
-                name="department"
-                required
-                className={`px-4 py-2 rounded-xl ${
-                  isDark
-                    ? 'bg-gray-800 text-white border border-gray-700'
-                    : 'bg-white text-gray-900 border border-gray-300'
-                } focus:outline-none`}
-              >
-                <option value="">ユニット選択</option>
-                {departments.map(dept => (
-                  <option key={dept} value={dept}>{dept}</option>
-                ))}
-              </select>
-              <input
-                type="number"
-                name="gross_profit"
-                placeholder="粗利（円）"
-                required
-                step="0.01"
-                className={`flex-1 px-4 py-2 rounded-xl ${
-                  isDark
-                    ? 'bg-gray-800 text-white border border-gray-700'
-                    : 'bg-white text-gray-900 border border-gray-300'
-                } focus:outline-none`}
-              />
-              <button
-                type="submit"
-                className={`px-6 py-2 rounded-xl font-medium transition-colors ${
-                  isDark
-                    ? 'bg-white text-gray-900 hover:bg-gray-100'
-                    : 'bg-gray-900 text-white hover:bg-gray-800'
-                }`}
-              >
-                登録
-              </button>
-            </form>
-          </div>
-
-          {/* 粗利一覧 */}
-          <div className={`rounded-2xl border overflow-hidden ${
-            isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'
-          }`}>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className={isDark ? 'bg-gray-800/50' : 'bg-gray-50'}>
-                  <tr>
-                    <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>日付</th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>ユニット</th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>粗利</th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>操作</th>
-                  </tr>
-                </thead>
-                <tbody className={`divide-y ${isDark ? 'divide-gray-800' : 'divide-gray-200'}`}>
-                  {revenueData.map((revenue) => (
-                    <tr key={revenue.id} className={isDark ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'}>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
-                        {new Date(revenue.date).toLocaleDateString('ja-JP')}
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                        {revenue.department}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <input
-                          type="number"
-                          value={revenue.gross_profit}
-                          onChange={(e) => handleUpdateRevenue(revenue.id, 'gross_profit', e.target.value)}
-                          className={`w-32 px-2 py-1 text-sm rounded ${
-                            isDark
-                              ? 'bg-gray-800 text-white border border-gray-700'
-                              : 'bg-white text-gray-900 border border-gray-300'
-                          }`}
-                        />
-                        <span className={`ml-2 text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>円</span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <button
-                          onClick={() => handleDeleteRevenue(revenue.id)}
-                          className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                            isDark
-                              ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                              : 'bg-red-50 text-red-600 hover:bg-red-100'
-                          }`}
-                        >
-                          削除
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {revenueData.length === 0 && (
-                <div className={`text-center py-12 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                  <p>粗利データがありません</p>
-                  <p className="text-sm mt-2">上のフォームから粗利を登録してください</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {activeTab === 'users' && (
         <div className={`rounded-2xl border overflow-hidden ${
@@ -1090,9 +1034,6 @@ export default function AdminPage({ isDark }) {
                   <tr key={user.id} className={isDark ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'}>
                     <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
                       <div className="font-medium">{user.name}</div>
-                      <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                        {user.employee_id}
-                      </div>
                     </td>
                     <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
                       {user.email}
@@ -1101,13 +1042,20 @@ export default function AdminPage({ isDark }) {
                       {user.department || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-3 py-1 text-xs font-bold rounded-full ${
-                        user.role === 'admin'
-                          ? 'bg-purple-100 text-purple-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`${user.name}さんを${user.role === 'admin' ? '一般ユーザー' : '管理者'}に変更しますか？`)) {
+                            handleUpdateUserRole(user.id, user.role === 'admin' ? 'user' : 'admin')
+                          }
+                        }}
+                        className={`px-3 py-1 text-xs font-bold rounded-full transition-all cursor-pointer ${
+                          user.role === 'admin'
+                            ? 'bg-purple-100 text-purple-800 hover:bg-purple-200'
+                            : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                        }`}
+                      >
                         {user.role === 'admin' ? '🛡️ 管理者' : '👤 一般'}
-                      </span>
+                      </button>
                     </td>
                     <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                       {new Date(user.created_at).toLocaleDateString('ja-JP')}
