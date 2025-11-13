@@ -105,6 +105,7 @@ export default function ReservationsPage({ user, isDark }) {
       // 既存の予約を表示
       const reservation = getReservationForTimeSlot(timeSlot)
       setSelectedTimeSlot({ timeSlot, reservation })
+      setShowReservationModal(true)
     } else {
       // 新規予約モーダルを表示
       setSelectedTimeSlot({ timeSlot, reservation: null })
@@ -292,11 +293,15 @@ export default function ReservationsPage({ user, isDark }) {
 
 // 予約作成・編集モーダル（簡易版）
 function ReservationModal({ user, isDark, room, date, timeSlot, onClose, onSave }) {
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
+  const reservation = timeSlot?.reservation
+  const isExisting = !!reservation
+  
+  const [title, setTitle] = useState(reservation?.title || '')
+  const [description, setDescription] = useState(reservation?.description || '')
   const [startTime, setStartTime] = useState(timeSlot.timeSlot)
   const [duration, setDuration] = useState(30)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const handleSave = async () => {
     if (!title.trim()) {
@@ -336,6 +341,30 @@ function ReservationModal({ user, isDark, room, date, timeSlot, onClose, onSave 
     }
   }
 
+  const handleDelete = async () => {
+    if (!window.confirm('この予約を取り消しますか？')) {
+      return
+    }
+
+    setDeleting(true)
+
+    try {
+      const { error } = await supabase
+        .from('reservations')
+        .delete()
+        .eq('id', reservation.id)
+
+      if (error) throw error
+
+      onSave()
+    } catch (error) {
+      console.error('Error deleting reservation:', error)
+      alert('予約の取り消しに失敗しました')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <>
       {/* オーバーレイ */}
@@ -351,7 +380,7 @@ function ReservationModal({ user, isDark, room, date, timeSlot, onClose, onSave 
           : 'bg-white/90 border-gray-200/50'
       }`}>
         <h3 className={`text-xl font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-          会議室を予約
+          {isExisting ? '予約の詳細' : '会議室を予約'}
         </h3>
 
         <div className="space-y-4">
@@ -364,11 +393,12 @@ function ReservationModal({ user, isDark, room, date, timeSlot, onClose, onSave 
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="会議のタイトル"
+              disabled={isExisting}
               className={`w-full px-4 py-2 rounded-xl border ${
                 isDark
                   ? 'bg-gray-800 border-gray-700 text-white'
                   : 'bg-gray-50 border-gray-200 text-gray-900'
-              }`}
+              } ${isExisting ? 'opacity-60 cursor-not-allowed' : ''}`}
             />
           </div>
 
@@ -381,11 +411,12 @@ function ReservationModal({ user, isDark, room, date, timeSlot, onClose, onSave 
               onChange={(e) => setDescription(e.target.value)}
               placeholder="会議の説明"
               rows={3}
+              disabled={isExisting}
               className={`w-full px-4 py-2 rounded-xl border ${
                 isDark
                   ? 'bg-gray-800 border-gray-700 text-white'
                   : 'bg-gray-50 border-gray-200 text-gray-900'
-              }`}
+              } ${isExisting ? 'opacity-60 cursor-not-allowed' : ''}`}
             />
           </div>
 
@@ -399,11 +430,12 @@ function ReservationModal({ user, isDark, room, date, timeSlot, onClose, onSave 
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
                 step="1800"
+                disabled={isExisting}
                 className={`w-full px-4 py-2 rounded-xl border ${
                   isDark
                     ? 'bg-gray-800 border-gray-700 text-white'
                     : 'bg-gray-50 border-gray-200 text-gray-900'
-                }`}
+                } ${isExisting ? 'opacity-60 cursor-not-allowed' : ''}`}
               />
             </div>
 
@@ -414,11 +446,12 @@ function ReservationModal({ user, isDark, room, date, timeSlot, onClose, onSave 
               <select
                 value={duration}
                 onChange={(e) => setDuration(Number(e.target.value))}
+                disabled={isExisting}
                 className={`w-full px-4 py-2 rounded-xl border ${
                   isDark
                     ? 'bg-gray-800 border-gray-700 text-white'
                     : 'bg-gray-50 border-gray-200 text-gray-900'
-                }`}
+                } ${isExisting ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
                 <option value={30}>30分</option>
                 <option value={60}>1時間</option>
@@ -429,28 +462,70 @@ function ReservationModal({ user, isDark, room, date, timeSlot, onClose, onSave 
             </div>
           </div>
 
+          {/* 既存予約の場合は予約者情報を表示 */}
+          {isExisting && reservation && (
+            <div className={`p-3 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
+              <div className={`text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                予約者
+              </div>
+              <div className={`${isDark ? 'text-white' : 'text-gray-900'}`}>
+                {reservation.user?.name || reservation.user?.email || 'ユーザー'}
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-3 pt-4">
-            <button
-              onClick={onClose}
-              className={`flex-1 px-4 py-2 rounded-xl font-medium transition-colors ${
-                isDark
-                  ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              キャンセル
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className={`flex-1 px-4 py-2 rounded-xl font-medium transition-colors ${
-                isDark
-                  ? 'bg-white text-gray-900 hover:bg-gray-100'
-                  : 'bg-gray-900 text-white hover:bg-gray-800'
-              } disabled:opacity-50`}
-            >
-              {saving ? '保存中...' : '予約する'}
-            </button>
+            {isExisting ? (
+              <>
+                <button
+                  onClick={onClose}
+                  className={`flex-1 px-4 py-2 rounded-xl font-medium transition-colors ${
+                    isDark
+                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  閉じる
+                </button>
+                {reservation?.user_id === user?.id && (
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className={`flex-1 px-4 py-2 rounded-xl font-medium transition-colors ${
+                      isDark
+                        ? 'bg-red-600 text-white hover:bg-red-700'
+                        : 'bg-red-500 text-white hover:bg-red-600'
+                    } disabled:opacity-50`}
+                  >
+                    {deleting ? '取り消し中...' : '予約取り消し'}
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={onClose}
+                  className={`flex-1 px-4 py-2 rounded-xl font-medium transition-colors ${
+                    isDark
+                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className={`flex-1 px-4 py-2 rounded-xl font-medium transition-colors ${
+                    isDark
+                      ? 'bg-white text-gray-900 hover:bg-gray-100'
+                      : 'bg-gray-900 text-white hover:bg-gray-800'
+                  } disabled:opacity-50`}
+                >
+                  {saving ? '保存中...' : '予約する'}
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
