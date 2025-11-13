@@ -36,13 +36,21 @@ function App() {
     const checkPomodoroTimer = () => {
       const saved = localStorage.getItem('pomodoroTimerState')
       if (saved) {
-        const { state, timeLeft: savedTimeLeft, startTime } = JSON.parse(saved)
+        const { state, timeLeft: savedTimeLeft, startTime, pausedTimeLeft, previousState } = JSON.parse(saved)
         if (state !== 'idle') {
-          // startTimeからの経過時間を計算
-          const elapsed = Math.floor((Date.now() - startTime) / 1000)
-          // 最初に保存された時間から経過時間を引く
-          const totalTime = state === 'working' ? 25 * 60 : state === 'short_break' ? 5 * 60 : 15 * 60
-          const currentTimeLeft = Math.max(0, totalTime - elapsed)
+          let currentTimeLeft
+          let totalTime
+          
+          // 一時停止中の場合は、保存された残り時間を使う
+          if (state === 'paused') {
+            currentTimeLeft = pausedTimeLeft
+            totalTime = previousState === 'working' ? 25 * 60 : previousState === 'short_break' ? 5 * 60 : 15 * 60
+          } else {
+            // 実行中の場合は、startTimeからの経過時間を計算
+            const elapsed = Math.floor((Date.now() - startTime) / 1000)
+            totalTime = state === 'working' ? 25 * 60 : state === 'short_break' ? 5 * 60 : 15 * 60
+            currentTimeLeft = Math.max(0, totalTime - elapsed)
+          }
 
           setPomodoroTimer({
             timeLeft: currentTimeLeft,

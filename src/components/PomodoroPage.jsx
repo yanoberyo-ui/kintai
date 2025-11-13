@@ -14,7 +14,12 @@ export default function PomodoroPage({ user, isDark }) {
   const [timeLeft, setTimeLeft] = useState(() => {
     const saved = localStorage.getItem('pomodoroTimerState')
     if (saved) {
-      const { state, startTime } = JSON.parse(saved)
+      const { state, startTime, pausedTimeLeft } = JSON.parse(saved)
+      // 一時停止中の場合は、保存された残り時間を使う
+      if (state === 'paused') {
+        return pausedTimeLeft
+      }
+      // 実行中の場合は、経過時間から計算
       const totalTime = state === 'working' ? 25 * 60 : state === 'short_break' ? 5 * 60 : 15 * 60
       const elapsed = Math.floor((Date.now() - startTime) / 1000)
       return Math.max(0, totalTime - elapsed)
@@ -49,13 +54,25 @@ export default function PomodoroPage({ user, isDark }) {
   useEffect(() => {
     if (timerState === 'idle') {
       localStorage.removeItem('pomodoroTimerState')
-    } else if (startTime) {
+    } else if (timerState === 'paused') {
+      // 一時停止時は残り時間と元の状態を保存
+      const saved = localStorage.getItem('pomodoroTimerState')
+      const previousState = saved ? JSON.parse(saved).previousState || JSON.parse(saved).state : 'working'
       localStorage.setItem('pomodoroTimerState', JSON.stringify({
         state: timerState,
-        startTime: startTime
+        pausedTimeLeft: timeLeft,
+        previousState: previousState === 'paused' ? 'working' : previousState,
+        startTime: null
+      }))
+    } else if (startTime) {
+      // 実行中はstartTimeを保存
+      localStorage.setItem('pomodoroTimerState', JSON.stringify({
+        state: timerState,
+        startTime: startTime,
+        previousState: timerState
       }))
     }
-  }, [timerState, startTime])
+  }, [timerState, startTime, timeLeft])
 
   useEffect(() => {
     loadTodoList()
@@ -159,10 +176,25 @@ export default function PomodoroPage({ user, isDark }) {
   }
 
   const pauseTimer = () => {
-    setTimerState('idle')
+    setTimerState('paused')
     setStartTime(null)
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
+    }
+  }
+
+  const resumeTimer = () => {
+    // localStorageから一時停止前の状態を取得
+    const saved = localStorage.getItem('pomodoroTimerState')
+    if (saved) {
+      const { pausedTimeLeft, previousState } = JSON.parse(saved)
+      if (pausedTimeLeft && previousState) {
+        // 残り時間から新しいstartTimeを計算
+        const totalTime = previousState === 'working' ? WORK_TIME : previousState === 'short_break' ? SHORT_BREAK : LONG_BREAK
+        const newStartTime = Date.now() - ((totalTime - pausedTimeLeft) * 1000)
+        setStartTime(newStartTime)
+        setTimerState(previousState)
+      }
     }
   }
 
@@ -256,6 +288,7 @@ export default function PomodoroPage({ user, isDark }) {
                 {timerState === 'working' && '集中タイム'}
                 {timerState === 'short_break' && '短い休憩'}
                 {timerState === 'long_break' && '長い休憩'}
+                {timerState === 'paused' && '一時停止中'}
                 {timerState === 'idle' && '待機中'}
               </div>
             </div>
@@ -287,7 +320,31 @@ export default function PomodoroPage({ user, isDark }) {
                 開始
               </button>
             )}
-            {timerState !== 'idle' && (
+            {timerState === 'paused' && (
+              <>
+                <button
+                  onClick={resumeTimer}
+                  className={`px-8 py-4 rounded-xl font-semibold transition-colors shadow-lg ${
+                    isDark
+                      ? 'bg-white text-gray-900 hover:bg-gray-100'
+                      : 'bg-gray-900 text-white hover:bg-gray-800'
+                  }`}
+                >
+                  再開
+                </button>
+                <button
+                  onClick={resetTimer}
+                  className={`px-8 py-4 rounded-xl font-semibold transition-colors shadow-lg ${
+                    isDark
+                      ? 'bg-gray-700 text-white hover:bg-gray-600'
+                      : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
+                  }`}
+                >
+                  リセット
+                </button>
+              </>
+            )}
+            {(timerState === 'working' || timerState === 'short_break' || timerState === 'long_break') && (
               <>
                 <button
                   onClick={pauseTimer}
@@ -311,6 +368,7 @@ export default function PomodoroPage({ user, isDark }) {
                 </button>
               </>
             )}
+          </div>
           </div>
 
           {/* 統計 */}
