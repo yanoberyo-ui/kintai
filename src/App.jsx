@@ -7,6 +7,8 @@ import SettingsPage from './components/SettingsPage'
 import MembersPage from './components/MembersPage'
 import PomodoroPage from './components/PomodoroPage'
 import ReservationsPage from './components/ReservationsPage'
+import AnnouncementsPage from './components/AnnouncementsPage'
+import AdminPage from './components/AdminPage'
 import { getStreaks } from './utils/streaks'
 import { getHeatmapData } from './utils/heatmap'
 
@@ -28,43 +30,11 @@ function App() {
   }, [currentPage])
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [othersMenuOpen, setOthersMenuOpen] = useState(false)
+  const [eventNotification, setEventNotification] = useState(null)
+  const [todayEventNotification, setTodayEventNotification] = useState(null)
+  const [followUpNotification, setFollowUpNotification] = useState(null)
 
-  // 17:00以降かどうかをチェック
-  useEffect(() => {
-    const checkTime = () => {
-      const hour = new Date().getHours()
-      setIsDark(hour >= 17 || hour < 6) // 17:00-翌6:00はダークモード
-    }
-
-    checkTime()
-    const timer = setInterval(checkTime, 60000) // 1分ごとにチェック
-
-    return () => clearInterval(timer)
-  }, [])
-
-  useEffect(() => {
-    // セッションチェック
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-      
-      // ユーザーがいる場合はストリークとヒートマップを読み込む
-      if (session?.user) {
-        loadStreaks(session.user.id)
-        loadHeatmapData(session.user.id)
-      }
-    })
-
-    // 認証状態の変更を監視
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
-
+  // データ読み込み関数（useEffectより前に定義）
   const loadStreaks = async (userId) => {
     try {
       const data = await getStreaks(userId)
@@ -82,6 +52,213 @@ function App() {
       console.error('Error loading heatmap data:', error)
     }
   }
+
+  // 17:00以降かどうかをチェック
+  useEffect(() => {
+    const checkTime = () => {
+      const hour = new Date().getHours()
+      setIsDark(hour >= 17 || hour < 6) // 17:00-翌6:00はダークモード
+    }
+
+    checkTime()
+    const timer = setInterval(checkTime, 60000) // 1分ごとにチェック
+
+    return () => clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    // セッションチェック
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      console.log('Session check:', session?.user ? 'User found' : 'No user')
+      if (session?.user) {
+        // usersテーブルから完全なユーザー情報を取得
+        const { data: userData, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single()
+        
+        console.log('User data:', userData, 'Error:', error)
+        setUser(userData || session.user)
+        loadStreaks(session.user.id)
+        loadHeatmapData(session.user.id)
+      } else {
+        setUser(null)
+      }
+      console.log('Setting loading to false')
+      setLoading(false)
+    }).catch(err => {
+      console.error('Session error:', err)
+      setLoading(false)
+    })
+
+    // 認証状態の変更を監視
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        // usersテーブルから完全なユーザー情報を取得
+        const { data: userData } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single()
+        
+        setUser(userData || session.user)
+      } else {
+        setUser(null)
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // イベント作成のリアルタイム監視
+  useEffect(() => {
+    if (!user) return
+
+    const channel = supabase
+      .channel('announcements-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'announcements',
+          filter: 'category=eq.event'
+        },
+        async (payload) => {
+          const newEvent = payload.new
+
+          // 投票期限があり、かつ日程投票がある場合のみ通知
+          if (newEvent.voting_deadline) {
+            // イベント作成者の情報を取得
+            const { data: author } = await supabase
+              .from('users')
+              .select('name, email')
+              .eq('id', newEvent.author_id)
+              .single()
+
+            setEventNotification({
+              ...newEvent,
+              author
+            })
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user])
+
+  // 当日のイベント通知チェック
+  useEffect(() => {
+    if (!user?.id) return
+
+    const checkTodayEvents = async () => {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+
+      // 今日のイベントで参加登録済みのものを取得
+      const { data: todayEvents } = await supabase
+        .from('announcements')
+        .select(`
+          *,
+          author:users!announcements_author_id_fkey (
+            id,
+            name,
+            email
+          ),
+          participants:announcement_participants!inner (
+            user_id
+          )
+        `)
+        .eq('category', 'event')
+        .eq('participants.user_id', user.id)
+        .gte('event_date', today.toISOString())
+        .lt('event_date', tomorrow.toISOString())
+
+      // まだ通知していないイベントがあれば表示
+      if (todayEvents && todayEvents.length > 0) {
+        const notifiedEvents = JSON.parse(localStorage.getItem('notifiedTodayEvents') || '[]')
+        const unnotifiedEvent = todayEvents.find(event => !notifiedEvents.includes(event.id))
+
+        if (unnotifiedEvent) {
+          setTodayEventNotification(unnotifiedEvent)
+          // 通知済みとしてマーク
+          localStorage.setItem('notifiedTodayEvents', JSON.stringify([...notifiedEvents, unnotifiedEvent.id]))
+        }
+      }
+    }
+
+    checkTodayEvents()
+    // 1時間ごとにチェック
+    const interval = setInterval(checkTodayEvents, 60 * 60 * 1000)
+
+    return () => clearInterval(interval)
+  }, [user])
+
+  // フォローアップメッセージのリアルタイム監視
+  useEffect(() => {
+    if (!user?.id) return
+
+    const channel = supabase
+      .channel('follow-up-messages-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'event_follow_up_messages'
+        },
+        async (payload) => {
+          const message = payload.new
+
+          // 自分が対象かどうかチェック
+          const { data: announcement } = await supabase
+            .from('announcements')
+            .select(`
+              *,
+              participants:announcement_participants!inner(user_id),
+              date_options:event_date_options(
+                id,
+                votes:event_date_votes!inner(user_id)
+              )
+            `)
+            .eq('id', message.announcement_id)
+            .single()
+
+          if (!announcement) return
+
+          let isTarget = false
+
+          if (message.target_type === 'all_participants') {
+            // 全参加者が対象
+            isTarget = announcement.participants.some(p => p.user_id === user.id)
+          } else if (message.target_type === 'date_option_voters' && message.date_option_id) {
+            // 特定の日程に投票した人のみが対象
+            const dateOption = announcement.date_options?.find(opt => opt.id === message.date_option_id)
+            isTarget = dateOption?.votes?.some(v => v.user_id === user.id) || false
+          }
+
+          if (isTarget) {
+            setFollowUpNotification({
+              ...message,
+              announcement
+            })
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user])
 
   if (loading) {
     return (
@@ -145,21 +322,13 @@ function App() {
           {user && (streaks.attendanceStreak > 0 || streaks.todoStreak > 0) && (
             <div className="ml-auto flex items-center gap-2">
               {streaks.attendanceStreak > 0 && (
-                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                  isDark
-                    ? 'bg-gray-800/80 text-gray-300'
-                    : 'bg-gray-100/80 text-gray-700'
-                }`}>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-white text-gray-600">
                   <span className="text-sm">📅</span>
                   <span>{streaks.attendanceStreak}</span>
                 </div>
               )}
               {streaks.todoStreak > 0 && (
-                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                  isDark
-                    ? 'bg-gray-800/80 text-gray-300'
-                    : 'bg-gray-100/80 text-gray-700'
-                }`}>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-white text-gray-600">
                   <span className="text-sm">🎯</span>
                   <span>{streaks.todoStreak}</span>
                 </div>
@@ -243,6 +412,49 @@ function App() {
                 <span className="md:inline text-xs md:text-base">メンバー</span>
               </div>
             </button>
+
+            <button
+              onClick={() => setCurrentPage('announcements')}
+              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+                currentPage === 'announcements'
+                  ? isDark
+                    ? 'bg-white text-gray-900'
+                    : 'bg-gray-900 text-white'
+                  : isDark
+                  ? 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/50'
+              }`}
+            >
+              <div className="flex md:flex-row flex-col items-center md:gap-3 gap-1">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+                </svg>
+                <span className="md:inline text-xs md:text-base">タイムライン</span>
+              </div>
+            </button>
+
+            {/* 管理者専用: Adminボタン */}
+            {user?.role === 'admin' && (
+              <button
+                onClick={() => setCurrentPage('admin')}
+                className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+                  currentPage === 'admin'
+                    ? isDark
+                      ? 'bg-white text-gray-900'
+                      : 'bg-gray-900 text-white'
+                    : isDark
+                    ? 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/50'
+                }`}
+              >
+                <div className="flex md:flex-row flex-col items-center md:gap-3 gap-1">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                  <span className="md:inline text-xs md:text-base">管理者</span>
+                </div>
+              </button>
+            )}
 
             {/* PC専用: 集中ボタン */}
             <button
@@ -380,6 +592,10 @@ function App() {
           <CalendarPage user={user} isDark={isDark} />
         ) : currentPage === 'members' ? (
           <MembersPage user={user} isDark={isDark} />
+        ) : currentPage === 'announcements' ? (
+          <AnnouncementsPage user={user} isDark={isDark} />
+        ) : currentPage === 'admin' ? (
+          <AdminPage isDark={isDark} />
         ) : currentPage === 'pomodoro' ? (
           <PomodoroPage user={user} isDark={isDark} />
         ) : currentPage === 'reservations' ? (
@@ -507,6 +723,335 @@ function App() {
         </>
       )}
 
+      {/* イベント投票通知ポップアップ */}
+      {eventNotification && (
+        <>
+          {/* オーバーレイ */}
+          <div
+            onClick={() => setEventNotification(null)}
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm animate-fade-in"
+          />
+
+          {/* ポップアップ */}
+          <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-11/12 max-w-md backdrop-blur-xl rounded-3xl shadow-2xl border overflow-hidden animate-scale-in ${
+            isDark
+              ? 'bg-gray-900/95 border-gray-800/50'
+              : 'bg-white/95 border-gray-200/50'
+          }`}>
+            {/* ヘッダー */}
+            <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="text-3xl">🎉</div>
+                  <div>
+                    <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      新しいイベント！
+                    </h3>
+                    <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                      投票が必要です
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setEventNotification(null)}
+                  className={`p-2 rounded-full transition-colors ${
+                    isDark
+                      ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
+                      : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* コンテンツ */}
+            <div className="p-6 space-y-4">
+              <div>
+                <h4 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  {eventNotification.title}
+                </h4>
+                <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                  {eventNotification.content}
+                </p>
+              </div>
+
+              {eventNotification.voting_deadline && (
+                <div className={`flex items-center gap-2 text-sm p-3 rounded-xl ${
+                  isDark ? 'bg-gray-800/50' : 'bg-gray-100/50'
+                }`}>
+                  <span>⏰</span>
+                  <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>
+                    投票期限: {new Date(eventNotification.voting_deadline).toLocaleString('ja-JP', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </span>
+                </div>
+              )}
+
+              {eventNotification.author && (
+                <div className={`flex items-center gap-2 text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  <span>投稿者:</span>
+                  <span>{eventNotification.author.name || eventNotification.author.email.split('@')[0]}</span>
+                </div>
+              )}
+            </div>
+
+            {/* アクション */}
+            <div className={`px-6 py-4 border-t flex gap-3 ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
+              <button
+                onClick={() => setEventNotification(null)}
+                className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
+                  isDark
+                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                後で
+              </button>
+              <button
+                onClick={() => {
+                  setCurrentPage('announcements')
+                  setEventNotification(null)
+                }}
+                className={`flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-200 ${
+                  isDark
+                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600'
+                    : 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700'
+                }`}
+              >
+                今すぐ投票
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* イベント当日通知ポップアップ */}
+      {todayEventNotification && (
+        <>
+          {/* オーバーレイ */}
+          <div
+            onClick={() => setTodayEventNotification(null)}
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm animate-fade-in"
+          />
+
+          {/* ポップアップ */}
+          <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-11/12 max-w-md backdrop-blur-xl rounded-3xl shadow-2xl border overflow-hidden animate-scale-in ${
+            isDark
+              ? 'bg-gray-900/95 border-gray-800/50'
+              : 'bg-white/95 border-gray-200/50'
+          }`}>
+            {/* ヘッダー */}
+            <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="text-3xl">📅</div>
+                  <div>
+                    <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      今日はイベント当日！
+                    </h3>
+                    <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                      参加登録済みのイベントです
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setTodayEventNotification(null)}
+                  className={`p-2 rounded-full transition-colors ${
+                    isDark
+                      ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
+                      : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* コンテンツ */}
+            <div className="p-6 space-y-4">
+              <div>
+                <h4 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  {todayEventNotification.title}
+                </h4>
+                <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                  {todayEventNotification.content}
+                </p>
+              </div>
+
+              {todayEventNotification.event_date && (
+                <div className={`flex items-center gap-2 text-sm p-3 rounded-xl ${
+                  isDark ? 'bg-gray-800/50' : 'bg-gray-100/50'
+                }`}>
+                  <span>⏰</span>
+                  <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>
+                    開始時刻: {new Date(todayEventNotification.event_date).toLocaleString('ja-JP', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </span>
+                </div>
+              )}
+
+              {todayEventNotification.event_location && (
+                <div className={`flex items-center gap-2 text-sm p-3 rounded-xl ${
+                  isDark ? 'bg-gray-800/50' : 'bg-gray-100/50'
+                }`}>
+                  <span>📍</span>
+                  <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>
+                    場所: {todayEventNotification.event_location}
+                  </span>
+                </div>
+              )}
+
+              {todayEventNotification.participants_only_message && (
+                <div className={`p-3 rounded-xl ${
+                  isDark ? 'bg-purple-900/30 border border-purple-700/50' : 'bg-purple-50 border border-purple-200'
+                }`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-sm">🔒</span>
+                    <span className={`text-xs font-bold ${isDark ? 'text-purple-300' : 'text-purple-700'}`}>
+                      参加者へのメッセージ
+                    </span>
+                  </div>
+                  <p className={`text-sm whitespace-pre-wrap ${isDark ? 'text-purple-200' : 'text-purple-900'}`}>
+                    {todayEventNotification.participants_only_message}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* アクション */}
+            <div className={`px-6 py-4 border-t flex gap-3 ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
+              <button
+                onClick={() => setTodayEventNotification(null)}
+                className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
+                  isDark
+                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                閉じる
+              </button>
+              <button
+                onClick={() => {
+                  setCurrentPage('announcements')
+                  setTodayEventNotification(null)
+                }}
+                className={`flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-200 ${
+                  isDark
+                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600'
+                    : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700'
+                }`}
+              >
+                詳細を見る
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* フォローアップメッセージ通知ポップアップ */}
+      {followUpNotification && (
+        <>
+          {/* オーバーレイ */}
+          <div
+            onClick={() => setFollowUpNotification(null)}
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm animate-fade-in"
+          />
+
+          {/* ポップアップ */}
+          <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-11/12 max-w-md backdrop-blur-xl rounded-3xl shadow-2xl border overflow-hidden animate-scale-in ${
+            isDark
+              ? 'bg-gray-900/95 border-gray-800/50'
+              : 'bg-white/95 border-gray-200/50'
+          }`}>
+            {/* ヘッダー */}
+            <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="text-3xl">💬</div>
+                  <div>
+                    <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      新着メッセージ
+                    </h3>
+                    <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {followUpNotification.announcement?.title}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setFollowUpNotification(null)}
+                  className={`p-2 rounded-full transition-colors ${
+                    isDark
+                      ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
+                      : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* コンテンツ */}
+            <div className="p-6 space-y-4">
+              <div className={`p-4 rounded-xl ${
+                isDark ? 'bg-green-900/20 border border-green-700/30' : 'bg-green-50 border border-green-200'
+              }`}>
+                <p className={`text-sm whitespace-pre-wrap ${isDark ? 'text-green-100' : 'text-green-900'}`}>
+                  {followUpNotification.message}
+                </p>
+              </div>
+
+              <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                {followUpNotification.target_type === 'all_participants' ? (
+                  <p>📢 全参加者へのメッセージ</p>
+                ) : (
+                  <p>🎯 特定の日程に投票した方へのメッセージ</p>
+                )}
+              </div>
+            </div>
+
+            {/* アクション */}
+            <div className={`px-6 py-4 border-t flex gap-3 ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
+              <button
+                onClick={() => setFollowUpNotification(null)}
+                className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
+                  isDark
+                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                閉じる
+              </button>
+              <button
+                onClick={() => {
+                  setCurrentPage('announcements')
+                  setFollowUpNotification(null)
+                }}
+                className={`flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-200 ${
+                  isDark
+                    ? 'bg-white text-gray-900 hover:bg-gray-100'
+                    : 'bg-gray-900 text-white hover:bg-gray-800'
+                }`}
+              >
+                イベントを見る
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
     </div>
   )
 }
@@ -559,7 +1104,7 @@ function LoginScreen({ isDark }) {
       }
 
       // 2. 既存のユーザーレコードをチェック
-      const { data: existingUser, error: selectError } = await supabase
+      const { data: existingUser } = await supabase
         .from('users')
         .select('id')
         .eq('id', authData.user.id)

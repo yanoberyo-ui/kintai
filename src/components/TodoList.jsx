@@ -172,24 +172,29 @@ export default function TodoList({ user, isDark }) {
       return
     }
 
+    // 挿入位置を保存（非同期処理中に変更される可能性があるため）
+    const savedInsertAtIndex = insertAtIndex
+    const sortedItems = [...items].sort((a, b) => a.order_index - b.order_index)
+
     try {
       console.log('Adding todo item...')
-      
+
+      // 入力欄を先にリセット（resetKeyをインクリメント）
+      setResetKey(prev => prev + 1)
+
       // 楽観的更新: 一時的なIDで即座にUIを更新
       const tempId = `temp-${Date.now()}`
-      const sortedItems = [...items].sort((a, b) => a.order_index - b.order_index)
-      
       let newOrderIndex
       let newItems
-      
-      if (insertAtIndex !== null) {
+
+      if (savedInsertAtIndex !== null) {
         // 挿入位置が指定されている場合
-        const afterOrderIndex = sortedItems[insertAtIndex]?.order_index ?? -1
+        const afterOrderIndex = sortedItems[savedInsertAtIndex]?.order_index ?? -1
         newOrderIndex = afterOrderIndex + 1
-        
+
         // 新しいアイテムを挿入位置の後に追加
         newItems = [
-          ...sortedItems.slice(0, insertAtIndex + 1),
+          ...sortedItems.slice(0, savedInsertAtIndex + 1),
           {
             id: tempId,
             content: content.trim(),
@@ -198,11 +203,16 @@ export default function TodoList({ user, isDark }) {
             order_index: newOrderIndex,
             todo_list_id: todoList.id,
           },
-          ...sortedItems.slice(insertAtIndex + 1).map(item => ({
+          ...sortedItems.slice(savedInsertAtIndex + 1).map(item => ({
             ...item,
             order_index: item.order_index + 1
           }))
         ]
+
+        // 挿入位置を更新（新しく追加したアイテムの位置）
+        setInsertAtIndex(savedInsertAtIndex + 1)
+        // インデントレベルを引き継ぐ
+        setNewItemIndent(indent)
       } else {
         // 最後に追加
         newOrderIndex = sortedItems.length > 0 ? sortedItems[sortedItems.length - 1].order_index + 1 : 0
@@ -217,35 +227,32 @@ export default function TodoList({ user, isDark }) {
             todo_list_id: todoList.id,
           }
         ]
+        // インデントレベルをリセット
+        setNewItemIndent(0)
       }
-      
+
       // 楽観的更新: UIを即座に更新
       setTodoList({
         ...todoList,
         todo_items: newItems
       })
-      
-      // インデントレベルと挿入位置をリセット
-      setNewItemIndent(0)
-      setInsertAtIndex(null)
-      setShowNewTaskInput(false)
-      setResetKey(prev => prev + 1)
-      
+
       // バックグラウンドでデータベースに保存
-      if (insertAtIndex !== null) {
-        const afterOrderIndex = sortedItems[insertAtIndex]?.order_index ?? null
+      if (savedInsertAtIndex !== null) {
+        const afterOrderIndex = sortedItems[savedInsertAtIndex]?.order_index ?? null
         await addTodoItemAtPosition(todoList.id, content.trim(), indent, afterOrderIndex)
       } else {
         await addTodoItem(todoList.id, content.trim(), indent)
       }
-      
+
       console.log('Todo item added, reloading list...')
-      // 保存完了後、正確なデータで更新
+      // 保存完了後、正確なデータで更新（ただし入力欄の位置は保持）
       await loadTodoList()
       console.log('List reloaded')
     } catch (error) {
       console.error('Error adding task:', error)
       // エラー時は元に戻す
+      setInsertAtIndex(null)
       await loadTodoList()
     }
   }
@@ -533,6 +540,12 @@ function NewTaskItem({ isDark, onAdd, onBackspaceEmpty, indentLevel, onIndentCha
     inputRef.current?.focus()
   }, [])
 
+  // indentLevelが変更されたら（新しいTODOが追加されたら）contentをリセット
+  useEffect(() => {
+    setContent('')
+    setLocalIndent(indentLevel)
+  }, [indentLevel])
+
   const handleTouchStart = (e) => {
     // 入力中は無効
     if (document.activeElement === inputRef.current) return
@@ -641,49 +654,14 @@ function NewTaskItem({ isDark, onAdd, onBackspaceEmpty, indentLevel, onIndentCha
         }`}
       />
       
-      {/* インデント調整ボタン（モバイル用） */}
-      <div className="flex gap-1 md:hidden">
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            setLocalIndent((prev) => (prev > 0 ? prev - 1 : prev))
-          }}
-          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-            localIndent === 0
-              ? isDark
-                ? 'bg-gray-800/30 text-gray-600'
-                : 'bg-gray-200/30 text-gray-400'
-              : isDark
-              ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          }`}
-          disabled={localIndent === 0}
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            setLocalIndent((prev) => (prev < 3 ? prev + 1 : prev))
-          }}
-          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-            localIndent === 3
-              ? isDark
-                ? 'bg-gray-800/30 text-gray-600'
-                : 'bg-gray-200/30 text-gray-400'
-              : isDark
-              ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          }`}
-          disabled={localIndent === 3}
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-      </div>
+      {/* インデント表示（モバイル用） - スワイプで調整 */}
+      {localIndent > 0 && (
+        <div className="md:hidden flex items-center gap-1 px-2 py-1 rounded-lg bg-gray-500/20 text-xs">
+          <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>
+            {'→'.repeat(localIndent)}
+          </span>
+        </div>
+      )}
     </div>
   )
 }
@@ -864,49 +842,14 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
                 : 'text-gray-900'
             }`}
           />
-          {/* インデント調整ボタン（モバイル用） */}
-          <div className="flex gap-1 md:hidden">
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setIndentLevel((prev) => (prev > 0 ? prev - 1 : prev))
-              }}
-              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                indentLevel === 0
-                  ? isDark
-                    ? 'bg-gray-800/30 text-gray-600'
-                    : 'bg-gray-200/30 text-gray-400'
-                  : isDark
-                  ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-              disabled={indentLevel === 0}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setIndentLevel((prev) => (prev < 3 ? prev + 1 : prev))
-              }}
-              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                indentLevel === 3
-                  ? isDark
-                    ? 'bg-gray-800/30 text-gray-600'
-                    : 'bg-gray-200/30 text-gray-400'
-                  : isDark
-                  ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-              disabled={indentLevel === 3}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
+          {/* インデント表示（モバイル用） - スワイプで調整 */}
+          {indentLevel > 0 && (
+            <div className="md:hidden flex items-center gap-1 px-2 py-1 rounded-lg bg-gray-500/20 text-xs">
+              <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>
+                {'→'.repeat(indentLevel)}
+              </span>
+            </div>
+          )}
         </>
       ) : (
         <span
