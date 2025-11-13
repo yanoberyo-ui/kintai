@@ -19,6 +19,8 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
     dateOptionId: null
   })
   const [openMenuId, setOpenMenuId] = useState(null) // 3点メニューの開閉状態
+  const [showVotersModal, setShowVotersModal] = useState(false) // 投票者表示モーダル
+  const [selectedDateOption, setSelectedDateOption] = useState(null) // 選択された日程候補
 
   // 投稿作成フォーム
   const [formData, setFormData] = useState({
@@ -132,7 +134,12 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
             option_label,
             votes:event_date_votes (
               id,
-              user_id
+              user_id,
+              user:users (
+                id,
+                name,
+                email
+              )
             )
           )
         `)
@@ -389,6 +396,17 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
             date_option_id: dateOptionId,
             user_id: currentUser.id
           })
+        
+        // 投票したら自動的に参加者としても登録
+        const isParticipant = announcement?.participants?.some(p => p.user_id === currentUser.id)
+        if (!isParticipant) {
+          await supabase
+            .from('announcement_participants')
+            .insert({
+              announcement_id: announcement.id,
+              user_id: currentUser.id
+            })
+        }
       }
 
       loadAnnouncements()
@@ -843,13 +861,20 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                                     )}
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    <span className={`text-sm font-bold ${
-                                      hasVoted
-                                        ? 'text-blue-500'
-                                        : isDark ? 'text-gray-400' : 'text-gray-600'
-                                    }`}>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setSelectedDateOption(option)
+                                        setShowVotersModal(true)
+                                      }}
+                                      className={`text-sm font-bold hover:underline cursor-pointer ${
+                                        hasVoted
+                                          ? 'text-blue-500'
+                                          : isDark ? 'text-gray-400' : 'text-gray-600'
+                                      }`}
+                                    >
                                       {voteCount}票
-                                    </span>
+                                    </button>
                                     {hasVoted && (
                                       <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
                                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -1711,6 +1736,80 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 投票者表示モーダル */}
+      {showVotersModal && selectedDateOption && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+             onClick={() => setShowVotersModal(false)}>
+          <div className={`rounded-2xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto ${
+            isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white'
+          }`}
+               onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                投票者一覧
+              </h3>
+              <button
+                onClick={() => setShowVotersModal(false)}
+                className={`p-2 rounded-lg hover:bg-gray-100 ${
+                  isDark ? 'hover:bg-gray-800 text-gray-400' : 'text-gray-600'
+                }`}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className={`mb-4 p-3 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
+              <div className={`font-medium mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                {new Date(selectedDateOption.option_date).toLocaleString('ja-JP', {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  weekday: 'short'
+                })}
+              </div>
+              {selectedDateOption.option_label && (
+                <div className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  {selectedDateOption.option_label}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              {selectedDateOption.votes && selectedDateOption.votes.length > 0 ? (
+                selectedDateOption.votes.map((vote, index) => (
+                  <div
+                    key={vote.id}
+                    className={`p-3 rounded-lg flex items-center gap-3 ${
+                      isDark ? 'bg-gray-800' : 'bg-gray-50'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                      isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'
+                    }`}>
+                      {index + 1}
+                    </div>
+                    <div className="flex-1">
+                      <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        {vote.user?.name || 'ユーザー'}
+                      </div>
+                      <div className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                        {vote.user?.email || ''}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className={`text-center py-8 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                  まだ投票はありません
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
