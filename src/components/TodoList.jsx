@@ -175,9 +175,63 @@ export default function TodoList({ user, isDark }) {
     try {
       console.log('Adding todo item...')
       
-      // 挿入位置が指定されている場合は、その位置に挿入
+      // 楽観的更新: 一時的なIDで即座にUIを更新
+      const tempId = `temp-${Date.now()}`
+      const sortedItems = [...items].sort((a, b) => a.order_index - b.order_index)
+      
+      let newOrderIndex
+      let newItems
+      
       if (insertAtIndex !== null) {
-        const sortedItems = items.sort((a, b) => a.order_index - b.order_index)
+        // 挿入位置が指定されている場合
+        const afterOrderIndex = sortedItems[insertAtIndex]?.order_index ?? -1
+        newOrderIndex = afterOrderIndex + 1
+        
+        // 新しいアイテムを挿入位置の後に追加
+        newItems = [
+          ...sortedItems.slice(0, insertAtIndex + 1),
+          {
+            id: tempId,
+            content: content.trim(),
+            is_completed: false,
+            indent_level: indent,
+            order_index: newOrderIndex,
+            todo_list_id: todoList.id,
+          },
+          ...sortedItems.slice(insertAtIndex + 1).map(item => ({
+            ...item,
+            order_index: item.order_index + 1
+          }))
+        ]
+      } else {
+        // 最後に追加
+        newOrderIndex = sortedItems.length > 0 ? sortedItems[sortedItems.length - 1].order_index + 1 : 0
+        newItems = [
+          ...sortedItems,
+          {
+            id: tempId,
+            content: content.trim(),
+            is_completed: false,
+            indent_level: indent,
+            order_index: newOrderIndex,
+            todo_list_id: todoList.id,
+          }
+        ]
+      }
+      
+      // 楽観的更新: UIを即座に更新
+      setTodoList({
+        ...todoList,
+        todo_items: newItems
+      })
+      
+      // インデントレベルと挿入位置をリセット
+      setNewItemIndent(0)
+      setInsertAtIndex(null)
+      setResetKey(prev => prev + 1)
+      
+      // バックグラウンドでデータベースに保存
+      if (insertAtIndex !== null) {
         const afterOrderIndex = sortedItems[insertAtIndex]?.order_index ?? null
         await addTodoItemAtPosition(todoList.id, content.trim(), indent, afterOrderIndex)
       } else {
@@ -185,14 +239,13 @@ export default function TodoList({ user, isDark }) {
       }
       
       console.log('Todo item added, reloading list...')
+      // 保存完了後、正確なデータで更新
       await loadTodoList()
       console.log('List reloaded')
-      // インデントレベルと挿入位置をリセット
-      setNewItemIndent(0)
-      setInsertAtIndex(null)
-      setResetKey(prev => prev + 1)
     } catch (error) {
       console.error('Error adding task:', error)
+      // エラー時は元に戻す
+      await loadTodoList()
     }
   }
 
@@ -750,21 +803,66 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
         )}
       </button>
 
-      {isEditing ? (
-        <input
-          ref={inputRef}
-          type="text"
-          value={editContent}
-          onChange={(e) => setEditContent(e.target.value)}
-          onBlur={handleSave}
-          onKeyDown={handleKeyDown}
-          autoFocus
-          className={`flex-1 bg-transparent border-0 focus:ring-0 outline-none text-sm ${
-            isDark
-              ? 'text-white'
-              : 'text-gray-900'
-          }`}
-        />
+{isEditing ? (
+        <>
+          <input
+            ref={inputRef}
+            type="text"
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={handleKeyDown}
+            autoFocus
+            className={`flex-1 bg-transparent border-0 focus:ring-0 outline-none text-sm ${
+              isDark
+                ? 'text-white'
+                : 'text-gray-900'
+            }`}
+          />
+          {/* インデント調整ボタン（モバイル用） */}
+          <div className="flex gap-1 md:hidden">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setIndentLevel((prev) => (prev > 0 ? prev - 1 : prev))
+              }}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                indentLevel === 0
+                  ? isDark
+                    ? 'bg-gray-800/30 text-gray-600'
+                    : 'bg-gray-200/30 text-gray-400'
+                  : isDark
+                  ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+              disabled={indentLevel === 0}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setIndentLevel((prev) => (prev < 3 ? prev + 1 : prev))
+              }}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                indentLevel === 3
+                  ? isDark
+                    ? 'bg-gray-800/30 text-gray-600'
+                    : 'bg-gray-200/30 text-gray-400'
+                  : isDark
+                  ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+              disabled={indentLevel === 3}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </>
       ) : (
         <span
           onClick={handleEdit}
