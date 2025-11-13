@@ -21,6 +21,8 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
   const [openMenuId, setOpenMenuId] = useState(null) // 3点メニューの開閉状態
   const [showVotersModal, setShowVotersModal] = useState(false) // 投票者表示モーダル
   const [selectedDateOption, setSelectedDateOption] = useState(null) // 選択された日程候補
+  const [showParticipantsModal, setShowParticipantsModal] = useState(false) // 参加者表示モーダル
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState(null) // 選択されたイベント
 
   // 投稿作成フォーム
   const [formData, setFormData] = useState({
@@ -119,7 +121,12 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
           ),
           participants:announcement_participants (
             id,
-            user_id
+            user_id,
+            user:users (
+              id,
+              name,
+              email
+            )
           ),
           likes:announcement_likes (
             id,
@@ -913,13 +920,20 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                           </span>
                         </div>
                       )}
-                      <div className="flex items-center gap-2 text-sm mb-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedAnnouncement(announcement)
+                          setShowParticipantsModal(true)
+                        }}
+                        className="flex items-center gap-2 text-sm mb-1 hover:underline cursor-pointer"
+                      >
                         <span>👥</span>
                         <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>
                           {announcement.participants?.length || 0}
                           {announcement.max_participants && `/${announcement.max_participants}`}人参加
                         </span>
-                      </div>
+                      </button>
                       {announcement.voting_deadline && (
                         <div className="flex items-center gap-2 text-sm">
                           <span>⏰</span>
@@ -1807,6 +1821,72 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
               ) : (
                 <div className={`text-center py-8 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                   まだ投票はありません
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 参加者表示モーダル */}
+      {showParticipantsModal && selectedAnnouncement && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+             onClick={() => setShowParticipantsModal(false)}>
+          <div className={`rounded-2xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto ${
+            isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white'
+          }`}
+               onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                参加者一覧
+              </h3>
+              <button
+                onClick={() => setShowParticipantsModal(false)}
+                className={`p-2 rounded-lg hover:bg-gray-100 ${
+                  isDark ? 'hover:bg-gray-800 text-gray-400' : 'text-gray-600'
+                }`}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className={`mb-4 p-3 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
+              <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                {selectedAnnouncement.title}
+              </div>
+              <div className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                {selectedAnnouncement.participants?.length || 0}
+                {selectedAnnouncement.max_participants && `/${selectedAnnouncement.max_participants}`}人参加
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {selectedAnnouncement.participants && selectedAnnouncement.participants.length > 0 ? (
+                selectedAnnouncement.participants.map((participant, index) => (
+                  <div
+                    key={participant.id}
+                    className={`p-3 rounded-lg flex items-center gap-3 ${
+                      isDark ? 'bg-gray-800' : 'bg-gray-50'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                      isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'
+                    }`}>
+                      {index + 1}
+                    </div>
+                    <div className="flex-1">
+                      <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        {participant.user?.name || 'ユーザー'}
+                      </div>
+                      <div className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                        {participant.user?.email || ''}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className={`text-center py-8 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                  まだ参加者はいません
                 </div>
               )}
             </div>
