@@ -14,6 +14,7 @@ export default function AdminPage({ isDark }) {
   const [todoAchievementData, setTodoAchievementData] = useState([])
   const [departments, setDepartments] = useState([])
   const [selectedDepartment, setSelectedDepartment] = useState('all') // ユニットフィルター
+  const [importingFromSheets, setImportingFromSheets] = useState(false)
 
   useEffect(() => {
     loadCurrentUser()
@@ -58,8 +59,9 @@ export default function AdminPage({ isDark }) {
         }
       }
     } catch (error) {
-      console.error('Error updating revenue:', error)
-      alert(`粗利の更新に失敗しました: ${error.message || JSON.stringify(error)}`)
+      console.error('Error loading current user:', error)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -74,6 +76,32 @@ export default function AdminPage({ isDark }) {
       setUsers(data || [])
     } catch (error) {
       console.error('Error loading users:', error)
+    }
+  }
+
+  const importRevenueFromSheets = async () => {
+    setImportingFromSheets(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('import-revenue', {
+        body: {
+          year: selectedYear,
+          month: selectedMonth
+        }
+      })
+
+      if (error) throw error
+
+      if (data.error) {
+        throw new Error(data.error)
+      }
+
+      alert(`スプレッドシートからのインポートが完了しました（${data.imported}件）`)
+      loadDashboard() // ダッシュボードを再読み込み
+    } catch (error) {
+      console.error('Error importing from sheets:', error)
+      alert(`インポートエラー: ${error.message}`)
+    } finally {
+      setImportingFromSheets(false)
     }
   }
 
@@ -350,20 +378,33 @@ export default function AdminPage({ isDark }) {
           ))}
         </select>
         {activeTab === 'dashboard' && (
-          <select
-            value={selectedDepartment}
-            onChange={(e) => setSelectedDepartment(e.target.value)}
-            className={`px-4 py-2 rounded-xl transition-colors ${
-              isDark
-                ? 'bg-gray-800 text-white border border-gray-700'
-                : 'bg-white text-gray-900 border border-gray-300'
-            } focus:outline-none`}
-          >
-            <option value="all">全ユニット</option>
-            {departments.map(dept => (
-              <option key={dept} value={dept}>{dept}</option>
-            ))}
-          </select>
+          <>
+            <select
+              value={selectedDepartment}
+              onChange={(e) => setSelectedDepartment(e.target.value)}
+              className={`px-4 py-2 rounded-xl transition-colors ${
+                isDark
+                  ? 'bg-gray-800 text-white border border-gray-700'
+                  : 'bg-white text-gray-900 border border-gray-300'
+              } focus:outline-none`}
+            >
+              <option value="all">全ユニット</option>
+              {departments.map(dept => (
+                <option key={dept} value={dept}>{dept}</option>
+              ))}
+            </select>
+            <button
+              onClick={importRevenueFromSheets}
+              disabled={importingFromSheets}
+              className={`px-4 py-2 rounded-xl transition-colors ${
+                isDark
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                  : 'bg-blue-500 hover:bg-blue-600 text-white'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              {importingFromSheets ? '📥 インポート中...' : '📊 シートから粗利をインポート'}
+            </button>
+          </>
         )}
       </div>
 

@@ -399,6 +399,83 @@ function App() {
     }
   }, [user])
 
+  // ページ読み込み時やホームページに戻った時に未表示の通知をチェック
+  useEffect(() => {
+    if (!user?.id || currentPage !== 'home') return
+
+    const checkPendingNotifications = async () => {
+      try {
+        // 投票期限のあるイベントで、まだ通知していないものをチェック
+        const dismissed = JSON.parse(localStorage.getItem('dismissed_event_notifications') || '[]')
+
+        const { data: pendingEvents } = await supabase
+          .from('announcements')
+          .select(`
+            *,
+            author:users!announcements_author_id_fkey (
+              id,
+              name,
+              email
+            )
+          `)
+          .eq('category', 'event')
+          .not('voting_deadline', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+
+        if (pendingEvents && pendingEvents.length > 0) {
+          const latestEvent = pendingEvents[0]
+          if (!dismissed.includes(latestEvent.id)) {
+            setEventNotification(latestEvent)
+          }
+        }
+
+        // 自分宛のフォローアップメッセージで、まだ通知していないものをチェック
+        const dismissedFollowUps = JSON.parse(localStorage.getItem('dismissed_followup_notifications') || '[]')
+
+        const { data: followUpMessages } = await supabase
+          .from('event_follow_up_messages')
+          .select(`
+            *,
+            announcement:announcements!inner (
+              *,
+              participants:announcement_participants!inner(user_id),
+              date_options:event_date_options(
+                id,
+                votes:event_date_votes(user_id)
+              )
+            )
+          `)
+          .order('created_at', { ascending: false })
+          .limit(10)
+
+        if (followUpMessages) {
+          for (const message of followUpMessages) {
+            if (dismissedFollowUps.includes(message.id)) continue
+
+            let isTarget = false
+
+            if (message.target_type === 'all_participants') {
+              isTarget = message.announcement.participants.some(p => p.user_id === user.id)
+            } else if (message.target_type === 'date_option_voters' && message.date_option_id) {
+              const dateOption = message.announcement.date_options?.find(opt => opt.id === message.date_option_id)
+              isTarget = dateOption?.votes?.some(v => v.user_id === user.id) || false
+            }
+
+            if (isTarget) {
+              setFollowUpNotification(message)
+              break // 最新の1件のみ表示
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error checking pending notifications:', error)
+      }
+    }
+
+    checkPendingNotifications()
+  }, [user, currentPage])
+
   if (loading) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${
