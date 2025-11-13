@@ -51,9 +51,8 @@ export default function AdminPage({ isDark }) {
         }
       }
     } catch (error) {
-      console.error('Error loading user:', error)
-    } finally {
-      setLoading(false)
+      console.error('Error updating revenue:', error)
+      alert(`粗利の更新に失敗しました: ${error.message || JSON.stringify(error)}`)
     }
   }
 
@@ -68,269 +67,6 @@ export default function AdminPage({ isDark }) {
       setUsers(data || [])
     } catch (error) {
       console.error('Error loading users:', error)
-    }
-  }
-
-  const loadAttendances = async () => {
-    try {
-      // 指定月の出勤データを取得
-      const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
-      const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0]
-
-      const { data: attendanceData, error: attendanceError } = await supabase
-        .from('attendances')
-        .select(`
-          *,
-          user:users (
-            id,
-            name,
-            email,
-            department
-          )
-        `)
-        .gte('date', startDate)
-        .lte('date', endDate)
-        .order('date', { ascending: false })
-
-      if (attendanceError) throw attendanceError
-      
-      // TODOデータも同時に取得
-      const { data: todoData, error: todoError } = await supabase
-        .from('todo_lists')
-        .select(`
-          *,
-          user_id,
-          todo_items (
-            is_completed
-          )
-        `)
-        .gte('date', startDate)
-        .lte('date', endDate)
-
-      if (todoError) throw todoError
-      
-      // 社員ごとに集計
-      const userSummary = {}
-      attendanceData?.forEach(record => {
-        const userId = record.user.id
-        if (!userSummary[userId]) {
-          userSummary[userId] = {
-            name: record.user.name,
-            department: record.user.department || '未設定',
-            attendanceDays: 0,
-            totalWorkMinutes: 0,
-            avgWorkMinutes: 0,
-            lateCount: 0,
-            todoTotal: 0,
-            todoCompleted: 0
-          }
-        }
-        
-        if (record.status === 'completed') {
-          userSummary[userId].attendanceDays++
-          userSummary[userId].totalWorkMinutes += record.total_work_minutes || 0
-          
-          // 9:00以降の出勤を遅刻としてカウント
-          if (record.clock_in) {
-            const clockInTime = new Date(record.clock_in)
-            const hour = clockInTime.getHours()
-            const minute = clockInTime.getMinutes()
-            if (hour > 9 || (hour === 9 && minute > 0)) {
-              userSummary[userId].lateCount++
-            }
-          }
-        }
-      })
-      
-      // TODOデータを集計
-      todoData?.forEach(list => {
-        const userId = list.user_id
-        if (userSummary[userId]) {
-          const items = list.todo_items || []
-          userSummary[userId].todoTotal += items.length
-          userSummary[userId].todoCompleted += items.filter(item => item.is_completed).length
-        }
-      })
-      
-      // 平均を計算
-      const summaryArray = Object.values(userSummary).map(user => ({
-        ...user,
-        avgWorkMinutes: user.attendanceDays > 0 ? Math.floor(user.totalWorkMinutes / user.attendanceDays) : 0,
-        todoRate: user.todoTotal > 0 ? Math.round((user.todoCompleted / user.todoTotal) * 100) : 0
-      }))
-      
-      setAttendances(summaryArray)
-    } catch (error) {
-      console.error('Error loading attendances:', error)
-    }
-  }
-
-  const loadSalaries = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('salaries')
-        .select(`
-          *,
-          user:users (
-            id,
-            name,
-            email
-          )
-        `)
-        .eq('year', selectedYear)
-        .eq('month', selectedMonth)
-        .order('created_at', { ascending: true })
-
-      if (error) throw error
-      setSalaries(data || [])
-    } catch (error) {
-      console.error('Error loading salaries:', error)
-    }
-  }
-
-  const handleCreateSalary = async (userId) => {
-    try {
-      // その月の出勤データを取得
-      const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
-      const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0]
-
-      const { data: attendanceData } = await supabase
-        .from('attendances')
-        .select('*')
-        .eq('user_id', userId)
-        .gte('date', startDate)
-        .lte('date', endDate)
-
-      const totalWorkMinutes = attendanceData?.reduce((sum, a) => sum + (a.total_work_minutes || 0), 0) || 0
-      const totalWorkHours = totalWorkMinutes / 60
-
-      // デフォルト給料レコード作成
-      const { error } = await supabase
-        .from('salaries')
-        .insert({
-          user_id: userId,
-          year: selectedYear,
-          month: selectedMonth,
-          base_salary: 0,
-          overtime_hours: Math.max(0, totalWorkHours - 160), // 160時間を超えた分を残業とする
-          overtime_pay: 0,
-          total_salary: 0,
-          payment_status: 'pending'
-        })
-
-      if (error) throw error
-      loadSalaries()
-    } catch (error) {
-      console.error('Error creating salary:', error)
-      alert('給料レコードの作成に失敗しました')
-    }
-  }
-
-  const handleUpdateSalary = async (salaryId, field, value) => {
-    try {
-      const salary = salaries.find(s => s.id === salaryId)
-      const updates = { [field]: parseFloat(value) || 0 }
-
-      // 総支給額を自動計算
-      if (['base_salary', 'overtime_pay', 'bonuses', 'deductions'].includes(field)) {
-        const baseSalary = field === 'base_salary' ? parseFloat(value) : salary.base_salary
-        const overtimePay = field === 'overtime_pay' ? parseFloat(value) : salary.overtime_pay
-        const bonuses = field === 'bonuses' ? parseFloat(value) : salary.bonuses
-        const deductions = field === 'deductions' ? parseFloat(value) : salary.deductions
-        
-        updates.total_salary = baseSalary + overtimePay + bonuses - deductions
-      }
-
-      const { error } = await supabase
-        .from('salaries')
-        .update(updates)
-        .eq('id', salaryId)
-
-      if (error) throw error
-      loadSalaries()
-    } catch (error) {
-      console.error('Error updating salary:', error)
-    }
-  }
-
-  const handleUpdatePaymentStatus = async (salaryId, status) => {
-    try {
-      const updates = { 
-        payment_status: status,
-        payment_date: status === 'paid' ? new Date().toISOString().split('T')[0] : null
-      }
-
-      const { error } = await supabase
-        .from('salaries')
-        .update(updates)
-        .eq('id', salaryId)
-
-      if (error) throw error
-      loadSalaries()
-    } catch (error) {
-      console.error('Error updating payment status:', error)
-    }
-  }
-
-  const handleUpdateUserRole = async (userId, newRole) => {
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ role: newRole })
-        .eq('id', userId)
-
-      if (error) throw error
-      loadUsers()
-      alert(`ユーザーの権限を${newRole === 'admin' ? '管理者' : '一般ユーザー'}に変更しました`)
-    } catch (error) {
-      console.error('Error updating user role:', error)
-      alert('権限の変更に失敗しました')
-    }
-  }
-
-  const handleUpdateRevenue = async (department, year, month, grossProfit) => {
-    try {
-      // 既存の粗利レコードを検索
-      const { data: existingRevenue, error: fetchError } = await supabase
-        .from('revenues')
-        .select('id')
-        .eq('department', department)
-        .eq('year', year)
-        .eq('month', month)
-        .single()
-
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        // PGRST116 は "not found" エラー（新規作成時は正常）
-        throw fetchError
-      }
-
-      if (existingRevenue) {
-        // 既存レコードを更新
-        const { error: updateError } = await supabase
-          .from('revenues')
-          .update({ gross_profit: parseFloat(grossProfit) || 0 })
-          .eq('id', existingRevenue.id)
-
-        if (updateError) throw updateError
-      } else {
-        // 新規レコードを作成
-        const { error: insertError } = await supabase
-          .from('revenues')
-          .insert({
-            department,
-            year,
-            month,
-            gross_profit: parseFloat(grossProfit) || 0
-          })
-
-        if (insertError) throw insertError
-      }
-
-      // ダッシュボードデータを再読み込み
-      loadDashboard()
-    } catch (error) {
-      console.error('Error updating revenue:', error)
-      alert('粗利の更新に失敗しました')
     }
   }
 
@@ -386,7 +122,12 @@ export default function AdminPage({ isDark }) {
       const unitSummary = {}
 
       attendanceData?.forEach(record => {
-        const dept = record.user.department || '未設定'
+        let dept = record.user.department || '未設定'
+        
+        // アドコンとムードメーカーを統合
+        if (dept === 'ムードメーカー') {
+          dept = 'アドコン'
+        }
         if (!unitSummary[dept]) {
           unitSummary[dept] = {
             department: dept,
@@ -404,7 +145,12 @@ export default function AdminPage({ isDark }) {
 
       // 粗利を集計
       revenueData?.forEach(revenue => {
-        const dept = revenue.department
+        let dept = revenue.department
+        
+        // アドコンとムードメーカーを統合
+        if (dept === 'ムードメーカー') {
+          dept = 'アドコン'
+        }
         if (unitSummary[dept]) {
           unitSummary[dept].totalRevenue += parseFloat(revenue.gross_profit) || 0
         }
@@ -412,7 +158,12 @@ export default function AdminPage({ isDark }) {
 
       // TODOを集計
       todoData?.forEach(list => {
-        const dept = list.user.department || '未設定'
+        let dept = list.user.department || '未設定'
+        
+        // アドコンとムードメーカーを統合
+        if (dept === 'ムードメーカー') {
+          dept = 'アドコン'
+        }
         if (unitSummary[dept]) {
           const items = list.todo_items || []
           unitSummary[dept].todoTotal += items.length
