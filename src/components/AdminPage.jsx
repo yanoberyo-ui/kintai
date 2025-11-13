@@ -110,10 +110,35 @@ export default function AdminPage({ isDark }) {
       const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
       const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0]
 
+      // 粗利データが最新かチェック（最終更新から24時間以上経過していたら自動インポート）
+      const { data: recentRevenue } = await supabase
+        .from('revenues')
+        .select('updated_at')
+        .eq('year', selectedYear)
+        .eq('month', selectedMonth)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      const shouldAutoImport = !recentRevenue ||
+        (new Date() - new Date(recentRevenue.updated_at)) > 24 * 60 * 60 * 1000
+
+      if (shouldAutoImport && !importingFromSheets) {
+        console.log('Auto-importing revenue data...')
+        // 自動インポート（エラーは無視）
+        try {
+          await supabase.functions.invoke('import-revenue', {
+            body: { year: selectedYear, month: selectedMonth }
+          })
+        } catch (e) {
+          console.log('Auto-import failed, using existing data:', e)
+        }
+      }
+
       // 3つのクエリを並列実行
       const [
         { data: attendanceData },
-        { data: revenueData },
+        { data: revenueData, error: revenueError },
         { data: todoData }
       ] = await Promise.all([
         // 勤怠データ取得
@@ -130,14 +155,14 @@ export default function AdminPage({ isDark }) {
           .gte('date', startDate)
           .lte('date', endDate)
           .eq('status', 'completed'),
-        
+
         // 粗利データ取得
         supabase
           .from('revenues')
           .select('*')
           .eq('year', selectedYear)
           .eq('month', selectedMonth),
-        
+
         // TODOデータ取得
         supabase
           .from('todo_lists')
@@ -188,7 +213,7 @@ export default function AdminPage({ isDark }) {
       // 粗利を集計
       revenueData?.forEach(revenue => {
         let dept = revenue.department
-        
+
         // アドコンとムードメーカーを統合
         if (dept === 'ムードメーカー') {
           dept = 'アドコン'
@@ -227,6 +252,57 @@ export default function AdminPage({ isDark }) {
       setDashboardData(dashboardArray)
     } catch (error) {
       console.error('Error loading dashboard:', error)
+    }
+  }
+
+  const loadAttendances = async () => {
+    try {
+      const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
+      const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0]
+
+      const { data, error } = await supabase
+        .from('attendances')
+        .select(`
+          *,
+          user:users (
+            id,
+            name,
+            department
+          )
+        `)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: false })
+
+      if (error) throw error
+      setAttendances(data || [])
+    } catch (error) {
+      console.error('Error loading attendances:', error)
+      setAttendances([])
+    }
+  }
+
+  const loadSalaries = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('salaries')
+        .select(`
+          *,
+          user:users (
+            id,
+            name,
+            department
+          )
+        `)
+        .eq('year', selectedYear)
+        .eq('month', selectedMonth)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setSalaries(data || [])
+    } catch (error) {
+      console.error('Error loading salaries:', error)
+      setSalaries([])
     }
   }
 

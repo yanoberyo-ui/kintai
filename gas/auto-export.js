@@ -58,6 +58,9 @@ function exportDailyAttendance() {
     // TODO達成率シートを更新
     updateTodoAchievementSheet(dateString);
 
+    // ユニット達成率を同期
+    syncUnitAchievementRates();
+
     Logger.log('勤怠データの自動出力が完了しました');
 
     // Slack通知（オプション）
@@ -645,6 +648,94 @@ function testExportSpecificDate() {
     updateDashboard();
     updateTodoAchievementSheet(testDate);
     Logger.log('テスト完了！');
+  }
+}
+
+/**
+ * スプレッドシートから各ユニットの達成率を取得してSupabaseに保存
+ */
+function syncUnitAchievementRates() {
+  try {
+    Logger.log('ユニット達成率の同期を開始します');
+
+    // スプレッドシートを開く
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = spreadsheet.getSheetByName('報告/MG粗利11月');
+
+    if (!sheet) {
+      Logger.log('シート「報告/MG粗利11月」が見つかりません');
+      return;
+    }
+
+    // 各ユニットの達成率を取得
+    const units = [
+      { name: '第1ユニット', cell: 'L17' },
+      { name: '第2ユニット', cell: 'L21' },
+      { name: '第3ユニット', cell: 'L52' },
+      { name: '第4ユニット', cell: 'L37' }
+    ];
+
+    const achievementRates = [];
+
+    units.forEach(unit => {
+      const cellValue = sheet.getRange(unit.cell).getValue();
+      // パーセンテージを数値に変換（0.85 -> 85）
+      const rate = typeof cellValue === 'number' ? Math.round(cellValue * 100) : 0;
+
+      achievementRates.push({
+        department: unit.name,
+        achievement_rate: rate,
+        month: new Date().getMonth() + 1, // 現在の月
+        year: new Date().getFullYear()
+      });
+
+      Logger.log(`${unit.name}: ${rate}% (セル: ${unit.cell})`);
+    });
+
+    // Supabaseに保存
+    const url = `${SUPABASE_URL}/rest/v1/unit_achievement_rates`;
+
+    achievementRates.forEach(data => {
+      // 既存データを削除してから挿入（upsert）
+      const deleteUrl = `${url}?department=eq.${encodeURIComponent(data.department)}&year=eq.${data.year}&month=eq.${data.month}`;
+      const deleteOptions = {
+        method: 'delete',
+        headers: {
+          'apikey': SUPABASE_SERVICE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_SERVICE_KEY,
+          'Content-Type': 'application/json'
+        },
+        muteHttpExceptions: true
+      };
+
+      UrlFetchApp.fetch(deleteUrl, deleteOptions);
+
+      // 新しいデータを挿入
+      const insertOptions = {
+        method: 'post',
+        headers: {
+          'apikey': SUPABASE_SERVICE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_SERVICE_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        payload: JSON.stringify(data),
+        muteHttpExceptions: true
+      };
+
+      const response = UrlFetchApp.fetch(url, insertOptions);
+      const statusCode = response.getResponseCode();
+
+      if (statusCode === 201 || statusCode === 200) {
+        Logger.log(`${data.department}の達成率を保存しました`);
+      } else {
+        Logger.log(`${data.department}の保存に失敗: ${statusCode}`);
+      }
+    });
+
+    Logger.log('ユニット達成率の同期が完了しました');
+  } catch (error) {
+    Logger.log('エラーが発生しました: ' + error.message);
   }
 }
 

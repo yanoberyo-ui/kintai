@@ -86,10 +86,10 @@ serve(async (req) => {
 
     const cellRanges = [
       { name: '全体', cell: 'I5' },
-      { name: '第1広告ユニット', cell: 'I12' },
-      { name: '第2広告ユニット', cell: 'I20' },
-      { name: '第3広告ユニット', cell: 'I28' },
-      { name: '第5広告ユニット', cell: 'I36' }
+      { name: '第1ユニット', cell: 'I12' },
+      { name: '第2ユニット', cell: 'I20' },
+      { name: '第3ユニット', cell: 'I28' },
+      { name: '第5ユニット', cell: 'I36' }
     ]
 
     const ranges = cellRanges.map(r => `${SHEET_NAME}!${r.cell}`).join('&ranges=')
@@ -106,34 +106,48 @@ serve(async (req) => {
     }
 
     const data = await response.json()
+    console.log('Raw data from sheets:', JSON.stringify(data))
 
     // Prepare data for Supabase
     const revenueData = []
     for (let i = 0; i < cellRanges.length; i++) {
       const unit = cellRanges[i]
       const value = data.valueRanges[i]?.values?.[0]?.[0]
+      console.log(`Cell ${unit.cell} for ${unit.name}: ${value}`)
 
       if (value) {
-        const gross_profit = parseFloat(String(value).replace(/,/g, ''))
+        const gross_profit = parseFloat(String(value).replace(/,/g, '').replace(/¥/g, ''))
+        console.log(`Parsed gross_profit for ${unit.name}: ${gross_profit}`)
         revenueData.push({
           year,
           month,
           department: unit.name,
           gross_profit
         })
+      } else {
+        console.log(`No value found for ${unit.name} at cell ${unit.cell}`)
       }
     }
+    console.log('Final revenueData:', JSON.stringify(revenueData))
 
     // Insert into Supabase
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
+    // まず既存のデータを削除
+    const { error: deleteError } = await supabase
+      .from('revenues')
+      .delete()
+      .eq('year', year)
+      .eq('month', month)
+
+    if (deleteError) throw deleteError
+
+    // 新しいデータを挿入
     const { error } = await supabase
       .from('revenues')
-      .upsert(revenueData, {
-        onConflict: 'year,month,department'
-      })
+      .insert(revenueData)
 
     if (error) throw error
 
