@@ -2,14 +2,78 @@ import { supabase } from './supabase'
 
 /**
  * 全メンバーの今日のタスク情報を取得して順位を計算
+ * 19:00以降は確定ランキングを使用し、その後の追加タスクも計算
  */
 export async function calculateTodayRanking(userId) {
   try {
-    // 日本時間で今日の日付を取得
+    // 日本時間で今日の日付と時刻を取得
     const now = new Date()
     const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000))
     const today = jstDate.toISOString().split('T')[0]
+    const currentHour = jstDate.getHours()
+    const isAfter19 = currentHour >= 19
 
+    // 19:00以降かつ確定ランキングがある場合
+    if (isAfter19) {
+      const { data: dailyRanking, error: rankingError } = await supabase
+        .from('daily_rankings')
+        .select('*')
+        .eq('date', today)
+        .eq('user_id', userId)
+        .single()
+
+      if (rankingError && rankingError.code !== 'PGRST116') {
+        throw rankingError
+      }
+
+      // 確定ランキングがある場合
+      if (dailyRanking) {
+        // 現在のタスク完了数を取得（19:00以降の追加タスク計算用）
+        const { data: todoLists, error: todoError } = await supabase
+          .from('todo_lists')
+          .select(`
+            id,
+            user_id,
+            todo_items (
+              id,
+              is_completed
+            )
+          `)
+          .eq('date', today)
+          .eq('user_id', userId)
+
+        if (todoError) throw todoError
+
+        const todoList = todoLists?.[0]
+        const items = todoList?.todo_items || []
+        const currentTaskCount = items.length
+        const currentCompletedTasks = items.filter(item => item.is_completed).length
+
+        // 19:00以降の追加完了タスク数
+        const additionalCompletedTasks = Math.max(0, currentCompletedTasks - dailyRanking.completed_tasks)
+
+        // 総メンバー数を取得
+        const { count: totalMembers } = await supabase
+          .from('users')
+          .select('*', { count: 'exact', head: true })
+
+        return {
+          rank: dailyRanking.rank,
+          totalMembers,
+          taskCount: dailyRanking.task_count,
+          completedTasks: dailyRanking.completed_tasks,
+          completionRate: dailyRanking.completion_rate,
+          score: dailyRanking.score,
+          // 19:00以降の追加情報
+          isAfter19: true,
+          currentTaskCount,
+          currentCompletedTasks,
+          additionalCompletedTasks
+        }
+      }
+    }
+
+    // 19:00前、または確定ランキングがない場合はリアルタイム計算
     // 全メンバー取得
     const { data: members, error: membersError } = await supabase
       .from('users')
@@ -67,7 +131,8 @@ export async function calculateTodayRanking(userId) {
       taskCount: userStats.taskCount,
       completedTasks: userStats.completedTasks,
       completionRate: userStats.completionRate,
-      score: userStats.score
+      score: userStats.score,
+      isAfter19: false
     }
   } catch (error) {
     console.error('Error calculating ranking:', error)
@@ -95,7 +160,9 @@ export async function getAIFeedback(userId, userName) {
         taskCount: stats.taskCount,
         completedTasks: stats.completedTasks,
         completionRate: stats.completionRate,
-        name: userName
+        name: userName,
+        isAfter19: stats.isAfter19 || false,
+        additionalCompletedTasks: stats.additionalCompletedTasks || 0
       })
     })
 

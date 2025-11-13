@@ -19,7 +19,22 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { rank, totalMembers, taskCount, completedTasks, completionRate, name } = req.body
+    const {
+      rank,
+      totalMembers,
+      taskCount,
+      completedTasks,
+      completionRate,
+      name,
+      isAfter19,
+      additionalCompletedTasks
+    } = req.body
+
+    // 19:00以降の追加タスク完了メッセージ
+    let additionalMessage = ''
+    if (isAfter19 && additionalCompletedTasks > 0) {
+      additionalMessage = `\n※19:00以降もさらに${additionalCompletedTasks}個のタスクを完了！素晴らしい努力です👏`
+    }
 
     // AIにフィードバックを生成させる
     const completion = await openai.chat.completions.create({
@@ -41,15 +56,20 @@ export default async function handler(req, res) {
 - タスクは少ないが達成率が高い → 「タスク全て完了お疲れ様！明日はもう少しチャレンジしてみよう🌟」
 - タスクが0個 → 「明日はTODOを出すところから始めよう！」
 
+注意事項：
+- ランキングは19:00時点で確定されるため、19:00以降のタスク完了はランキングには影響しない
+- しかし19:00以降も頑張った人は別途褒める
+
 メッセージは2-3行、100文字以内で簡潔に。`
         },
         {
           role: 'user',
           content: `${name}さんの今日の結果:
-- 順位: ${rank}位 / ${totalMembers}人中
+- 順位: ${rank}位 / ${totalMembers}人中（19:00時点で確定）
 - タスク数: ${taskCount}個
 - 完了タスク: ${completedTasks}個
 - 達成率: ${completionRate}%
+${isAfter19 && additionalCompletedTasks > 0 ? `- 19:00以降の追加完了: ${additionalCompletedTasks}個` : ''}
 
 退勤メッセージを作成してください。`
         }

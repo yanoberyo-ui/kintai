@@ -11,6 +11,7 @@ export default function MembersPage({ isDark }) {
   const [attendanceStatus, setAttendanceStatus] = useState({})
   const [taskProgress, setTaskProgress] = useState({})
   const [taskCounts, setTaskCounts] = useState({})
+  const [dailyRankings, setDailyRankings] = useState({}) // 確定ランキング
   const [showModal, setShowModal] = useState(false)
   const [birthdayNotifications, setBirthdayNotifications] = useState({ today: [], tomorrow: [] })
   const [showBirthdayPopup, setShowBirthdayPopup] = useState(false)
@@ -24,6 +25,7 @@ export default function MembersPage({ isDark }) {
     loadMembers()
     loadAttendanceStatus()
     loadAllTaskProgress()
+    loadDailyRankings()
   }, [])
 
   useEffect(() => {
@@ -172,6 +174,31 @@ export default function MembersPage({ isDark }) {
       setTaskCounts(countMap)
     } catch (error) {
       console.error('Error loading task progress:', error)
+    }
+  }
+
+  const loadDailyRankings = async () => {
+    try {
+      // 日本時間で今日の日付を取得
+      const now = new Date()
+      const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000))
+      const today = jstDate.toISOString().split('T')[0]
+
+      const { data, error } = await supabase
+        .from('daily_rankings')
+        .select('*')
+        .eq('date', today)
+
+      if (error) throw error
+
+      // user_idをキーにしたマップに変換
+      const rankingsMap = {}
+      data?.forEach(ranking => {
+        rankingsMap[ranking.user_id] = ranking
+      })
+      setDailyRankings(rankingsMap)
+    } catch (error) {
+      console.error('Error loading daily rankings:', error)
     }
   }
 
@@ -506,22 +533,46 @@ export default function MembersPage({ isDark }) {
             return scoreB - scoreA
           })
           
+          // 現在時刻が19:00以降かチェック
+          const now = new Date()
+          const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000))
+          const currentHour = jstDate.getHours()
+          const isAfter19 = currentHour >= 19
+
           // 出勤中のメンバーを取得して頑張り度でソート
-          const workingMembers = sortedMembers
-            .filter(member => {
-              const status = attendanceStatus[member.id]
-              return status && !status.clock_out && status.status === 'working'
-            })
-            .map(member => {
-              const progress = taskProgress[member.id] ?? 0
-              const count = taskCounts[member.id] ?? 0
-              // 頑張り度スコア = タスク数 × (達成率 / 100)
-              // 完了したタスク数を評価
-              const completedTasks = Math.round(count * (progress / 100))
-              const score = completedTasks + (progress / 100) // 完了数 + 達成率のボーナス
-              return { member, score }
-            })
-            .sort((a, b) => b.score - a.score)
+          let workingMembers
+
+          if (isAfter19 && Object.keys(dailyRankings).length > 0) {
+            // 19:00以降は確定ランキングを使用
+            workingMembers = sortedMembers
+              .filter(member => {
+                const status = attendanceStatus[member.id]
+                return status && !status.clock_out && status.status === 'working'
+              })
+              .map(member => {
+                const ranking = dailyRankings[member.id]
+                const score = ranking?.score ?? 0
+                return { member, score, rank: ranking?.rank }
+              })
+              .sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999)) // rankで昇順ソート
+          } else {
+            // 19:00前はリアルタイム計算
+            workingMembers = sortedMembers
+              .filter(member => {
+                const status = attendanceStatus[member.id]
+                return status && !status.clock_out && status.status === 'working'
+              })
+              .map(member => {
+                const progress = taskProgress[member.id] ?? 0
+                const count = taskCounts[member.id] ?? 0
+                // 頑張り度スコア = タスク数 × (達成率 / 100)
+                // 完了したタスク数を評価
+                const completedTasks = Math.round(count * (progress / 100))
+                const score = completedTasks + (progress / 100) // 完了数 + 達成率のボーナス
+                return { member, score }
+              })
+              .sort((a, b) => b.score - a.score)
+          }
 
           // メダルマッピング（トップ3：金銀銅）
           const getMedal = (member) => {
@@ -867,6 +918,7 @@ export default function MembersPage({ isDark }) {
                             className={`flex items-center gap-3 p-3 rounded-xl ${
                               isDark ? 'bg-gray-900/50' : 'bg-white/50'
                             }`}
+                            style={{ paddingLeft: `${(item.indent_level || 0) * 24 + 12}px` }}
                           >
                             <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${
                               item.is_completed

@@ -27,6 +27,7 @@ function App() {
     localStorage.setItem('currentPage', currentPage)
   }, [currentPage])
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [othersMenuOpen, setOthersMenuOpen] = useState(false)
 
   // 17:00以降かどうかをチェック
   useEffect(() => {
@@ -242,9 +243,10 @@ function App() {
               </div>
             </button>
 
+            {/* PC専用: 集中ボタン */}
             <button
               onClick={() => setCurrentPage('pomodoro')}
-              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+              className={`hidden md:block md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
                 currentPage === 'pomodoro'
                   ? isDark
                     ? 'bg-white text-gray-900'
@@ -262,9 +264,10 @@ function App() {
               </div>
             </button>
 
+            {/* PC専用: 予約ボタン */}
             <button
               onClick={() => setCurrentPage('reservations')}
-              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+              className={`hidden md:block md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
                 currentPage === 'reservations'
                   ? isDark
                     ? 'bg-white text-gray-900'
@@ -282,11 +285,11 @@ function App() {
               </div>
             </button>
 
-            {/* ユーザーアイコンボタン (モバイルのみ) */}
+            {/* モバイル専用: メニューボタン */}
             <button
               onClick={() => setUserMenuOpen(!userMenuOpen)}
               className={`md:hidden md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 relative ${
-                userMenuOpen
+                userMenuOpen || ['pomodoro', 'reservations', 'settings'].includes(currentPage)
                   ? isDark
                     ? 'bg-white text-gray-900'
                     : 'bg-gray-900 text-white'
@@ -296,17 +299,9 @@ function App() {
               }`}
             >
               <div className="flex md:flex-row flex-col items-center md:gap-3 gap-1">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                  userMenuOpen
-                    ? isDark
-                      ? 'bg-gray-900 text-white'
-                      : 'bg-white text-gray-900'
-                    : isDark
-                    ? 'bg-gradient-to-br from-gray-700 to-gray-600 text-white'
-                    : 'bg-gradient-to-br from-gray-600 to-gray-500 text-white'
-                }`}>
-                  {user?.email?.charAt(0).toUpperCase()}
-                </div>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
                 <span className="md:inline text-xs md:text-base">メニュー</span>
               </div>
             </button>
@@ -403,7 +398,7 @@ function App() {
           />
           
           {/* メニュー */}
-          <div className={`fixed bottom-24 md:bottom-auto md:right-8 md:top-24 left-1/2 md:left-auto -translate-x-1/2 md:translate-x-0 z-50 w-64 backdrop-blur-xl rounded-2xl shadow-2xl border overflow-hidden transition-all duration-300 ${
+          <div className={`fixed bottom-24 md:bottom-auto md:right-8 md:top-24 left-1/2 md:left-auto -translate-x-1/2 md:translate-x-0 z-50 w-64 backdrop-blur-xl rounded-2xl shadow-2xl border overflow-hidden animate-genie-in ${
             isDark
               ? 'bg-gray-900/90 border-gray-800/50'
               : 'bg-white/90 border-gray-200/50'
@@ -428,11 +423,57 @@ function App() {
             <div className="p-2">
               <button
                 onClick={() => {
+                  setCurrentPage('pomodoro')
+                  setUserMenuOpen(false)
+                }}
+                className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 ${
+                  currentPage === 'pomodoro'
+                    ? isDark
+                      ? 'bg-white/10 text-white'
+                      : 'bg-gray-900/10 text-gray-900'
+                    : isDark
+                    ? 'text-gray-300 hover:bg-gray-800/50 hover:text-white'
+                    : 'text-gray-600 hover:bg-gray-100/50 hover:text-gray-900'
+                }`}
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>集中</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setCurrentPage('reservations')
+                  setUserMenuOpen(false)
+                }}
+                className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 ${
+                  currentPage === 'reservations'
+                    ? isDark
+                      ? 'bg-white/10 text-white'
+                      : 'bg-gray-900/10 text-gray-900'
+                    : isDark
+                    ? 'text-gray-300 hover:bg-gray-800/50 hover:text-white'
+                    : 'text-gray-600 hover:bg-gray-100/50 hover:text-gray-900'
+                }`}
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span>予約</span>
+              </button>
+
+              <button
+                onClick={() => {
                   setCurrentPage('settings')
                   setUserMenuOpen(false)
                 }}
                 className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 ${
-                  isDark
+                  currentPage === 'settings'
+                    ? isDark
+                      ? 'bg-white/10 text-white'
+                      : 'bg-gray-900/10 text-gray-900'
+                    : isDark
                     ? 'text-gray-300 hover:bg-gray-800/50 hover:text-white'
                     : 'text-gray-600 hover:bg-gray-100/50 hover:text-gray-900'
                 }`}

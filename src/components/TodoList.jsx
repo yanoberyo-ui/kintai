@@ -228,6 +228,7 @@ export default function TodoList({ user, isDark }) {
       // インデントレベルと挿入位置をリセット
       setNewItemIndent(0)
       setInsertAtIndex(null)
+      setShowNewTaskInput(false)
       setResetKey(prev => prev + 1)
       
       // バックグラウンドでデータベースに保存
@@ -639,6 +640,50 @@ function NewTaskItem({ isDark, onAdd, onBackspaceEmpty, indentLevel, onIndentCha
             : 'text-gray-900 placeholder:text-gray-400'
         }`}
       />
+      
+      {/* インデント調整ボタン（モバイル用） */}
+      <div className="flex gap-1 md:hidden">
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            setLocalIndent((prev) => (prev > 0 ? prev - 1 : prev))
+          }}
+          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+            localIndent === 0
+              ? isDark
+                ? 'bg-gray-800/30 text-gray-600'
+                : 'bg-gray-200/30 text-gray-400'
+              : isDark
+              ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+          disabled={localIndent === 0}
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            setLocalIndent((prev) => (prev < 3 ? prev + 1 : prev))
+          }}
+          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+            localIndent === 3
+              ? isDark
+                ? 'bg-gray-800/30 text-gray-600'
+                : 'bg-gray-200/30 text-gray-400'
+              : isDark
+              ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+          disabled={localIndent === 3}
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
     </div>
   )
 }
