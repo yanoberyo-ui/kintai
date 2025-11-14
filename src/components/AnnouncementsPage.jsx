@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../utils/supabase'
 
+// 画像URL最適化関数（Supabase画像変換を使用）
+const getOptimizedAvatarUrl = (url, size = 100) => {
+  if (!url) return null
+  // Supabase Storageの画像変換パラメータを追加
+  // width, height, quality, formatを指定可能
+  if (url.includes('supabase')) {
+    return `${url}?width=${size}&height=${size}&quality=80`
+  }
+  return url
+}
+
 // タイムゾーン変換ユーティリティ関数
 // datetime-local inputで使用するためにJSTの日時をフォーマット
 const toJSTDatetimeLocal = (isoString) => {
@@ -771,7 +782,12 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                   isDark ? 'bg-gradient-to-br from-gray-700 to-gray-600 text-white' : 'bg-gradient-to-br from-gray-800 to-gray-700 text-white'
                 }`}>
                   {announcement.author.avatar_url ? (
-                    <img src={announcement.author.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                    <img
+                      src={getOptimizedAvatarUrl(announcement.author.avatar_url, 48)}
+                      alt="Avatar"
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
                   ) : (
                     announcement.author.name?.charAt(0) || announcement.author.email.charAt(0).toUpperCase()
                   )}
@@ -2009,7 +2025,12 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                   isDark ? 'bg-gradient-to-br from-gray-700 to-gray-600 text-white' : 'bg-gradient-to-br from-gray-800 to-gray-700 text-white'
                 }`}>
                   {selectedAnnouncement.author.avatar_url ? (
-                    <img src={selectedAnnouncement.author.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                    <img
+                      src={getOptimizedAvatarUrl(selectedAnnouncement.author.avatar_url, 48)}
+                      alt="Avatar"
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
                   ) : (
                     selectedAnnouncement.author.name?.charAt(0) || selectedAnnouncement.author.email.charAt(0).toUpperCase()
                   )}
@@ -2037,7 +2058,12 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                       isDark ? 'bg-gradient-to-br from-gray-700 to-gray-600 text-white' : 'bg-gradient-to-br from-gray-800 to-gray-700 text-white'
                     }`}>
                       {comment.user.avatar_url ? (
-                        <img src={comment.user.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                        <img
+                          src={getOptimizedAvatarUrl(comment.user.avatar_url, 40)}
+                          alt="Avatar"
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
                       ) : (
                         comment.user.name?.charAt(0) || comment.user.email.charAt(0).toUpperCase()
                       )}
@@ -2078,7 +2104,12 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                   isDark ? 'bg-gradient-to-br from-gray-700 to-gray-600 text-white' : 'bg-gradient-to-br from-gray-800 to-gray-700 text-white'
                 }`}>
                   {currentUser?.avatar_url ? (
-                    <img src={currentUser.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                    <img
+                      src={getOptimizedAvatarUrl(currentUser.avatar_url, 40)}
+                      alt="Avatar"
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
                   ) : (
                     currentUser?.name?.charAt(0) || currentUser?.email.charAt(0).toUpperCase()
                   )}
