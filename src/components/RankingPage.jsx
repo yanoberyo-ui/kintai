@@ -48,7 +48,7 @@ export default function RankingPage({ isDark, user }) {
   }
 
   // 全画面表示の切り替え（Safari対応）
-  const toggleFullscreen = async () => {
+  const toggleFullscreen = () => {
     try {
       const elem = containerRef.current
       if (!elem) return
@@ -61,29 +61,27 @@ export default function RankingPage({ isDark, user }) {
         document.msFullscreenElement
 
       if (!isCurrentlyFullscreen) {
-        // 全画面にする（ブラウザ別の関数を試す）
+        // 全画面にする（ブラウザ別の関数を直接実行）
         if (elem.requestFullscreen) {
-          await elem.requestFullscreen()
+          elem.requestFullscreen().catch(err => console.error('Fullscreen error:', err))
         } else if (elem.webkitRequestFullscreen) {
-          await elem.webkitRequestFullscreen() // Safari
+          elem.webkitRequestFullscreen() // Safari - Promiseを返さない
         } else if (elem.mozRequestFullScreen) {
-          await elem.mozRequestFullScreen() // Firefox
+          elem.mozRequestFullScreen().catch(err => console.error('Fullscreen error:', err))
         } else if (elem.msRequestFullscreen) {
-          await elem.msRequestFullscreen() // IE/Edge
+          elem.msRequestFullscreen().catch(err => console.error('Fullscreen error:', err))
         }
-        setIsFullscreen(true)
       } else {
         // 全画面を終了
         if (document.exitFullscreen) {
-          await document.exitFullscreen()
+          document.exitFullscreen().catch(err => console.error('Exit fullscreen error:', err))
         } else if (document.webkitExitFullscreen) {
-          await document.webkitExitFullscreen() // Safari
+          document.webkitExitFullscreen() // Safari - Promiseを返さない
         } else if (document.mozCancelFullScreen) {
-          await document.mozCancelFullScreen() // Firefox
+          document.mozCancelFullScreen().catch(err => console.error('Exit fullscreen error:', err))
         } else if (document.msExitFullscreen) {
-          await document.msExitFullscreen() // IE/Edge
+          document.msExitFullscreen().catch(err => console.error('Exit fullscreen error:', err))
         }
-        setIsFullscreen(false)
       }
     } catch (error) {
       console.error('Fullscreen error:', error)
