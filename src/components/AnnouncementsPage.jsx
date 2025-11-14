@@ -5,9 +5,10 @@ import { supabase } from '../utils/supabase'
 const getOptimizedAvatarUrl = (url, size = 100) => {
   if (!url) return null
   // Supabase Storageの画像変換パラメータを追加
-  // width, height, quality, formatを指定可能
+  // WebP形式、小さいサイズ、低画質で高速化
   if (url.includes('supabase')) {
-    return `${url}?width=${size}&height=${size}&quality=80`
+    // WebP形式 + リサイズ + 圧縮率を下げる
+    return `${url}?width=${size}&height=${size}&resize=contain&format=origin&quality=60`
   }
   return url
 }
@@ -787,6 +788,10 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                       alt="Avatar"
                       className="w-full h-full object-cover"
                       loading="lazy"
+                      decoding="async"
+                      fetchpriority="low"
+                      decoding="async"
+                      fetchpriority="low"
                     />
                   ) : (
                     announcement.author.name?.charAt(0) || announcement.author.email.charAt(0).toUpperCase()
@@ -2030,6 +2035,8 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                       alt="Avatar"
                       className="w-full h-full object-cover"
                       loading="lazy"
+                      decoding="async"
+                      fetchpriority="low"
                     />
                   ) : (
                     selectedAnnouncement.author.name?.charAt(0) || selectedAnnouncement.author.email.charAt(0).toUpperCase()
@@ -2063,6 +2070,8 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                           alt="Avatar"
                           className="w-full h-full object-cover"
                           loading="lazy"
+                      decoding="async"
+                      fetchpriority="low"
                         />
                       ) : (
                         comment.user.name?.charAt(0) || comment.user.email.charAt(0).toUpperCase()
@@ -2109,6 +2118,8 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                       alt="Avatar"
                       className="w-full h-full object-cover"
                       loading="lazy"
+                      decoding="async"
+                      fetchpriority="low"
                     />
                   ) : (
                     currentUser?.name?.charAt(0) || currentUser?.email.charAt(0).toUpperCase()
