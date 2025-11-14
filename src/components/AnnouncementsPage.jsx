@@ -1,6 +1,30 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../utils/supabase'
 
+// タイムゾーン変換ユーティリティ関数
+// datetime-local inputで使用するためにJSTの日時をフォーマット
+const toJSTDatetimeLocal = (isoString) => {
+  if (!isoString) return ''
+  // ISO文字列からDateオブジェクトを作成（自動的にローカルタイムゾーンに変換される）
+  const date = new Date(isoString)
+  // datetime-local形式の文字列を作成（YYYY-MM-DDTHH:mm）
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
+// datetime-local inputの値をJSTとして解釈してISO文字列に変換
+const fromJSTDatetimeLocal = (datetimeLocalString) => {
+  if (!datetimeLocalString) return null
+  // datetime-localの値はブラウザのローカルタイムゾーンとして解釈される
+  // そのままISO文字列にする（データベースはUTCで保存される）
+  const date = new Date(datetimeLocalString)
+  return date.toISOString()
+}
+
 export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
   const [announcements, setAnnouncements] = useState([])
   const [loading, setLoading] = useState(true)
@@ -22,6 +46,10 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
   const [showVotersModal, setShowVotersModal] = useState(false) // 投票者表示モーダル
   const [selectedDateOption, setSelectedDateOption] = useState(null) // 選択された日程候補
   const [showParticipantsModal, setShowParticipantsModal] = useState(false) // 参加者表示モーダル
+  const [showEditModal, setShowEditModal] = useState(false) // 投稿編集モーダル
+  const [editingAnnouncement, setEditingAnnouncement] = useState(null) // 編集中の投稿
+  const [pinnedLikesId, setPinnedLikesId] = useState(null) // 固定表示中のいいねID
+  const [pinnedVotesId, setPinnedVotesId] = useState(null) // 固定表示中の投票ID
 
   // 投稿作成フォーム
   const [formData, setFormData] = useState({
@@ -95,6 +123,30 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
     }
   }, [currentUser, announcements])
 
+  // ツールチップの外側をクリックしたら閉じる
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      // ツールチップ内のクリックは無視
+      if (e.target.closest('.tooltip-content')) {
+        return
+      }
+      // 票数のクリックも無視（トグルは別で処理）
+      if (e.target.closest('.vote-count-btn')) {
+        return
+      }
+      // それ以外のクリックで閉じる
+      if (pinnedLikesId !== null || pinnedVotesId !== null) {
+        setPinnedLikesId(null)
+        setPinnedVotesId(null)
+      }
+    }
+
+    document.addEventListener('click', handleClickOutside)
+    return () => {
+      document.removeEventListener('click', handleClickOutside)
+    }
+  }, [pinnedLikesId, pinnedVotesId])
+
   const loadCurrentUser = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
@@ -129,7 +181,12 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
           ),
           likes:announcement_likes (
             id,
-            user_id
+            user_id,
+            user:users (
+              id,
+              name,
+              email
+            )
           ),
           comments:announcement_comments (
             id
@@ -249,6 +306,72 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
     } catch (error) {
       console.error('Error deleting announcement:', error)
       alert('削除に失敗しました')
+    }
+  }
+
+  const handleEditSubmit = async () => {
+    if (!editingAnnouncement) return
+
+    try {
+      // お知らせの基本情報を更新
+      const updateData = {
+        title: editingAnnouncement.title,
+        content: editingAnnouncement.content
+      }
+
+      // イベント用のフィールドを追加
+      if (editingAnnouncement.category === 'event') {
+        // 日程投票を使うかどうかで event_date を設定
+        const useDatePoll = editingAnnouncement.use_date_poll || false
+        updateData.event_date = useDatePoll ? null : (editingAnnouncement.event_date || null)
+        updateData.event_location = editingAnnouncement.event_location || null
+        updateData.max_participants = editingAnnouncement.max_participants ? parseInt(editingAnnouncement.max_participants) : null
+        updateData.voting_deadline = editingAnnouncement.voting_deadline || null
+      }
+
+      const { error } = await supabase
+        .from('announcements')
+        .update(updateData)
+        .eq('id', editingAnnouncement.id)
+
+      if (error) throw error
+
+      // イベントの場合、日程候補を更新
+      if (editingAnnouncement.category === 'event') {
+        // 既存の日程候補をすべて削除
+        await supabase
+          .from('event_date_options')
+          .delete()
+          .eq('announcement_id', editingAnnouncement.id)
+
+        // 日程投票を使用する場合のみ、新しい日程候補を挿入
+        if (editingAnnouncement.use_date_poll) {
+          const validDateOptions = (editingAnnouncement.date_options || [])
+          .filter(opt => opt.option_date)
+          .map(option => ({
+            announcement_id: editingAnnouncement.id,
+            option_date: option.option_date,
+            option_label: option.option_label || null
+          }))
+
+        if (validDateOptions.length > 0) {
+            const { error: optionsError } = await supabase
+              .from('event_date_options')
+              .insert(validDateOptions)
+
+            if (optionsError) throw optionsError
+          }
+        }
+      }
+
+      // 編集成功後、リストを再読み込み
+      await loadAnnouncements()
+      setShowEditModal(false)
+      setEditingAnnouncement(null)
+      alert('投稿を編集しました')
+    } catch (error) {
+      console.error('Error updating announcement:', error)
+      alert('編集に失敗しました')
     }
   }
 
@@ -485,13 +608,13 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
           title: formData.title,
           content: formData.content,
           category: formData.category,
-          event_date: formData.use_date_poll ? null : (formData.event_date || null),
+          event_date: formData.use_date_poll ? null : (formData.event_date ? fromJSTDatetimeLocal(formData.event_date) : null),
           event_location: formData.event_location || null,
           max_participants: formData.max_participants ? parseInt(formData.max_participants) : null,
           image_url: imageUrl,
           link_url: formData.link_url || null,
           link_title: formData.link_title || null,
-          voting_deadline: formData.voting_deadline || null,
+          voting_deadline: formData.voting_deadline ? fromJSTDatetimeLocal(formData.voting_deadline) : null,
           participants_only_message: formData.category === 'event' && formData.participants_only_message ? formData.participants_only_message : null,
           author_id: currentUser.id
         })
@@ -504,7 +627,7 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
       if (formData.use_date_poll && formData.date_options.length > 0) {
         const dateOptionsData = formData.date_options.map(option => ({
           announcement_id: newAnnouncement.id,
-          option_date: option.date,
+          option_date: fromJSTDatetimeLocal(option.date),
           option_label: option.label || null
         }))
 
@@ -682,6 +805,30 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                               ? 'bg-gray-900 border-gray-800'
                               : 'bg-white border-gray-200'
                           }`}>
+                            {/* 編集 */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                // 編集用に投稿データを準備（date_optionsも含める）
+                                setEditingAnnouncement({
+                                  ...announcement,
+                                  date_options: announcement.date_options || []
+                                })
+                                setShowEditModal(true)
+                                setOpenMenuId(null)
+                              }}
+                              className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${
+                                isDark
+                                  ? 'hover:bg-gray-800 text-gray-300'
+                                  : 'hover:bg-gray-50 text-gray-700'
+                              }`}
+                            >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                              <span>投稿を編集</span>
+                            </button>
+
                             {/* フォローアップメッセージ（イベント投稿者のみ） */}
                             {announcement.category === 'event' && currentUser?.id === announcement.author_id && (
                               <button
@@ -835,60 +982,82 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                             const voteCount = option.votes?.length || 0
                             const hasVoted = option.votes?.some(v => v.user_id === currentUser?.id)
                             return (
-                              <button
-                                key={option.id}
-                                onClick={(e) => handleDateVote(option.id, e)}
-                                className={`w-full text-left p-3 rounded-lg transition-all ${
-                                  hasVoted
-                                    ? isDark
-                                      ? 'bg-blue-500/20 border-2 border-blue-500'
-                                      : 'bg-blue-50 border-2 border-blue-500'
-                                    : isDark
-                                    ? 'bg-gray-700/50 border border-gray-600 hover:bg-gray-700'
-                                    : 'bg-white border border-gray-300 hover:bg-gray-50'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div className="flex-1">
-                                    <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                                      {new Date(option.option_date).toLocaleString('ja-JP', {
-                                        year: 'numeric',
-                                        month: 'short',
-                                        day: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                        weekday: 'short'
-                                      })}
-                                    </div>
-                                    {option.option_label && (
-                                      <div className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                                        {option.option_label}
+                              <div key={option.id} className="relative group">
+                                <button
+                                  onClick={(e) => handleDateVote(option.id, e)}
+                                  className={`w-full text-left p-3 rounded-lg transition-all ${
+                                    hasVoted
+                                      ? isDark
+                                        ? 'bg-blue-500/20 border-2 border-blue-500'
+                                        : 'bg-blue-50 border-2 border-blue-500'
+                                      : isDark
+                                      ? 'bg-gray-700/50 border border-gray-600 hover:bg-gray-700'
+                                      : 'bg-white border border-gray-300 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex-1">
+                                      <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                        {new Date(option.option_date).toLocaleString('ja-JP', {
+                                          year: 'numeric',
+                                          month: 'short',
+                                          day: 'numeric',
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                          weekday: 'short'
+                                        })}
                                       </div>
-                                    )}
+                                      {option.option_label && (
+                                        <div className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                          {option.option_label}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setPinnedVotesId(pinnedVotesId === option.id ? null : option.id)
+                                        }}
+                                        className={`vote-count-btn text-sm font-bold cursor-pointer ${
+                                          hasVoted
+                                            ? 'text-blue-500'
+                                            : isDark ? 'text-gray-400' : 'text-gray-600'
+                                        }`}
+                                      >
+                                        {voteCount}票
+                                      </span>
+                                      {hasVoted && (
+                                        <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                        </svg>
+                                      )}
+                                    </div>
                                   </div>
-                                  <div className="flex items-center gap-2">
-                                    <span
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        setSelectedDateOption(option)
-                                        setShowVotersModal(true)
-                                      }}
-                                      className={`text-sm font-bold hover:underline cursor-pointer ${
-                                        hasVoted
-                                          ? 'text-blue-500'
-                                          : isDark ? 'text-gray-400' : 'text-gray-600'
-                                      }`}
-                                    >
-                                      {voteCount}票
-                                    </span>
-                                    {hasVoted && (
-                                      <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                      </svg>
-                                    )}
+                                </button>
+
+                                {/* 投票者ツールチップ */}
+                                {voteCount > 0 && (
+                                  <div
+                                    className={`tooltip-content absolute left-0 top-full mt-1 z-10 transition-opacity duration-200 ${
+                                      pinnedVotesId === option.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                    } ${pinnedVotesId !== option.id ? 'pointer-events-none' : ''}`}
+                                  >
+                                    <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border rounded-lg shadow-lg p-2 min-w-[150px]`}>
+                                      <div className={`text-xs font-semibold mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                        投票者 {voteCount}人
+                                      </div>
+                                      <div className="flex flex-wrap gap-1">
+                                        {option.votes?.map((vote) => (
+                                          <span key={vote.id} className={`text-xs px-2 py-1 rounded ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'}`}>
+                                            {vote.user?.name || vote.user?.email?.split('@')[0]}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
-                              </button>
+                                )}
+                              </div>
                             )
                           })}
                         </div>
@@ -992,27 +1161,59 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                     </button>
 
                     {/* いいね */}
-                    <button
-                      onClick={(e) => handleLike(announcement.id, e)}
-                      className={`flex items-center gap-2 text-sm transition-colors group ${
-                        isUserLiked(announcement)
-                          ? 'text-red-500'
-                          : isDark
-                          ? 'text-gray-500 hover:text-red-400'
-                          : 'text-gray-500 hover:text-red-600'
-                      }`}
-                    >
-                      <div className={`p-2 rounded-full transition-colors ${
-                        isUserLiked(announcement)
-                          ? isDark ? 'bg-red-400/10' : 'bg-red-50'
-                          : isDark ? 'group-hover:bg-red-400/10' : 'group-hover:bg-red-50'
-                      }`}>
-                        <svg className={`w-5 h-5 ${isUserLiked(announcement) ? 'fill-current' : ''}`} fill={isUserLiked(announcement) ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                        </svg>
-                      </div>
-                      <span>{announcement.likes?.length || 0}</span>
-                    </button>
+                    <div className="relative group">
+                      <button
+                        onClick={(e) => handleLike(announcement.id, e)}
+                        className={`flex items-center gap-2 text-sm transition-colors ${
+                          isUserLiked(announcement)
+                            ? 'text-red-500'
+                            : isDark
+                            ? 'text-gray-500 hover:text-red-400'
+                            : 'text-gray-500 hover:text-red-600'
+                        }`}
+                      >
+                        <div className={`p-2 rounded-full transition-colors ${
+                          isUserLiked(announcement)
+                            ? isDark ? 'bg-red-400/10' : 'bg-red-50'
+                            : isDark ? 'group-hover:bg-red-400/10' : 'group-hover:bg-red-50'
+                        }`}>
+                          <svg className={`w-5 h-5 ${isUserLiked(announcement) ? 'fill-current' : ''}`} fill={isUserLiked(announcement) ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                          </svg>
+                        </div>
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setPinnedLikesId(pinnedLikesId === announcement.id ? null : announcement.id)
+                          }}
+                          className="cursor-pointer vote-count-btn"
+                        >
+                          {announcement.likes?.length || 0}
+                        </span>
+                      </button>
+
+                      {/* いいねした人のツールチップ */}
+                      {announcement.likes && announcement.likes.length > 0 && (
+                        <div
+                          className={`tooltip-content absolute left-0 top-full mt-1 z-10 transition-opacity duration-200 ${
+                            pinnedLikesId === announcement.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                          } ${pinnedLikesId !== announcement.id ? 'pointer-events-none' : ''}`}
+                        >
+                          <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border rounded-lg shadow-lg p-2 min-w-[150px]`}>
+                            <div className={`text-xs font-semibold mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                              いいね {announcement.likes.length}人
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {announcement.likes.map((like) => (
+                                <span key={like.id} className={`text-xs px-2 py-1 rounded ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'}`}>
+                                  {like.user?.name || like.user?.email?.split('@')[0]}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     {/* イベント参加ボタン */}
                     {announcement.category === 'event' && currentUser?.id !== announcement.author_id && (
@@ -1447,6 +1648,311 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 投稿編集モーダル */}
+      {showEditModal && editingAnnouncement && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => {
+            setShowEditModal(false)
+            setEditingAnnouncement(null)
+          }}
+        >
+          <div
+            className={`max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl border ${
+              isDark
+                ? 'bg-gray-900/95 border-gray-800/50'
+                : 'bg-white/95 border-gray-200/50'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* ヘッダー */}
+            <div className={`sticky top-0 z-10 backdrop-blur-xl border-b p-6 ${
+              isDark ? 'bg-gray-900/80 border-gray-800/50' : 'bg-white/80 border-gray-200/50'
+            }`}>
+              <div className="flex items-center justify-between">
+                <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  投稿を編集
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false)
+                    setEditingAnnouncement(null)
+                  }}
+                  className={`p-2 rounded-xl transition-colors ${
+                    isDark
+                      ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
+                      : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* コンテンツ */}
+            <div className="p-6 space-y-4">
+              {/* タイトル */}
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                  タイトル <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editingAnnouncement.title}
+                  onChange={(e) => setEditingAnnouncement({ ...editingAnnouncement, title: e.target.value })}
+                  className={`w-full px-4 py-3 rounded-xl transition-colors ${
+                    isDark
+                      ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
+                      : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
+                  } focus:outline-none`}
+                  placeholder="タイトルを入力"
+                />
+              </div>
+
+              {/* 本文 */}
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                  本文 <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  required
+                  value={editingAnnouncement.content}
+                  onChange={(e) => setEditingAnnouncement({ ...editingAnnouncement, content: e.target.value })}
+                  rows={6}
+                  className={`w-full px-4 py-3 rounded-xl transition-colors ${
+                    isDark
+                      ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
+                      : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
+                  } focus:outline-none resize-none`}
+                  placeholder="本文を入力"
+                />
+              </div>
+
+              {/* イベント用フィールド */}
+              {editingAnnouncement.category === 'event' && (
+                <>
+                  {/* 日程投票の有効/無効 */}
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="edit-use-date-poll"
+                      checked={editingAnnouncement.use_date_poll || false}
+                      onChange={(e) => setEditingAnnouncement({ 
+                        ...editingAnnouncement, 
+                        use_date_poll: e.target.checked,
+                        event_date: e.target.checked ? null : editingAnnouncement.event_date
+                      })}
+                      className="w-5 h-5 rounded"
+                    />
+                    <label htmlFor="edit-use-date-poll" className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                      日程投票を使用する
+                    </label>
+                  </div>
+
+                  {/* イベント日時（日程投票を使わない場合） */}
+                  {!editingAnnouncement.use_date_poll && (
+                    <div>
+                      <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                        イベント日時
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={toJSTDatetimeLocal(editingAnnouncement.event_date)}
+                        onChange={(e) => setEditingAnnouncement({ 
+                          ...editingAnnouncement, 
+                          event_date: fromJSTDatetimeLocal(e.target.value)
+                        })}
+                        className={`w-full px-4 py-3 rounded-xl transition-colors ${
+                          isDark
+                            ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
+                            : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
+                        } focus:outline-none`}
+                      />
+                    </div>
+                  )}
+
+                  {/* 日程候補（日程投票を使う場合） */}
+                  {editingAnnouncement.use_date_poll && (
+                    <div>
+                      <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                        日程候補
+                      </label>
+                      <div className="space-y-2">
+                        {(editingAnnouncement.date_options || []).map((option, index) => (
+                          <div key={index} className="flex gap-2">
+                            <input
+                              type="datetime-local"
+                              value={toJSTDatetimeLocal(option.option_date)}
+                              onChange={(e) => {
+                                const newOptions = [...editingAnnouncement.date_options]
+                                newOptions[index] = {
+                                  ...newOptions[index],
+                                  option_date: fromJSTDatetimeLocal(e.target.value)
+                                }
+                                setEditingAnnouncement({ ...editingAnnouncement, date_options: newOptions })
+                              }}
+                              className={`flex-1 px-4 py-2 rounded-xl transition-colors ${
+                                isDark
+                                  ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
+                                  : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
+                              } focus:outline-none`}
+                            />
+                            <input
+                              type="text"
+                              value={option.option_label || ''}
+                              onChange={(e) => {
+                                const newOptions = [...editingAnnouncement.date_options]
+                                newOptions[index] = {
+                                  ...newOptions[index],
+                                  option_label: e.target.value
+                                }
+                                setEditingAnnouncement({ ...editingAnnouncement, date_options: newOptions })
+                              }}
+                              placeholder="ラベル (任意)"
+                              className={`w-32 px-4 py-2 rounded-xl transition-colors ${
+                                isDark
+                                  ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
+                                  : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
+                              } focus:outline-none`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newOptions = editingAnnouncement.date_options.filter((_, i) => i !== index)
+                                setEditingAnnouncement({ ...editingAnnouncement, date_options: newOptions })
+                              }}
+                              className={`px-3 py-2 rounded-xl ${
+                                isDark
+                                  ? 'bg-red-900 text-red-200 hover:bg-red-800'
+                                  : 'bg-red-100 text-red-700 hover:bg-red-200'
+                              }`}
+                            >
+                              削除
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newOptions = [
+                              ...(editingAnnouncement.date_options || []),
+                              { option_date: '', option_label: '' }
+                            ]
+                            setEditingAnnouncement({ ...editingAnnouncement, date_options: newOptions })
+                          }}
+                          className={`w-full px-4 py-2 rounded-xl border-2 border-dashed transition-colors ${
+                            isDark
+                              ? 'border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-300'
+                              : 'border-gray-300 text-gray-600 hover:border-gray-400 hover:text-gray-700'
+                          }`}
+                        >
+                          + 日程を追加
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* イベント場所 */}
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                      場所
+                    </label>
+                    <input
+                      type="text"
+                      value={editingAnnouncement.event_location || ''}
+                      onChange={(e) => setEditingAnnouncement({ ...editingAnnouncement, event_location: e.target.value })}
+                      className={`w-full px-4 py-3 rounded-xl transition-colors ${
+                        isDark
+                          ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
+                          : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
+                      } focus:outline-none`}
+                      placeholder="場所を入力"
+                    />
+                  </div>
+
+                  {/* 参加者上限 */}
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                      参加者上限
+                    </label>
+                    <input
+                      type="number"
+                      value={editingAnnouncement.max_participants || ''}
+                      onChange={(e) => setEditingAnnouncement({ ...editingAnnouncement, max_participants: e.target.value })}
+                      className={`w-full px-4 py-3 rounded-xl transition-colors ${
+                        isDark
+                          ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
+                          : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
+                      } focus:outline-none`}
+                      placeholder="上限なしの場合は空欄"
+                      min="1"
+                    />
+                  </div>
+
+                  {/* 投票期限 */}
+                  {editingAnnouncement.use_date_poll && (
+                    <div>
+                      <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                        投票期限
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={toJSTDatetimeLocal(editingAnnouncement.voting_deadline)}
+                        onChange={(e) => setEditingAnnouncement({ 
+                          ...editingAnnouncement, 
+                          voting_deadline: fromJSTDatetimeLocal(e.target.value)
+                        })}
+                        className={`w-full px-4 py-3 rounded-xl transition-colors ${
+                          isDark
+                            ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
+                            : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
+                        } focus:outline-none`}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* フッター */}
+            <div className={`sticky bottom-0 backdrop-blur-xl border-t p-6 flex gap-3 justify-end ${
+              isDark ? 'bg-gray-900/80 border-gray-800/50' : 'bg-white/80 border-gray-200/50'
+            }`}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEditModal(false)
+                  setEditingAnnouncement(null)
+                }}
+                className={`px-6 py-3 rounded-xl font-medium transition-colors ${
+                  isDark
+                    ? 'text-gray-300 hover:bg-gray-800'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleEditSubmit}
+                disabled={!editingAnnouncement.title.trim() || !editingAnnouncement.content.trim()}
+                className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
+                  isDark
+                    ? 'bg-white text-gray-900 hover:bg-gray-200'
+                    : 'bg-gray-900 text-white hover:bg-gray-800'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                更新する
+              </button>
+            </div>
           </div>
         </div>
       )}

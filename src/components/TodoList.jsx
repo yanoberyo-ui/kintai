@@ -172,87 +172,45 @@ export default function TodoList({ user, isDark }) {
       return
     }
 
-    // 挿入位置を保存（非同期処理中に変更される可能性があるため）
+    // 挿入位置とインデントを保存（非同期処理中に変更される可能性があるため）
     const savedInsertAtIndex = insertAtIndex
+    const savedIndent = indent
     const sortedItems = [...items].sort((a, b) => a.order_index - b.order_index)
 
     try {
       console.log('Adding todo item...')
 
-      // 入力欄を先にリセット（resetKeyをインクリメント）
-      setResetKey(prev => prev + 1)
-
-      // 楽観的更新: 一時的なIDで即座にUIを更新
-      const tempId = `temp-${Date.now()}`
-      let newOrderIndex
-      let newItems
-
-      if (savedInsertAtIndex !== null) {
-        // 挿入位置が指定されている場合
-        const afterOrderIndex = sortedItems[savedInsertAtIndex]?.order_index ?? -1
-        newOrderIndex = afterOrderIndex + 1
-
-        // 新しいアイテムを挿入位置の後に追加
-        newItems = [
-          ...sortedItems.slice(0, savedInsertAtIndex + 1),
-          {
-            id: tempId,
-            content: content.trim(),
-            is_completed: false,
-            indent_level: indent,
-            order_index: newOrderIndex,
-            todo_list_id: todoList.id,
-          },
-          ...sortedItems.slice(savedInsertAtIndex + 1).map(item => ({
-            ...item,
-            order_index: item.order_index + 1
-          }))
-        ]
-
-        // 挿入位置を更新（新しく追加したアイテムの位置）
-        setInsertAtIndex(savedInsertAtIndex + 1)
-        // インデントレベルを引き継ぐ
-        setNewItemIndent(indent)
-      } else {
-        // 最後に追加
-        newOrderIndex = sortedItems.length > 0 ? sortedItems[sortedItems.length - 1].order_index + 1 : 0
-        newItems = [
-          ...sortedItems,
-          {
-            id: tempId,
-            content: content.trim(),
-            is_completed: false,
-            indent_level: indent,
-            order_index: newOrderIndex,
-            todo_list_id: todoList.id,
-          }
-        ]
-        // インデントレベルをリセット
-        setNewItemIndent(0)
-      }
-
-      // 楽観的更新: UIを即座に更新
-      setTodoList({
-        ...todoList,
-        todo_items: newItems
-      })
-
       // バックグラウンドでデータベースに保存
       if (savedInsertAtIndex !== null) {
         const afterOrderIndex = sortedItems[savedInsertAtIndex]?.order_index ?? null
-        await addTodoItemAtPosition(todoList.id, content.trim(), indent, afterOrderIndex)
+        await addTodoItemAtPosition(todoList.id, content.trim(), savedIndent, afterOrderIndex)
       } else {
-        await addTodoItem(todoList.id, content.trim(), indent)
+        await addTodoItem(todoList.id, content.trim(), savedIndent)
       }
 
       console.log('Todo item added, reloading list...')
-      // 保存完了後、正確なデータで更新（ただし入力欄の位置は保持）
+      // 保存完了後、リストを再読み込み
       await loadTodoList()
+
+      // 入力欄の状態を更新
+      if (savedInsertAtIndex !== null) {
+        // 挿入位置を更新（新しく追加したアイテムの位置）
+        setInsertAtIndex(savedInsertAtIndex + 1)
+        // インデントレベルを引き継ぐ
+        setNewItemIndent(savedIndent)
+      } else {
+        // 最後に追加した場合はインデントをリセット
+        setNewItemIndent(0)
+      }
+
+      // 入力欄をリセット（新しいキーで再マウント）
+      setResetKey(prev => prev + 1)
       console.log('List reloaded')
     } catch (error) {
       console.error('Error adding task:', error)
       // エラー時は元に戻す
       setInsertAtIndex(null)
+      setNewItemIndent(0)
       await loadTodoList()
     }
   }
@@ -363,7 +321,7 @@ export default function TodoList({ user, isDark }) {
             items={items.map((item) => item.id)}
             strategy={verticalListSortingStrategy}
           >
-            <div className="space-y-1">
+            <div className="space-y-1 max-h-[60vh] overflow-y-auto overflow-x-hidden">
               {items
                 .sort((a, b) => a.order_index - b.order_index)
                 .map((item, index) => (
@@ -534,6 +492,8 @@ function NewTaskItem({ isDark, onAdd, onBackspaceEmpty, indentLevel, onIndentCha
   const touchStartX = useRef(0)
   const touchStartY = useRef(0)
   const [isDragging, setIsDragging] = useState(false)
+  const lastSubmittedContent = useRef('')
+  const [isComposing, setIsComposing] = useState(false)
 
   // コンポーネントがマウントされた時に自動的にフォーカス
   useEffect(() => {
@@ -580,30 +540,44 @@ function NewTaskItem({ isDark, onAdd, onBackspaceEmpty, indentLevel, onIndentCha
   }
 
   const handleKeyDown = async (e) => {
-    console.log('Key pressed:', e.key, 'Content:', content, 'localIndent:', localIndent)
-    
-    if (e.key === 'Enter' && !e.shiftKey) {
+    console.log('Key pressed:', e.key, 'Content:', content, 'localIndent:', localIndent, 'isSubmitting:', isSubmitting, 'isComposing:', isComposing)
+
+    // IME入力中（日本語変換中）はEnterを無視
+    if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
       e.preventDefault()
-      // 内容がある場合のみ追加
-      if (content.trim() && !isSubmitting) {
-        const taskContent = content.trim()
+      const taskContent = content.trim()
+
+      // 内容がある場合のみ追加（重複送信を防ぐ）
+      // 同じ内容を連続して送信しないようにチェック
+      if (taskContent && !isSubmitting && taskContent !== lastSubmittedContent.current) {
         console.log('Adding task:', taskContent, 'with indent:', localIndent)
         setIsSubmitting(true)
-        setContent('') // すぐにクリア
-        
+        lastSubmittedContent.current = taskContent
+
         // 現在のインデントレベルを親に保存
         onIndentChange?.(localIndent)
-        
+
         try {
           await onAdd(taskContent, localIndent)
           console.log('onAdd completed')
+
+          // 保存完了後に入力欄をクリア
+          setContent('')
+
+          // 送信成功後、少し待ってから次の入力を許可
+          setTimeout(() => {
+            lastSubmittedContent.current = ''
+          }, 500)
+        } catch (error) {
+          console.error('Error in onAdd:', error)
+          lastSubmittedContent.current = ''
         } finally {
           setIsSubmitting(false)
         }
       } else {
-        console.log('Content is empty or already submitting, not adding')
+        console.log('Content is empty, already submitting, or duplicate content')
       }
-    } else if (e.key === 'Backspace' && content === '') {
+    } else if (e.key === 'Backspace' && content === '' && !isComposing) {
       // 空の状態でBackspaceを押したら一つ上の欄にフォーカス
       e.preventDefault()
       console.log('Backspace on empty field, focusing previous item')
@@ -645,13 +619,15 @@ function NewTaskItem({ isDark, onAdd, onBackspaceEmpty, indentLevel, onIndentCha
         value={content}
         onChange={(e) => setContent(e.target.value)}
         onKeyDown={handleKeyDown}
-
+        onCompositionStart={() => setIsComposing(true)}
+        onCompositionEnd={() => setIsComposing(false)}
+        disabled={isSubmitting}
         placeholder=""
         className={`flex-1 bg-transparent border-0 focus:ring-0 outline-none text-sm ${
           isDark
             ? 'text-white placeholder:text-gray-600'
             : 'text-gray-900 placeholder:text-gray-400'
-        }`}
+        } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
       />
       
       {/* インデント表示（モバイル用） - スワイプで調整 */}
@@ -668,7 +644,7 @@ function NewTaskItem({ isDark, onAdd, onBackspaceEmpty, indentLevel, onIndentCha
 
 const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspaceEmpty, onEnterPress, dragHandleProps }, ref) => {
   const [indentLevel, setIndentLevel] = useState(item.indent_level || 0)
-  
+
   // indent_levelが変更されたらデータベースを更新
   useEffect(() => {
     const updateIndent = async () => {
@@ -685,6 +661,7 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(item.content)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isComposing, setIsComposing] = useState(false)
   const inputRef = useRef(null)
   const touchStartX = useRef(0)
   const touchStartY = useRef(0)
@@ -756,7 +733,8 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
   }
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // IME入力中は特殊キー操作を無視
+    if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
       e.preventDefault()
       handleSave()
       // Enterで次の行に新しいタスクを挿入（現在のインデントレベルを渡す）
@@ -771,7 +749,7 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
       } else {
         setIndentLevel((prev) => (prev < 3 ? prev + 1 : prev))
       }
-    } else if (e.key === 'Backspace' && isEditing && editContent === '') {
+    } else if (e.key === 'Backspace' && isEditing && editContent === '' && !isComposing) {
       // 編集中で内容が空の時にBackspaceを押したら削除して上の欄にフォーカス
       e.preventDefault()
       setIsDeleting(true)
@@ -779,7 +757,7 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
         onDelete(item.id)
         onBackspaceEmpty?.()
       }, 200) // 200msのアニメーション後に削除
-    } else if (e.key === 'Backspace' && !isEditing) {
+    } else if (e.key === 'Backspace' && !isEditing && !isComposing) {
       e.preventDefault()
       setIsDeleting(true)
       setTimeout(() => {
@@ -835,6 +813,8 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
             onChange={(e) => setEditContent(e.target.value)}
             onBlur={handleSave}
             onKeyDown={handleKeyDown}
+            onCompositionStart={() => setIsComposing(true)}
+            onCompositionEnd={() => setIsComposing(false)}
             autoFocus
             className={`flex-1 bg-transparent border-0 focus:ring-0 outline-none text-sm ${
               isDark

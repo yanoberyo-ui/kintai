@@ -401,6 +401,7 @@ function App() {
   }, [user])
 
   // ページ読み込み時やホームページに戻った時に未表示の通知をチェック
+  // userが初めてセットされた時だけ実行（複数回実行を防ぐ）
   useEffect(() => {
     if (!user?.id || currentPage !== 'home') return
 
@@ -433,6 +434,9 @@ function App() {
 
         // 自分宛のフォローアップメッセージで、まだ通知していないものをチェック
         const dismissedFollowUps = JSON.parse(localStorage.getItem('dismissed_followup_notifications') || '[]')
+
+        // 既に表示中のメッセージがある場合はチェックしない
+        if (followUpNotification) return
 
         const { data: followUpMessages } = await supabase
           .from('event_follow_up_messages')
@@ -474,7 +478,12 @@ function App() {
       }
     }
 
-    checkPendingNotifications()
+    // 初回ログイン時のみ実行
+    const hasChecked = sessionStorage.getItem('has_checked_notifications')
+    if (!hasChecked) {
+      checkPendingNotifications()
+      sessionStorage.setItem('has_checked_notifications', 'true')
+    }
   }, [user, currentPage])
 
   if (loading) {
