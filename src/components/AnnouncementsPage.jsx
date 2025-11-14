@@ -763,10 +763,14 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
             <div className="p-4">
               {/* ヘッダー */}
               <div className="flex gap-3">
-                <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center text-lg font-bold ${
+                <div className={`w-12 h-12 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center text-lg font-bold ${
                   isDark ? 'bg-gradient-to-br from-gray-700 to-gray-600 text-white' : 'bg-gradient-to-br from-gray-800 to-gray-700 text-white'
                 }`}>
-                  {announcement.author.name?.charAt(0) || announcement.author.email.charAt(0).toUpperCase()}
+                  {announcement.author.avatar_url ? (
+                    <img src={announcement.author.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    announcement.author.name?.charAt(0) || announcement.author.email.charAt(0).toUpperCase()
+                  )}
                 </div>
 
                 <div className="flex-1 min-w-0">
@@ -1997,10 +2001,14 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
             {/* 元の投稿 */}
             <div className={`p-6 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
               <div className="flex gap-3">
-                <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center text-lg font-bold ${
+                <div className={`w-12 h-12 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center text-lg font-bold ${
                   isDark ? 'bg-gradient-to-br from-gray-700 to-gray-600 text-white' : 'bg-gradient-to-br from-gray-800 to-gray-700 text-white'
                 }`}>
-                  {selectedAnnouncement.author.name?.charAt(0) || selectedAnnouncement.author.email.charAt(0).toUpperCase()}
+                  {selectedAnnouncement.author.avatar_url ? (
+                    <img src={selectedAnnouncement.author.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    selectedAnnouncement.author.name?.charAt(0) || selectedAnnouncement.author.email.charAt(0).toUpperCase()
+                  )}
                 </div>
                 <div className="flex-1">
                   <div className={`font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
@@ -2021,10 +2029,14 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
               {comments.length > 0 ? (
                 comments.map((comment) => (
                   <div key={comment.id} className="flex gap-3">
-                    <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold ${
+                    <div className={`w-10 h-10 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center text-sm font-bold ${
                       isDark ? 'bg-gradient-to-br from-gray-700 to-gray-600 text-white' : 'bg-gradient-to-br from-gray-800 to-gray-700 text-white'
                     }`}>
-                      {comment.user.name?.charAt(0) || comment.user.email.charAt(0).toUpperCase()}
+                      {comment.user.avatar_url ? (
+                        <img src={comment.user.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                      ) : (
+                        comment.user.name?.charAt(0) || comment.user.email.charAt(0).toUpperCase()
+                      )}
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
@@ -2058,10 +2070,14 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
               isDark ? 'bg-gray-900/80 border-gray-800/50' : 'bg-white/80 border-gray-200/50'
             }`}>
               <form onSubmit={handleCommentSubmit} className="flex gap-3">
-                <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold ${
+                <div className={`w-10 h-10 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center text-sm font-bold ${
                   isDark ? 'bg-gradient-to-br from-gray-700 to-gray-600 text-white' : 'bg-gradient-to-br from-gray-800 to-gray-700 text-white'
                 }`}>
-                  {currentUser?.name?.charAt(0) || currentUser?.email.charAt(0).toUpperCase()}
+                  {currentUser?.avatar_url ? (
+                    <img src={currentUser.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    currentUser?.name?.charAt(0) || currentUser?.email.charAt(0).toUpperCase()
+                  )}
                 </div>
                 <input
                   type="text"
