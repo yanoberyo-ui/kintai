@@ -47,72 +47,10 @@ export default function RankingPage({ isDark, user }) {
     }
   }
 
-  // 全画面表示の切り替え（Safari対応）
+  // CSS疑似全画面モードの切り替え（Safari対応）
   const toggleFullscreen = () => {
-    try {
-      const elem = containerRef.current
-      if (!elem) return
-
-      // 全画面状態を確認（クロスブラウザ対応）
-      const isCurrentlyFullscreen =
-        document.fullscreenElement ||
-        document.webkitFullscreenElement ||
-        document.mozFullScreenElement ||
-        document.msFullscreenElement
-
-      if (!isCurrentlyFullscreen) {
-        // 全画面にする（ブラウザ別の関数を直接実行）
-        if (elem.requestFullscreen) {
-          elem.requestFullscreen().catch(err => console.error('Fullscreen error:', err))
-        } else if (elem.webkitRequestFullscreen) {
-          elem.webkitRequestFullscreen() // Safari - Promiseを返さない
-        } else if (elem.mozRequestFullScreen) {
-          elem.mozRequestFullScreen().catch(err => console.error('Fullscreen error:', err))
-        } else if (elem.msRequestFullscreen) {
-          elem.msRequestFullscreen().catch(err => console.error('Fullscreen error:', err))
-        }
-      } else {
-        // 全画面を終了
-        if (document.exitFullscreen) {
-          document.exitFullscreen().catch(err => console.error('Exit fullscreen error:', err))
-        } else if (document.webkitExitFullscreen) {
-          document.webkitExitFullscreen() // Safari - Promiseを返さない
-        } else if (document.mozCancelFullScreen) {
-          document.mozCancelFullScreen().catch(err => console.error('Exit fullscreen error:', err))
-        } else if (document.msExitFullscreen) {
-          document.msExitFullscreen().catch(err => console.error('Exit fullscreen error:', err))
-        }
-      }
-    } catch (error) {
-      console.error('Fullscreen error:', error)
-    }
+    setIsFullscreen(!isFullscreen)
   }
-
-  // 全画面状態の監視（クロスブラウザ対応）
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      const isFullscreen = !!(
-        document.fullscreenElement ||
-        document.webkitFullscreenElement ||
-        document.mozFullScreenElement ||
-        document.msFullscreenElement
-      )
-      setIsFullscreen(isFullscreen)
-    }
-
-    // 各ブラウザのイベントをリッスン
-    document.addEventListener('fullscreenchange', handleFullscreenChange)
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
-    document.addEventListener('mozfullscreenchange', handleFullscreenChange)
-    document.addEventListener('MSFullscreenChange', handleFullscreenChange)
-
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange)
-      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
-      document.removeEventListener('mozfullscreenchange', handleFullscreenChange)
-      document.removeEventListener('MSFullscreenChange', handleFullscreenChange)
-    }
-  }, [])
 
   const getRankColor = (rank) => {
     switch(rank) {
@@ -176,10 +114,14 @@ export default function RankingPage({ isDark, user }) {
   }
 
   return (
-    <div 
+    <div
       ref={containerRef}
-      className={`min-h-screen transition-colors duration-500 ${
+      className={`min-h-screen transition-all duration-500 ${
         isDark ? 'bg-gray-900' : 'bg-gray-50'
+      } ${
+        isFullscreen
+          ? 'fixed inset-0 z-[9999] overflow-auto'
+          : ''
       }`}
     >
       <div className="max-w-6xl mx-auto px-4 py-8">
