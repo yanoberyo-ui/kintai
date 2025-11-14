@@ -168,7 +168,8 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
           author:users!announcements_author_id_fkey (
             id,
             name,
-            email
+            email,
+            avatar_url
           ),
           participants:announcement_participants (
             id,
@@ -176,7 +177,8 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
             user:users (
               id,
               name,
-              email
+              email,
+              avatar_url
             )
           ),
           likes:announcement_likes (
@@ -185,7 +187,8 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
             user:users (
               id,
               name,
-              email
+              email,
+              avatar_url
             )
           ),
           comments:announcement_comments (
@@ -410,7 +413,8 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
           user:users (
             id,
             name,
-            email
+            email,
+            avatar_url
           )
         `)
         .eq('announcement_id', announcementId)
