@@ -843,10 +843,14 @@ function App() {
             >
               <div className="flex items-center gap-3">
                 {/* アバター */}
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
+                <div className={`w-10 h-10 rounded-full overflow-hidden flex items-center justify-center font-bold text-white ${
                   isDark ? 'bg-gradient-to-br from-gray-700 to-gray-600' : 'bg-gradient-to-br from-gray-800 to-gray-700'
                 }`}>
-                  {user?.email?.charAt(0).toUpperCase()}
+                  {user?.avatar_url ? (
+                    <img src={user.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    user?.email?.charAt(0).toUpperCase()
+                  )}
                 </div>
                 {/* ユーザー名とメール */}
                 <div className="flex-1 min-w-0">
@@ -929,10 +933,14 @@ function App() {
             {/* ユーザー情報 */}
             <div className={`px-4 py-4 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
               <div className="flex items-center gap-3">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-white ${
+                <div className={`w-12 h-12 rounded-full overflow-hidden flex items-center justify-center font-bold text-white ${
                   isDark ? 'bg-gradient-to-br from-gray-700 to-gray-600' : 'bg-gradient-to-br from-gray-800 to-gray-700'
                 }`}>
-                  {user?.email?.charAt(0).toUpperCase()}
+                  {user?.avatar_url ? (
+                    <img src={user.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    user?.email?.charAt(0).toUpperCase()
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../utils/supabase'
+import ProfileEdit from './ProfileEdit'
 
 export default function SettingsPage({ user, isDark, setIsDark }) {
   const [userData, setUserData] = useState({
@@ -7,11 +8,13 @@ export default function SettingsPage({ user, isDark, setIsDark }) {
     slack_user_id: '',
     department: '',
     birthday: '',
+    avatar_url: null,
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [isEditing, setIsEditing] = useState(false)
+  const [showProfileEdit, setShowProfileEdit] = useState(false)
 
   useEffect(() => {
     loadUserData()
@@ -31,6 +34,7 @@ export default function SettingsPage({ user, isDark, setIsDark }) {
         slack_user_id: data.slack_user_id || '',
         department: data.department || '',
         birthday: data.birthday || '',
+        avatar_url: data.avatar_url || null,
       })
     } catch (error) {
       console.error('Error loading user data:', error)
@@ -116,11 +120,19 @@ export default function SettingsPage({ user, isDark, setIsDark }) {
         <form onSubmit={handleSave} className="space-y-6">
           {/* アバター */}
           <div className="flex items-center gap-4">
-            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold text-white ${
-              isDark ? 'bg-gradient-to-br from-gray-700 to-gray-600' : 'bg-gradient-to-br from-gray-800 to-gray-700'
-            }`}>
-              {user?.email?.charAt(0).toUpperCase()}
-            </div>
+            <button
+              onClick={() => setShowProfileEdit(true)}
+              className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold text-white overflow-hidden hover:ring-4 hover:ring-blue-500 transition-all ${
+                isDark ? 'bg-gradient-to-br from-gray-700 to-gray-600' : 'bg-gradient-to-br from-gray-800 to-gray-700'
+              }`}
+              title="プロフィール画像を変更"
+            >
+              {userData?.avatar_url ? (
+                <img src={userData.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                user?.email?.charAt(0).toUpperCase()
+              )}
+            </button>
             <div>
               <div className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                 {userData?.name || user?.email?.split('@')[0]}
@@ -362,6 +374,15 @@ export default function SettingsPage({ user, isDark, setIsDark }) {
           ログアウト
         </button>
       </div>
+
+      {/* プロフィール編集モーダル */}
+      {showProfileEdit && (
+        <ProfileEdit
+          user={{ ...user, avatar_url: userData.avatar_url }}
+          onClose={() => setShowProfileEdit(false)}
+          onUpdate={loadUserData}
+        />
+      )}
     </div>
   )
 }

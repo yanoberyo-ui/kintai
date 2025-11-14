@@ -644,7 +644,7 @@ export default function MembersPage({ isDark }) {
                   />
                 </svg>
                 {/* アバター */}
-                <div className={`absolute inset-2 rounded-full flex items-center justify-center text-2xl font-bold ${
+                <div className={`absolute inset-2 rounded-full overflow-hidden flex items-center justify-center text-2xl font-bold ${
                   medal?.rank === 1
                     ? 'bg-gradient-to-br from-yellow-400 via-amber-500 to-yellow-600 text-white shadow-lg shadow-yellow-500/50'
                     : medal?.rank === 2
@@ -655,7 +655,11 @@ export default function MembersPage({ isDark }) {
                     ? 'bg-gradient-to-br from-gray-700 to-gray-600 text-white'
                     : 'bg-gradient-to-br from-gray-800 to-gray-700 text-white'
                 }`}>
-                  {member.email.charAt(0).toUpperCase()}
+                  {member.avatar_url ? (
+                    <img src={member.avatar_url} alt={member.name} className="w-full h-full object-cover" />
+                  ) : (
+                    member.email.charAt(0).toUpperCase()
+                  )}
                 </div>
               </div>
 
@@ -792,10 +796,14 @@ export default function MembersPage({ isDark }) {
             }`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white ${
+                  <div className={`w-16 h-16 rounded-full overflow-hidden flex items-center justify-center text-2xl font-bold text-white ${
                     isDark ? 'bg-gradient-to-br from-gray-700 to-gray-600' : 'bg-gradient-to-br from-gray-800 to-gray-700'
                   }`}>
-                    {selectedMember.email.charAt(0).toUpperCase()}
+                    {selectedMember.avatar_url ? (
+                      <img src={selectedMember.avatar_url} alt={selectedMember.name} className="w-full h-full object-cover" />
+                    ) : (
+                      selectedMember.email.charAt(0).toUpperCase()
+                    )}
                   </div>
                   <div>
                     <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
