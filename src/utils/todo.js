@@ -10,7 +10,16 @@ export async function getTodayTodoList(userId) {
     .from('todo_lists')
     .select(`
       *,
-      todo_items (*)
+      todo_items (
+        id,
+        todo_list_id,
+        content,
+        is_completed,
+        order_index,
+        indent_level,
+        created_at,
+        updated_at
+      )
     `)
     .eq('user_id', userId)
     .eq('date', today)
@@ -18,6 +27,11 @@ export async function getTodayTodoList(userId) {
 
   if (error && error.code !== 'PGRST116') {
     throw error;
+  }
+
+  // todo_itemsをorder_indexでソート
+  if (data && data.todo_items) {
+    data.todo_items.sort((a, b) => a.order_index - b.order_index);
   }
 
   return data;

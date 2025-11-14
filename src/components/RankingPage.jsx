@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../utils/supabase'
 
 export default function RankingPage({ isDark, user }) {
@@ -6,6 +6,8 @@ export default function RankingPage({ isDark, user }) {
   const [loading, setLoading] = useState(true)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const containerRef = useRef(null)
 
   useEffect(() => {
     if (user) {
@@ -44,6 +46,33 @@ export default function RankingPage({ isDark, user }) {
       setLoading(false)
     }
   }
+
+  // 全画面表示の切り替え
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await containerRef.current?.requestFullscreen()
+        setIsFullscreen(true)
+      } else {
+        await document.exitFullscreen()
+        setIsFullscreen(false)
+      }
+    } catch (error) {
+      console.error('Fullscreen error:', error)
+    }
+  }
+
+  // 全画面状態の監視
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+    }
+  }, [])
 
   const getRankColor = (rank) => {
     switch(rank) {
@@ -107,22 +136,40 @@ export default function RankingPage({ isDark, user }) {
   }
 
   return (
-    <div className={`min-h-screen transition-colors duration-500 ${
-      isDark ? 'bg-gray-900' : 'bg-gray-50'
-    }`}>
+    <div 
+      ref={containerRef}
+      className={`min-h-screen transition-colors duration-500 ${
+        isDark ? 'bg-gray-900' : 'bg-gray-50'
+      }`}
+    >
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* ヘッダー */}
-        <div className="mb-8">
-          <h1 className={`text-4xl font-bold mb-2 ${
-            isDark ? 'text-white' : 'text-gray-900'
-          }`}>
-            🏆 ユニット別ランキング
-          </h1>
-          <p className={`text-lg ${
-            isDark ? 'text-gray-400' : 'text-gray-600'
-          }`}>
-            TODO達成率で競い合おう！
-          </p>
+        <div className="mb-8 flex justify-between items-start">
+          <div>
+            <h1 className={`text-4xl font-bold mb-2 ${
+              isDark ? 'text-white' : 'text-gray-900'
+            }`}>
+              🏆 ユニット別ランキング
+            </h1>
+            <p className={`text-lg ${
+              isDark ? 'text-gray-400' : 'text-gray-600'
+            }`}>
+              TODO達成率で競い合おう！
+            </p>
+          </div>
+          
+          {/* 全画面ボタン */}
+          <button
+            onClick={toggleFullscreen}
+            className={`px-4 py-2 rounded-xl font-medium transition-all hover:scale-105 ${
+              isDark 
+                ? 'bg-gray-800 hover:bg-gray-700 text-white' 
+                : 'bg-white hover:bg-gray-100 text-gray-900 border-2 border-gray-200'
+            }`}
+            title={isFullscreen ? '全画面を終了' : '全画面表示'}
+          >
+            {isFullscreen ? '⬇ 通常表示' : '⬆ 全画面'}
+          </button>
         </div>
 
         {/* 期間選択 */}
@@ -173,12 +220,20 @@ export default function RankingPage({ isDark, user }) {
           <div className="space-y-6">
             {rankings.map((unit, index) => {
               const isTop3 = index < 3
-              const rankColors = {
-                0: { border: 'border-yellow-400', glow: 'shadow-[0_0_40px_rgba(250,204,21,0.6)]', bg: 'from-yellow-500/20 to-orange-500/20', text: 'text-yellow-400', barBg: 'from-yellow-400 to-orange-500' },
-                1: { border: 'border-gray-300', glow: 'shadow-[0_0_30px_rgba(209,213,219,0.5)]', bg: 'from-gray-400/20 to-gray-500/20', text: 'text-gray-300', barBg: 'from-gray-300 to-gray-500' },
-                2: { border: 'border-orange-400', glow: 'shadow-[0_0_30px_rgba(251,146,60,0.5)]', bg: 'from-orange-500/20 to-orange-600/20', text: 'text-orange-400', barBg: 'from-orange-400 to-orange-600' },
-                3: { border: 'border-gray-600', glow: 'shadow-md', bg: 'from-gray-700/20 to-gray-800/20', text: 'text-gray-500', barBg: 'from-gray-600 to-gray-700' }
+              
+              // ライトモードとダークモードで色を切り替え
+              const rankColors = isDark ? {
+                0: { border: 'border-yellow-400', glow: 'shadow-[0_0_40px_rgba(250,204,21,0.6)]', bg: 'from-yellow-500/20 to-orange-500/20', text: 'text-yellow-400', barBg: 'from-yellow-400 to-orange-500', cardBg: 'bg-yellow-500/10' },
+                1: { border: 'border-gray-300', glow: 'shadow-[0_0_30px_rgba(209,213,219,0.5)]', bg: 'from-gray-400/20 to-gray-500/20', text: 'text-gray-300', barBg: 'from-gray-300 to-gray-500', cardBg: 'bg-gray-400/10' },
+                2: { border: 'border-orange-400', glow: 'shadow-[0_0_30px_rgba(251,146,60,0.5)]', bg: 'from-orange-500/20 to-orange-600/20', text: 'text-orange-400', barBg: 'from-orange-400 to-orange-600', cardBg: 'bg-orange-500/10' },
+                3: { border: 'border-gray-600', glow: 'shadow-md', bg: 'from-gray-700/20 to-gray-800/20', text: 'text-gray-500', barBg: 'from-gray-600 to-gray-700', cardBg: 'bg-gray-700/10' }
+              } : {
+                0: { border: 'border-yellow-600', glow: 'shadow-[0_0_20px_rgba(202,138,4,0.4)]', bg: 'from-yellow-100 to-orange-100', text: 'text-yellow-800', barBg: 'from-yellow-500 to-orange-600', cardBg: 'bg-yellow-50' },
+                1: { border: 'border-gray-400', glow: 'shadow-[0_0_20px_rgba(156,163,175,0.3)]', bg: 'from-gray-100 to-gray-200', text: 'text-gray-700', barBg: 'from-gray-400 to-gray-600', cardBg: 'bg-gray-50' },
+                2: { border: 'border-orange-500', glow: 'shadow-[0_0_20px_rgba(249,115,22,0.3)]', bg: 'from-orange-100 to-orange-200', text: 'text-orange-700', barBg: 'from-orange-500 to-orange-700', cardBg: 'bg-orange-50' },
+                3: { border: 'border-gray-500', glow: 'shadow-md', bg: 'from-gray-200 to-gray-300', text: 'text-gray-600', barBg: 'from-gray-500 to-gray-700', cardBg: 'bg-gray-100' }
               }
+              
               const colors = rankColors[index]
 
               return (
@@ -227,23 +282,23 @@ export default function RankingPage({ isDark, user }) {
 
                       {/* ユニット名 + スコア表示 */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-3">
-                          <h3 className={`font-black pixel-font ${colors.text} ${index === 0 ? 'text-3xl' : index < 3 ? 'text-2xl' : 'text-lg'} truncate`} style={{
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-3 gap-2">
+                          <h3 className={`font-black pixel-font ${colors.text} ${index === 0 ? 'text-2xl md:text-3xl' : index < 3 ? 'text-xl md:text-2xl' : 'text-base md:text-lg'} break-words`} style={{
                             textShadow: isTop3 ? `0 0 20px currentColor` : 'none'
                           }}>
                             {unit.department}
                           </h3>
 
                           {/* スコア表示（ゲーム風） */}
-                          <div className="text-right ml-4">
-                            <div className={`${colors.text} font-black pixel-font ${index === 0 ? 'text-5xl' : index < 3 ? 'text-4xl' : 'text-2xl'}`} style={{
+                          <div className="text-center md:text-right md:ml-4 flex-shrink-0">
+                            <div className={`${colors.text} font-black pixel-font ${index === 0 ? 'text-4xl md:text-5xl' : index < 3 ? 'text-3xl md:text-4xl' : 'text-xl md:text-2xl'}`} style={{
                               textShadow: isTop3 ? `0 0 30px currentColor, 0 0 60px currentColor` : 'none'
                             }}>
                               {unit.achievementRate}
-                              <span className={index === 0 ? 'text-3xl' : index < 3 ? 'text-2xl' : 'text-lg'}>%</span>
+                              <span className={index === 0 ? 'text-2xl md:text-3xl' : index < 3 ? 'text-xl md:text-2xl' : 'text-base md:text-lg'}>%</span>
                             </div>
                             {isTop3 && (
-                              <div className="text-xs pixel-font text-white/60 mt-1">SCORE</div>
+                              <div className={`text-xs pixel-font mt-1 ${isDark ? 'text-white/60' : 'text-gray-600'}`}>SCORE</div>
                             )}
                           </div>
                         </div>
@@ -278,8 +333,12 @@ export default function RankingPage({ isDark, user }) {
 
                     {/* コンボ表示（1位のみ） */}
                     {index === 0 && (
-                      <div className="absolute top-2 right-2 px-3 py-1 bg-yellow-400 rounded-lg animate-bounce-slow">
-                        <span className="text-xs font-black pixel-font text-gray-900">★ TOP ★</span>
+                      <div className={`absolute top-2 right-2 px-3 py-1 rounded-lg animate-bounce-slow ${
+                        isDark ? 'bg-yellow-400' : 'bg-yellow-500'
+                      }`}>
+                        <span className={`text-xs font-black pixel-font ${
+                          isDark ? 'text-gray-900' : 'text-white'
+                        }`}>★ TOP ★</span>
                       </div>
                     )}
                   </div>

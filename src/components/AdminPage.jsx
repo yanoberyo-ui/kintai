@@ -110,7 +110,7 @@ export default function AdminPage({ isDark }) {
       const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
       const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0]
 
-      // 粗利データが最新かチェック（最終更新から24時間以上経過していたら自動インポート）
+      // 粗利データが最新かチェック（最終更新から12時間以上経過していたら自動インポート）
       const { data: recentRevenue } = await supabase
         .from('revenues')
         .select('updated_at')
@@ -121,7 +121,7 @@ export default function AdminPage({ isDark }) {
         .single()
 
       const shouldAutoImport = !recentRevenue ||
-        (new Date() - new Date(recentRevenue.updated_at)) > 24 * 60 * 60 * 1000
+        (new Date() - new Date(recentRevenue.updated_at)) > 12 * 60 * 60 * 1000
 
       if (shouldAutoImport && !importingFromSheets) {
         console.log('Auto-importing revenue data...')
@@ -260,22 +260,74 @@ export default function AdminPage({ isDark }) {
       const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
       const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0]
 
-      const { data, error } = await supabase
-        .from('attendances')
-        .select(`
-          *,
-          user:users (
-            id,
-            name,
-            department
-          )
-        `)
-        .gte('date', startDate)
-        .lte('date', endDate)
-        .order('date', { ascending: false })
+      const [
+        { data: attendanceData },
+        { data: todoData }
+      ] = await Promise.all([
+        supabase
+          .from('attendances')
+          .select(`
+            *,
+            user:users (
+              id,
+              name,
+              department
+            )
+          `)
+          .gte('date', startDate)
+          .lte('date', endDate)
+          .eq('status', 'completed'),
 
-      if (error) throw error
-      setAttendances(data || [])
+        supabase
+          .from('todo_lists')
+          .select(`
+            *,
+            todo_items (
+              is_completed
+            )
+          `)
+          .gte('date', startDate)
+          .lte('date', endDate)
+      ])
+
+      // ユーザーごとに集計
+      const userStats = {}
+
+      attendanceData?.forEach(record => {
+        const userId = record.user.id
+        if (!userStats[userId]) {
+          userStats[userId] = {
+            name: record.user.name,
+            department: record.user.department,
+            attendanceDays: 0,
+            totalWorkMinutes: 0,
+            todoTotal: 0,
+            todoCompleted: 0
+          }
+        }
+
+        userStats[userId].attendanceDays++
+        userStats[userId].totalWorkMinutes += record.total_work_minutes || 0
+      })
+
+      // TODO達成率を集計
+      todoData?.forEach(list => {
+        const userId = list.user_id
+        if (userStats[userId]) {
+          const items = list.todo_items || []
+          userStats[userId].todoTotal += items.length
+          userStats[userId].todoCompleted += items.filter(item => item.is_completed).length
+        }
+      })
+
+      // 平均勤務時間とTODO達成率を計算
+      const attendanceArray = Object.values(userStats).map(user => ({
+        ...user,
+        avgWorkMinutes: user.attendanceDays > 0 ? Math.round(user.totalWorkMinutes / user.attendanceDays) : 0,
+        todoRate: user.todoTotal > 0 ? Math.round((user.todoCompleted / user.todoTotal) * 100) : 0
+      }))
+
+      setAttendances(attendanceArray)
     } catch (error) {
       console.error('Error loading attendances:', error)
       setAttendances([])
@@ -453,34 +505,34 @@ export default function AdminPage({ isDark }) {
             <option key={month} value={month}>{month}月</option>
           ))}
         </select>
+        {(activeTab === 'dashboard' || activeTab === 'attendance') && (
+          <select
+            value={selectedDepartment}
+            onChange={(e) => setSelectedDepartment(e.target.value)}
+            className={`px-4 py-2 rounded-xl transition-colors ${
+              isDark
+                ? 'bg-gray-800 text-white border border-gray-700'
+                : 'bg-white text-gray-900 border border-gray-300'
+            } focus:outline-none`}
+          >
+            <option value="all">全ユニット</option>
+            {departments.map(dept => (
+              <option key={dept} value={dept}>{dept}</option>
+            ))}
+          </select>
+        )}
         {activeTab === 'dashboard' && (
-          <>
-            <select
-              value={selectedDepartment}
-              onChange={(e) => setSelectedDepartment(e.target.value)}
-              className={`px-4 py-2 rounded-xl transition-colors ${
-                isDark
-                  ? 'bg-gray-800 text-white border border-gray-700'
-                  : 'bg-white text-gray-900 border border-gray-300'
-              } focus:outline-none`}
-            >
-              <option value="all">全ユニット</option>
-              {departments.map(dept => (
-                <option key={dept} value={dept}>{dept}</option>
-              ))}
-            </select>
-            <button
-              onClick={importRevenueFromSheets}
-              disabled={importingFromSheets}
-              className={`px-4 py-2 rounded-xl transition-colors ${
-                isDark
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                  : 'bg-blue-500 hover:bg-blue-600 text-white'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              {importingFromSheets ? '📥 インポート中...' : '📊 シートから粗利をインポート'}
-            </button>
-          </>
+          <button
+            onClick={importRevenueFromSheets}
+            disabled={importingFromSheets}
+            className={`px-4 py-2 rounded-xl transition-colors ${
+              isDark
+                ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                : 'bg-blue-500 hover:bg-blue-600 text-white'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            {importingFromSheets ? '📥 インポート中...' : '📊 シートから粗利をインポート'}
+          </button>
         )}
       </div>
 
@@ -521,22 +573,14 @@ export default function AdminPage({ isDark }) {
                   <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
                     isDark ? 'text-gray-400' : 'text-gray-500'
                   }`}>
-                    遅刻回数
-                  </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
-                    isDark ? 'text-gray-400' : 'text-gray-500'
-                  }`}>
                     TODO達成率
-                  </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
-                    isDark ? 'text-gray-400' : 'text-gray-500'
-                  }`}>
-                    ステータス
                   </th>
                 </tr>
               </thead>
               <tbody className={`divide-y ${isDark ? 'divide-gray-800' : 'divide-gray-200'}`}>
-                {attendances.map((user, index) => (
+                {attendances
+                  .filter(user => selectedDepartment === 'all' || user.department === selectedDepartment)
+                  .map((user, index) => (
                   <tr key={index} className={isDark ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'}>
                     <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
                       {user.name}
@@ -554,13 +598,7 @@ export default function AdminPage({ isDark }) {
                       {Math.floor(user.avgWorkMinutes / 60)}:{String(user.avgWorkMinutes % 60).padStart(2, '0')}
                     </td>
                     <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
-                      {user.lateCount}
-                    </td>
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
                       {user.todoTotal > 0 ? `${user.todoRate}%` : '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center text-xl">
-                      {user.lateCount > 0 ? '⚠️' : '✅'}
                     </td>
                   </tr>
                 ))}

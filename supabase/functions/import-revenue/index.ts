@@ -85,15 +85,24 @@ serve(async (req) => {
     const SHEET_NAME = '報告/MG粗利11月'
 
     const cellRanges = [
-      { name: '全体', cell: 'I5' },
-      { name: '第1ユニット', cell: 'I12' },
-      { name: '第2ユニット', cell: 'I20' },
-      { name: '第3ユニット', cell: 'I28' },
-      { name: '第5ユニット', cell: 'I36' }
+      { name: '全体', grossProfitCell: 'I5', achievementRateCell: null },
+      { name: '第1ユニット', grossProfitCell: 'I12', achievementRateCell: 'L17' },
+      { name: '第2ユニット', grossProfitCell: 'I20', achievementRateCell: 'L21' },
+      { name: '第3ユニット', grossProfitCell: 'I28', achievementRateCell: 'L29' },
+      { name: '第5ユニット', grossProfitCell: 'I36', achievementRateCell: 'L37' }
     ]
 
-    const ranges = cellRanges.map(r => `${SHEET_NAME}!${r.cell}`).join('&ranges=')
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values:batchGet?ranges=${ranges}`
+    // 粗利と達成率のセルを両方取得
+    const ranges: string[] = []
+    cellRanges.forEach(r => {
+      ranges.push(`${SHEET_NAME}!${r.grossProfitCell}`)
+      if (r.achievementRateCell) {
+        ranges.push(`${SHEET_NAME}!${r.achievementRateCell}`)
+      }
+    })
+    const encodedRanges = ranges.map(r => encodeURIComponent(r))
+    const rangesParam = encodedRanges.join('&ranges=')
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values:batchGet?ranges=${rangesParam}`
 
     const response = await fetch(url, {
       headers: {
@@ -110,24 +119,52 @@ serve(async (req) => {
 
     // Prepare data for Supabase
     const revenueData = []
+    let rangeIndex = 0
+
     for (let i = 0; i < cellRanges.length; i++) {
       const unit = cellRanges[i]
-      const value = data.valueRanges[i]?.values?.[0]?.[0]
-      console.log(`Cell ${unit.cell} for ${unit.name}: ${value}`)
 
-      if (value) {
-        const gross_profit = parseFloat(String(value).replace(/,/g, '').replace(/¥/g, ''))
-        console.log(`Parsed gross_profit for ${unit.name}: ${gross_profit}`)
-        revenueData.push({
-          year,
-          month,
-          department: unit.name,
-          gross_profit
-        })
-      } else {
-        console.log(`No value found for ${unit.name} at cell ${unit.cell}`)
+      // 粗利を取得
+      const grossProfitValue = data.valueRanges[rangeIndex]?.values?.[0]?.[0]
+      rangeIndex++
+
+      let gross_profit = 0
+      if (grossProfitValue) {
+        gross_profit = parseFloat(String(grossProfitValue).replace(/,/g, '').replace(/¥/g, ''))
       }
+
+      // 達成率を取得（全体以外）
+      let achievement_rate = null
+      if (unit.achievementRateCell) {
+        const achievementValue = data.valueRanges[rangeIndex]?.values?.[0]?.[0]
+        rangeIndex++
+
+        if (achievementValue) {
+          // パーセンテージ形式の処理
+          if (typeof achievementValue === 'string') {
+            if (achievementValue.includes('%')) {
+              achievement_rate = parseFloat(achievementValue.replace('%', ''))
+            } else {
+              const num = parseFloat(achievementValue)
+              achievement_rate = num > 1 ? num : num * 100
+            }
+          } else if (typeof achievementValue === 'number') {
+            achievement_rate = achievementValue > 1 ? achievementValue : achievementValue * 100
+          }
+        }
+      }
+
+      console.log(`${unit.name}: gross_profit=${gross_profit}, achievement_rate=${achievement_rate}`)
+
+      revenueData.push({
+        year,
+        month,
+        department: unit.name,
+        gross_profit,
+        achievement_rate: achievement_rate ? Math.round(achievement_rate) : null
+      })
     }
+
     console.log('Final revenueData:', JSON.stringify(revenueData))
 
     // Insert into Supabase
