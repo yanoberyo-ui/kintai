@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './utils/supabase'
 import TodoList from './components/TodoList'
+import RoutineTodos from './components/RoutineTodos'
 import AttendanceCard from './components/AttendanceCard'
 import CalendarPage from './components/CalendarPage'
 import SettingsPage from './components/SettingsPage'
@@ -895,6 +896,9 @@ function App() {
 
             {/* TODOリスト */}
             <TodoList user={user} isDark={isDark} />
+
+            {/* 定常TODO */}
+            <RoutineTodos user={user} isDark={isDark} />
           </div>
         ) : currentPage === 'calendar' ? (
           <CalendarPage user={user} isDark={isDark} />
