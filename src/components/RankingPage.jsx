@@ -47,14 +47,42 @@ export default function RankingPage({ isDark, user }) {
     }
   }
 
-  // 全画面表示の切り替え
+  // 全画面表示の切り替え（Safari対応）
   const toggleFullscreen = async () => {
     try {
-      if (!document.fullscreenElement) {
-        await containerRef.current?.requestFullscreen()
+      const elem = containerRef.current
+      if (!elem) return
+
+      // 全画面状態を確認（クロスブラウザ対応）
+      const isCurrentlyFullscreen =
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+
+      if (!isCurrentlyFullscreen) {
+        // 全画面にする（ブラウザ別の関数を試す）
+        if (elem.requestFullscreen) {
+          await elem.requestFullscreen()
+        } else if (elem.webkitRequestFullscreen) {
+          await elem.webkitRequestFullscreen() // Safari
+        } else if (elem.mozRequestFullScreen) {
+          await elem.mozRequestFullScreen() // Firefox
+        } else if (elem.msRequestFullscreen) {
+          await elem.msRequestFullscreen() // IE/Edge
+        }
         setIsFullscreen(true)
       } else {
-        await document.exitFullscreen()
+        // 全画面を終了
+        if (document.exitFullscreen) {
+          await document.exitFullscreen()
+        } else if (document.webkitExitFullscreen) {
+          await document.webkitExitFullscreen() // Safari
+        } else if (document.mozCancelFullScreen) {
+          await document.mozCancelFullScreen() // Firefox
+        } else if (document.msExitFullscreen) {
+          await document.msExitFullscreen() // IE/Edge
+        }
         setIsFullscreen(false)
       }
     } catch (error) {
@@ -62,15 +90,29 @@ export default function RankingPage({ isDark, user }) {
     }
   }
 
-  // 全画面状態の監視
+  // 全画面状態の監視（クロスブラウザ対応）
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement)
+      const isFullscreen = !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+      )
+      setIsFullscreen(isFullscreen)
     }
 
+    // 各ブラウザのイベントをリッスン
     document.addEventListener('fullscreenchange', handleFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange)
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange)
+
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange)
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange)
     }
   }, [])
 
