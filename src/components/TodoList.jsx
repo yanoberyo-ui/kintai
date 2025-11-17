@@ -46,7 +46,7 @@ export default function TodoList({ user, isDark }) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8,
+        distance: 15,
       },
     })
   )
@@ -264,27 +264,28 @@ export default function TodoList({ user, isDark }) {
     }
   }
 
-  const handleToggle = async (itemId, isCompleted, isRoutine = false) => {
+  const handleToggle = async (itemId, currentIsCompleted, isRoutine = false) => {
     try {
       if (isRoutine) {
         // Handle routine todo completion
         const today = new Date().toISOString().split('T')[0]
-        
-        if (isCompleted) {
-          // Uncomplete: remove from completions table
+
+        if (currentIsCompleted) {
+          // Currently completed, so uncomplete: remove from completions table
           await supabase
             .from('routine_todo_completions')
             .delete()
             .eq('routine_todo_id', itemId)
+            .eq('user_id', user.id)
             .eq('completed_date', today)
-          
+
           setRoutineCompletions(prev => {
             const newSet = new Set(prev)
             newSet.delete(itemId)
             return newSet
           })
         } else {
-          // Complete: add to completions table
+          // Currently not completed, so complete: add to completions table
           await supabase
             .from('routine_todo_completions')
             .insert({
@@ -292,16 +293,17 @@ export default function TodoList({ user, isDark }) {
               user_id: user.id,
               completed_date: today
             })
-          
+
           setRoutineCompletions(prev => new Set([...prev, itemId]))
         }
       } else {
         // Handle regular todo
-        await toggleTodoItem(itemId, isCompleted)
+        await toggleTodoItem(itemId, currentIsCompleted)
         await loadTodoList()
       }
     } catch (error) {
       console.error('Error toggling task:', error)
+      alert('チェックの更新に失敗しました')
     }
   }
 
@@ -350,7 +352,62 @@ export default function TodoList({ user, isDark }) {
     <>
       {/* クラッカーアニメーション */}
       {showConfetti && <ConfettiAnimation />}
-      
+
+      {/* 進捗バーセクション */}
+      <div className={`backdrop-blur-xl rounded-3xl shadow-lg border overflow-hidden transition-colors duration-500 relative mb-6 ${
+        isDark
+          ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
+          : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
+      }`}>
+        <div className="p-8">
+          {/* タイトルと進捗バッジ */}
+          <div className="flex items-center justify-between mb-6">
+            <h2 className={`text-2xl font-bold tracking-tight ${
+              isDark ? 'text-white' : 'text-gray-900'
+            }`}>
+              {new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/')}のToDo
+            </h2>
+            <div className={`px-4 py-2 rounded-full font-bold text-lg ${
+              progress >= 70
+                ? isDark
+                  ? 'bg-white text-gray-900'
+                  : 'bg-gray-900 text-white'
+                : progress >= 40
+                ? isDark
+                  ? 'bg-gray-300 text-gray-900'
+                  : 'bg-gray-700 text-white'
+                : isDark
+                ? 'bg-gray-700 text-gray-300'
+                : 'bg-gray-300 text-gray-700'
+            }`}>
+              {progress}%
+            </div>
+          </div>
+
+          {/* プログレスバー */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className={`text-sm font-semibold ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                進捗
+              </span>
+              <span className={`text-xs font-medium ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                {totalCompletedItems} / {allItems.length} タスク完了
+              </span>
+            </div>
+            <div className={`h-3 rounded-full overflow-hidden ${
+              isDark ? 'bg-gray-800' : 'bg-gray-100'
+            }`}>
+              <div
+                className={`h-full rounded-full transition-all duration-700 ease-out ${
+                  isDark ? 'bg-white' : 'bg-gray-900'
+                }`}
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* 定常TODOセクション */}
       <div className={`backdrop-blur-xl rounded-3xl shadow-lg border overflow-hidden transition-colors duration-500 relative mb-6 ${
         isDark
@@ -416,16 +473,23 @@ export default function TodoList({ user, isDark }) {
               items={routineItems.map((item) => item.id)}
               strategy={verticalListSortingStrategy}
             >
-              <div className="space-y-1 max-h-[40vh] overflow-y-auto overflow-x-hidden">
-                {routineItems.map((item) => (
+              <div className="space-y-1 overflow-x-hidden">
+                {routineItems.map((item, index) => (
                   <SortableTaskItem
                     key={item.id}
                     item={item}
                     isDark={isDark}
                     onToggle={handleToggle}
                     onDelete={handleDelete}
-                    onBackspaceEmpty={() => {}}
+                    onBackspaceEmpty={() => {
+                      // 一つ前の項目にフォーカス
+                      if (index > 0) {
+                        const prevItem = routineItems[index - 1]
+                        itemRefs.current[prevItem.id]?.focus()
+                      }
+                    }}
                     onEnterPress={() => {}}
+                    ref={(el) => (itemRefs.current[item.id] = el)}
                   />
                 ))}
                 
@@ -443,8 +507,7 @@ export default function TodoList({ user, isDark }) {
                         .insert({
                           user_id: user.id,
                           content: content.trim(),
-                          order_index: maxOrderIndex + 1,
-                          indent_level: 0
+                          order_index: maxOrderIndex + 1
                         })
                       
                       if (error) throw error
@@ -468,51 +531,14 @@ export default function TodoList({ user, isDark }) {
       }`}>
         {/* ヘッダー */}
         <div className="p-8 pb-6">
-          {/* タイトルと進捗バッジ */}
-          <div className="flex items-center justify-between mb-6">
-            <h2 className={`text-2xl font-bold tracking-tight ${
-              isDark ? 'text-white' : 'text-gray-900'
-            }`}>
-              {new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/')}のToDo
-            </h2>
-            <div className={`px-4 py-2 rounded-full font-bold text-lg ${
-              progress >= 70
-                ? isDark
-                  ? 'bg-white text-gray-900'
-                  : 'bg-gray-900 text-white'
-                : progress >= 40
-                ? isDark
-                  ? 'bg-gray-300 text-gray-900'
-                  : 'bg-gray-700 text-white'
-                : isDark
-                ? 'bg-gray-700 text-gray-300'
-                : 'bg-gray-300 text-gray-700'
-            }`}>
-              {progress}%
-            </div>
-          </div>
-
-          {/* プログレスバー */}
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <span className={`text-sm font-semibold ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                進捗
-              </span>
-              <span className={`text-xs font-medium ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                {totalCompletedItems} / {allItems.length} タスク完了
-              </span>
-            </div>
-            <div className={`h-3 rounded-full overflow-hidden ${
-              isDark ? 'bg-gray-800' : 'bg-gray-100'
-            }`}>
-              <div
-                className={`h-full rounded-full transition-all duration-700 ease-out ${
-                  isDark ? 'bg-white' : 'bg-gray-900'
-                }`}
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
+          <h2 className={`text-2xl font-bold tracking-tight mb-4 ${
+            isDark ? 'text-white' : 'text-gray-900'
+          }`}>
+            本日のToDo
+          </h2>
+          <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+            今日やるべきタスク
+          </p>
         </div>
 
         {/* タスクリスト */}
@@ -526,7 +552,7 @@ export default function TodoList({ user, isDark }) {
             items={regularItems.map((item) => item.id)}
             strategy={verticalListSortingStrategy}
           >
-            <div className="space-y-1 max-h-[60vh] overflow-y-auto overflow-x-hidden">
+            <div className="space-y-1 overflow-x-hidden">
               {regularItems
                 .sort((a, b) => a.order_index - b.order_index)
                 .map((item, index) => (
@@ -885,7 +911,7 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
   }))
 
   const handleToggle = async () => {
-    await onToggle(item.id, !item.is_completed, item.is_routine || false)
+    await onToggle(item.id, item.is_completed, item.is_routine || false)
   }
 
   const handleEdit = () => {
