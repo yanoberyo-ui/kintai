@@ -224,7 +224,16 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      setAnnouncements(data || [])
+
+      // Filter out announcements with expired voting deadlines
+      const filteredData = (data || []).filter(announcement => {
+        // Keep announcements without voting deadlines
+        if (!announcement.voting_deadline) return true
+        // Filter out announcements with expired voting deadlines
+        return new Date(announcement.voting_deadline) >= new Date()
+      })
+
+      setAnnouncements(filteredData)
     } catch (error) {
       console.error('Error loading announcements:', error)
     } finally {

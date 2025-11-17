@@ -59,32 +59,41 @@ export default function TodoList({ user, isDark }) {
     }
   }, [user])
 
+  // Calculate progress and items (moved before useEffects that use them)
+  const regularItems = todoList?.todo_items || []
+  const routineItems = routineTodos.map(rt => ({
+    ...rt,
+    is_routine: true,
+    is_completed: routineCompletions.has(rt.id),
+    indent_level: rt.indent_level || 0
+  }))
+  
+  const allItems = [...routineItems, ...regularItems]
+  const completedRoutineItems = routineItems.filter(item => item.is_completed)
+  const completedRegularItems = regularItems.filter(item => item.is_completed)
+  const totalCompletedItems = completedRoutineItems.length + completedRegularItems.length
+  const progress = allItems.length > 0 ? Math.round((totalCompletedItems / allItems.length) * 100) : 0
+
   // progressに応じて入力欄の表示を切り替え
   useEffect(() => {
     if (!todoList) return
     
-    const items = todoList?.todo_items || []
-    const progress = calculateProgress(items)
-    
-    // 100%未満の時は入力欄を表示、100%の時は非表示
+    // 進捗が100%未満の時は入力欄を表示、100%の時は非表示
     setShowNewTaskInput(progress < 100)
-  }, [todoList])
+  }, [todoList, routineCompletions, routineTodos, progress])
 
   // 100%達成時のクラッカー表示
   useEffect(() => {
     if (!todoList) return
     
-    const items = todoList?.todo_items || []
-    const progress = calculateProgress(items)
-    
     // 前回が100%未満で、今回100%になった場合のみ表示
-    if (prevProgressRef.current < 100 && progress === 100 && items.length > 0) {
+    if (prevProgressRef.current < 100 && progress === 100 && allItems.length > 0) {
       setShowConfetti(true)
       setTimeout(() => setShowConfetti(false), 4000) // 4秒後に消す
     }
     
     prevProgressRef.current = progress
-  }, [todoList])
+  }, [todoList, routineCompletions, routineTodos, progress, allItems.length])
 
   const handleDragEnd = async (event) => {
     const { active, over } = event
@@ -93,7 +102,7 @@ export default function TodoList({ user, isDark }) {
       return
     }
 
-    const sortedItems = [...items].sort((a, b) => a.order_index - b.order_index)
+    const sortedItems = [...regularItems].sort((a, b) => a.order_index - b.order_index)
     const oldIndex = sortedItems.findIndex((item) => item.id === active.id)
     const newIndex = sortedItems.findIndex((item) => item.id === over.id)
 
@@ -215,7 +224,7 @@ export default function TodoList({ user, isDark }) {
     // 挿入位置とインデントを保存（非同期処理中に変更される可能性があるため）
     const savedInsertAtIndex = insertAtIndex
     const savedIndent = indent
-    const sortedItems = [...items].sort((a, b) => a.order_index - b.order_index)
+    const sortedItems = [...regularItems].sort((a, b) => a.order_index - b.order_index)
 
     try {
       console.log('Adding todo item...')
@@ -337,94 +346,188 @@ export default function TodoList({ user, isDark }) {
     )
   }
 
-  // Merge routine todos with regular todos
-  const regularItems = todoList?.todo_items || []
-  const routineItems = routineTodos.map(rt => ({
-    ...rt,
-    is_routine: true,
-    is_completed: routineCompletions.has(rt.id),
-    indent_level: rt.indent_level || 0
-  }))
-  
-  // Combine and sort by order_index
-  const items = [...routineItems, ...regularItems].sort((a, b) => a.order_index - b.order_index)
-  
-  // Only count regular items for progress (routine todos are daily reset)
-  const completedItems = regularItems.filter((item) => item.is_completed)
-  const progress = calculateProgress(regularItems)
-
   return (
     <>
       {/* クラッカーアニメーション */}
       {showConfetti && <ConfettiAnimation />}
       
-      <div className={`backdrop-blur-xl rounded-3xl shadow-lg border overflow-hidden transition-colors duration-500 relative ${
-      isDark
-        ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
-        : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
-    }`}>
-      {/* ヘッダー */}
-      <div className="p-8 pb-6">
-        {/* タイトルと進捗バッジ */}
-        <div className="flex items-center justify-between mb-6">
-          <h2 className={`text-2xl font-bold tracking-tight ${
+      {/* 定常TODOセクション */}
+      <div className={`backdrop-blur-xl rounded-3xl shadow-lg border overflow-hidden transition-colors duration-500 relative mb-6 ${
+        isDark
+          ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
+          : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
+      }`}>
+        {/* ヘッダー */}
+        <div className="p-8 pb-6">
+          <h2 className={`text-2xl font-bold tracking-tight mb-4 ${
             isDark ? 'text-white' : 'text-gray-900'
           }`}>
-            {new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/')}のToDo
+            定常ToDo
           </h2>
-          <div className={`px-4 py-2 rounded-full font-bold text-lg ${
-            progress >= 70
-              ? isDark
-                ? 'bg-white text-gray-900'
-                : 'bg-gray-900 text-white'
-              : progress >= 40
-              ? isDark
-                ? 'bg-gray-300 text-gray-900'
-                : 'bg-gray-700 text-white'
-              : isDark
-              ? 'bg-gray-700 text-gray-300'
-              : 'bg-gray-300 text-gray-700'
-          }`}>
-            {progress}%
-          </div>
+          <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+            毎日繰り返すタスク（完了状態は毎日リセットされます）
+          </p>
         </div>
 
-        {/* プログレスバー */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <span className={`text-sm font-semibold ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-              進捗
-            </span>
-            <span className={`text-xs font-medium ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-              {completedItems.length} / {items.length} タスク完了
-            </span>
-          </div>
-          <div className={`h-3 rounded-full overflow-hidden ${
-            isDark ? 'bg-gray-800' : 'bg-gray-100'
-          }`}>
-            <div
-              className={`h-full rounded-full transition-all duration-700 ease-out ${
-                isDark ? 'bg-white' : 'bg-gray-900'
-              }`}
-              style={{ width: `${progress}%` }}
-            />
-          </div>
+        {/* 定常タスクリスト */}
+        <div className="px-8 pb-8">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={(event) => {
+              // 定常TODO用のドラッグ＆ドロップ処理
+              const { active, over } = event
+              if (!over || active.id === over.id) return
+
+              const oldIndex = routineItems.findIndex((item) => item.id === active.id)
+              const newIndex = routineItems.findIndex((item) => item.id === over.id)
+
+              if (oldIndex === -1 || newIndex === -1) return
+
+              const reorderedItems = arrayMove(routineItems, oldIndex, newIndex)
+              
+              // order_indexを更新
+              const updatedItems = reorderedItems.map((item, index) => ({
+                ...item,
+                order_index: index
+              }))
+
+              // 楽観的更新
+              setRoutineTodos(updatedItems.map(item => {
+                const { is_routine, is_completed, ...rest } = item
+                return rest
+              }))
+
+              // データベース更新
+              Promise.all(
+                updatedItems.map(item =>
+                  supabase
+                    .from('routine_todos')
+                    .update({ order_index: item.order_index })
+                    .eq('id', item.id)
+                )
+              ).catch(error => {
+                console.error('Error reordering routine todos:', error)
+                loadRoutineTodos()
+              })
+            }}
+          >
+            <SortableContext
+              items={routineItems.map((item) => item.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-1 max-h-[40vh] overflow-y-auto overflow-x-hidden">
+                {routineItems.map((item) => (
+                  <SortableTaskItem
+                    key={item.id}
+                    item={item}
+                    isDark={isDark}
+                    onToggle={handleToggle}
+                    onDelete={handleDelete}
+                    onBackspaceEmpty={() => {}}
+                    onEnterPress={() => {}}
+                  />
+                ))}
+                
+                {/* 定常TODO追加欄 */}
+                <NewRoutineTaskItem 
+                  isDark={isDark}
+                  onAdd={async (content) => {
+                    try {
+                      const maxOrderIndex = routineItems.length > 0 
+                        ? Math.max(...routineItems.map(item => item.order_index || 0))
+                        : -1
+                      
+                      const { error } = await supabase
+                        .from('routine_todos')
+                        .insert({
+                          user_id: user.id,
+                          content: content.trim(),
+                          order_index: maxOrderIndex + 1,
+                          indent_level: 0
+                        })
+                      
+                      if (error) throw error
+                      await loadRoutineTodos()
+                    } catch (error) {
+                      console.error('Error adding routine todo:', error)
+                    }
+                  }}
+                />
+              </div>
+            </SortableContext>
+          </DndContext>
         </div>
       </div>
 
-      {/* タスクリスト */}
-      <div className="px-8 pb-8">
-        <DndContext
+      {/* 通常のTODOセクション */}
+      <div className={`backdrop-blur-xl rounded-3xl shadow-lg border overflow-hidden transition-colors duration-500 relative ${
+        isDark
+          ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
+          : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
+      }`}>
+        {/* ヘッダー */}
+        <div className="p-8 pb-6">
+          {/* タイトルと進捗バッジ */}
+          <div className="flex items-center justify-between mb-6">
+            <h2 className={`text-2xl font-bold tracking-tight ${
+              isDark ? 'text-white' : 'text-gray-900'
+            }`}>
+              {new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/')}のToDo
+            </h2>
+            <div className={`px-4 py-2 rounded-full font-bold text-lg ${
+              progress >= 70
+                ? isDark
+                  ? 'bg-white text-gray-900'
+                  : 'bg-gray-900 text-white'
+                : progress >= 40
+                ? isDark
+                  ? 'bg-gray-300 text-gray-900'
+                  : 'bg-gray-700 text-white'
+                : isDark
+                ? 'bg-gray-700 text-gray-300'
+                : 'bg-gray-300 text-gray-700'
+            }`}>
+              {progress}%
+            </div>
+          </div>
+
+          {/* プログレスバー */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <span className={`text-sm font-semibold ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                進捗
+              </span>
+              <span className={`text-xs font-medium ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                {totalCompletedItems} / {allItems.length} タスク完了
+              </span>
+            </div>
+            <div className={`h-3 rounded-full overflow-hidden ${
+              isDark ? 'bg-gray-800' : 'bg-gray-100'
+            }`}>
+              <div
+                className={`h-full rounded-full transition-all duration-700 ease-out ${
+                  isDark ? 'bg-white' : 'bg-gray-900'
+                }`}
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* タスクリスト */}
+        <div className="px-8 pb-8">
+          <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={items.map((item) => item.id)}
+            items={regularItems.map((item) => item.id)}
             strategy={verticalListSortingStrategy}
           >
             <div className="space-y-1 max-h-[60vh] overflow-y-auto overflow-x-hidden">
-              {items
+              {regularItems
                 .sort((a, b) => a.order_index - b.order_index)
                 .map((item, index) => (
                   <React.Fragment key={item.id}>
@@ -436,7 +539,7 @@ export default function TodoList({ user, isDark }) {
                   ref={(el) => (itemRefs.current[item.id] = el)}
                   onBackspaceEmpty={() => {
                     // 一つ前の項目にフォーカス
-                    const sortedItems = items.sort((a, b) => a.order_index - b.order_index)
+                    const sortedItems = regularItems.sort((a, b) => a.order_index - b.order_index)
                     if (index > 0) {
                       const prevItem = sortedItems[index - 1]
                       itemRefs.current[prevItem.id]?.focus()
@@ -477,7 +580,7 @@ export default function TodoList({ user, isDark }) {
             onIndentChange={setNewItemIndent}
             onBackspaceEmpty={() => {
               // 一番最後のアイテムにフォーカス
-              const sortedItems = items.sort((a, b) => a.order_index - b.order_index)
+              const sortedItems = regularItems.sort((a, b) => a.order_index - b.order_index)
               if (sortedItems.length > 0) {
                 const lastItem = sortedItems[sortedItems.length - 1]
                 itemRefs.current[lastItem.id]?.focus()
@@ -502,8 +605,8 @@ export default function TodoList({ user, isDark }) {
             </div>
           </SortableContext>
         </DndContext>
+        </div>
       </div>
-    </div>
     </>
   )
 }
@@ -942,7 +1045,7 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
               : isDark ? 'text-gray-100' : 'text-gray-900'
           }`}
         >
-          {item.is_routine && '🔄 '}{item.content}
+          {item.content}
         </span>
       )}
     </div>
@@ -950,3 +1053,58 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
 })
 
 TaskItem.displayName = 'TaskItem'
+
+// 定常TODO用の新規タスク入力コンポーネント
+function NewRoutineTaskItem({ isDark, onAdd }) {
+  const [content, setContent] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isComposing, setIsComposing] = useState(false)
+  const inputRef = useRef(null)
+  const lastSubmittedContent = useRef('')
+
+  const handleKeyDown = async (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
+      e.preventDefault()
+      const taskContent = content.trim()
+
+      if (taskContent && !isSubmitting && taskContent !== lastSubmittedContent.current) {
+        setIsSubmitting(true)
+        lastSubmittedContent.current = taskContent
+
+        try {
+          await onAdd(taskContent)
+          setContent('')
+          setTimeout(() => {
+            lastSubmittedContent.current = ''
+          }, 500)
+        } catch (error) {
+          console.error('Error in onAdd:', error)
+          lastSubmittedContent.current = ''
+        } finally {
+          setIsSubmitting(false)
+        }
+      }
+    }
+  }
+
+  return (
+    <div className="group flex items-center gap-3 py-2 transition-all duration-200">
+      <input
+        ref={inputRef}
+        type="text"
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onCompositionStart={() => setIsComposing(true)}
+        onCompositionEnd={() => setIsComposing(false)}
+        disabled={isSubmitting}
+        placeholder="定常タスクを追加..."
+        className={`flex-1 bg-transparent border-0 focus:ring-0 outline-none text-sm ${
+          isDark
+            ? 'text-white placeholder:text-gray-600'
+            : 'text-gray-900 placeholder:text-gray-400'
+        } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+      />
+    </div>
+  )
+}
