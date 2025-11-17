@@ -26,6 +26,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { supabase } from '../utils/supabase'
 
 export default function TodoList({ user, isDark }) {
   const [todoList, setTodoList] = useState(null)
@@ -37,6 +38,10 @@ export default function TodoList({ user, isDark }) {
   const [showConfetti, setShowConfetti] = useState(false)
   const prevProgressRef = useRef(0)
   const itemRefs = useRef({})
+  
+  // Routine TODO state
+  const [routineTodos, setRoutineTodos] = useState([])
+  const [routineCompletions, setRoutineCompletions] = useState(new Set())
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -47,7 +52,11 @@ export default function TodoList({ user, isDark }) {
   )
 
   useEffect(() => {
-    loadTodoList()
+    if (user) {
+      loadTodoList()
+      loadRoutineTodos()
+      loadTodayCompletions()
+    }
   }, [user])
 
   // progressに応じて入力欄の表示を切り替え
@@ -165,6 +174,37 @@ export default function TodoList({ user, isDark }) {
     }
   }
 
+  const loadRoutineTodos = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('routine_todos')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('order_index', { ascending: true })
+
+      if (error) throw error
+      setRoutineTodos(data || [])
+    } catch (error) {
+      console.error('Error loading routine todos:', error)
+    }
+  }
+
+  const loadTodayCompletions = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      const { data, error } = await supabase
+        .from('routine_todo_completions')
+        .select('routine_todo_id')
+        .eq('user_id', user.id)
+        .eq('completed_date', today)
+
+      if (error) throw error
+      setRoutineCompletions(new Set(data?.map(c => c.routine_todo_id) || []))
+    } catch (error) {
+      console.error('Error loading completions:', error)
+    }
+  }
+
   const handleAddTask = async (content, indent) => {
     console.log('handleAddTask called with:', content, 'indent:', indent, 'insertAtIndex:', insertAtIndex)
     if (!content.trim()) {
@@ -215,21 +255,71 @@ export default function TodoList({ user, isDark }) {
     }
   }
 
-  const handleToggle = async (itemId, isCompleted) => {
+  const handleToggle = async (itemId, isCompleted, isRoutine = false) => {
     try {
-      await toggleTodoItem(itemId, isCompleted)
-      await loadTodoList()
+      if (isRoutine) {
+        // Handle routine todo completion
+        const today = new Date().toISOString().split('T')[0]
+        
+        if (isCompleted) {
+          // Uncomplete: remove from completions table
+          await supabase
+            .from('routine_todo_completions')
+            .delete()
+            .eq('routine_todo_id', itemId)
+            .eq('completed_date', today)
+          
+          setRoutineCompletions(prev => {
+            const newSet = new Set(prev)
+            newSet.delete(itemId)
+            return newSet
+          })
+        } else {
+          // Complete: add to completions table
+          await supabase
+            .from('routine_todo_completions')
+            .insert({
+              routine_todo_id: itemId,
+              user_id: user.id,
+              completed_date: today
+            })
+          
+          setRoutineCompletions(prev => new Set([...prev, itemId]))
+        }
+      } else {
+        // Handle regular todo
+        await toggleTodoItem(itemId, isCompleted)
+        await loadTodoList()
+      }
     } catch (error) {
       console.error('Error toggling task:', error)
     }
   }
 
-  const handleDelete = async (itemId) => {
+  const handleDelete = async (itemId, isRoutine = false) => {
     try {
-      await deleteTodoItem(itemId)
-      await loadTodoList()
+      if (isRoutine) {
+        // Handle routine todo deletion
+        await supabase
+          .from('routine_todos')
+          .delete()
+          .eq('id', itemId)
+        
+        // Remove from state
+        setRoutineTodos(routineTodos.filter(t => t.id !== itemId))
+        setRoutineCompletions(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(itemId)
+          return newSet
+        })
+      } else {
+        // Handle regular todo deletion
+        await deleteTodoItem(itemId)
+        await loadTodoList()
+      }
     } catch (error) {
       console.error('Error deleting task:', error)
+      alert('削除に失敗しました')
     }
   }
 
@@ -247,9 +337,21 @@ export default function TodoList({ user, isDark }) {
     )
   }
 
-  const items = todoList?.todo_items || []
-  const completedItems = items.filter((item) => item.is_completed)
-  const progress = calculateProgress(items)
+  // Merge routine todos with regular todos
+  const regularItems = todoList?.todo_items || []
+  const routineItems = routineTodos.map(rt => ({
+    ...rt,
+    is_routine: true,
+    is_completed: routineCompletions.has(rt.id),
+    indent_level: rt.indent_level || 0
+  }))
+  
+  // Combine and sort by order_index
+  const items = [...routineItems, ...regularItems].sort((a, b) => a.order_index - b.order_index)
+  
+  // Only count regular items for progress (routine todos are daily reset)
+  const completedItems = regularItems.filter((item) => item.is_completed)
+  const progress = calculateProgress(regularItems)
 
   return (
     <>
@@ -680,7 +782,7 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
   }))
 
   const handleToggle = async () => {
-    await onToggle(item.id, !item.is_completed)
+    await onToggle(item.id, !item.is_completed, item.is_routine || false)
   }
 
   const handleEdit = () => {
@@ -754,14 +856,14 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
       e.preventDefault()
       setIsDeleting(true)
       setTimeout(() => {
-        onDelete(item.id)
+        onDelete(item.id, item.is_routine || false)
         onBackspaceEmpty?.()
       }, 200) // 200msのアニメーション後に削除
     } else if (e.key === 'Backspace' && !isEditing && !isComposing) {
       e.preventDefault()
       setIsDeleting(true)
       setTimeout(() => {
-        onDelete(item.id)
+        onDelete(item.id, item.is_routine || false)
         onBackspaceEmpty?.()
       }, 200)
     }
@@ -840,7 +942,7 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
               : isDark ? 'text-gray-100' : 'text-gray-900'
           }`}
         >
-          {item.content}
+          {item.is_routine && '🔄 '}{item.content}
         </span>
       )}
     </div>

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './utils/supabase'
 import TodoList from './components/TodoList'
-import RoutineTodos from './components/RoutineTodos'
 import AttendanceCard from './components/AttendanceCard'
 import CalendarPage from './components/CalendarPage'
 import SettingsPage from './components/SettingsPage'
@@ -11,6 +10,7 @@ import ReservationsPage from './components/ReservationsPage'
 import AnnouncementsPage from './components/AnnouncementsPage'
 import AdminPage from './components/AdminPage'
 import RankingPage from './components/RankingPage'
+import Avatar from './components/Avatar'
 import { getStreaks } from './utils/streaks'
 import { getHeatmapData } from './utils/heatmap'
 
@@ -100,6 +100,25 @@ function App() {
       setHeatmapData(data)
     } catch (error) {
       console.error('Error loading heatmap data:', error)
+    }
+  }
+
+  const reloadUserData = async () => {
+    if (!user?.id) return
+    
+    try {
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+      
+      if (error) throw error
+      if (userData) {
+        setUser(userData)
+      }
+    } catch (error) {
+      console.error('Error reloading user data:', error)
     }
   }
 
@@ -844,15 +863,13 @@ function App() {
             >
               <div className="flex items-center gap-3">
                 {/* アバター */}
-                <div className={`w-10 h-10 rounded-full overflow-hidden flex items-center justify-center font-bold text-white ${
-                  isDark ? 'bg-gradient-to-br from-gray-700 to-gray-600' : 'bg-gradient-to-br from-gray-800 to-gray-700'
-                }`}>
-                  {user?.avatar_url ? (
-                    <img src={user.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    user?.email?.charAt(0).toUpperCase()
-                  )}
-                </div>
+                <Avatar
+                  avatarUrl={user?.avatar_url}
+                  name={user?.name}
+                  email={user?.email}
+                  size="md"
+                  className={isDark ? 'bg-gradient-to-br from-gray-700 to-gray-600 text-white' : 'bg-gradient-to-br from-gray-800 to-gray-700 text-white'}
+                />
                 {/* ユーザー名とメール */}
                 <div className="flex-1 min-w-0">
                   <div className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
@@ -896,9 +913,6 @@ function App() {
 
             {/* TODOリスト */}
             <TodoList user={user} isDark={isDark} />
-
-            {/* 定常TODO */}
-            <RoutineTodos user={user} isDark={isDark} />
           </div>
         ) : currentPage === 'calendar' ? (
           <CalendarPage user={user} isDark={isDark} />
@@ -915,7 +929,7 @@ function App() {
         ) : currentPage === 'ranking' ? (
           <RankingPage user={user} isDark={isDark} />
         ) : (
-          <SettingsPage user={user} isDark={isDark} setIsDark={setIsDark} />
+          <SettingsPage user={user} isDark={isDark} setIsDark={setIsDark} onUserUpdate={reloadUserData} />
         )}
       </main>
 

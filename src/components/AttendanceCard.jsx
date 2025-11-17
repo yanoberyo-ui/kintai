@@ -23,6 +23,7 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
   const [streakValue, setStreakValue] = useState(0)
   const [showOvertimeAlert, setShowOvertimeAlert] = useState(false)
   const [overtimeAlertShown, setOvertimeAlertShown] = useState(false)
+  const [showAIFeedbackPopup, setShowAIFeedbackPopup] = useState(false)
 
   useEffect(() => {
     loadAttendance()
@@ -192,19 +193,6 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
 
   const handleClockOut = async () => {
     setShowBreakModal(true)
-    setLoadingFeedback(true)
-    setAiFeedback(null)
-
-    try {
-      // AIフィードバックを取得
-      const feedback = await getAIFeedback(user.id, userProfile?.name || user.email)
-      setAiFeedback(feedback)
-    } catch (error) {
-      console.error('Error getting AI feedback:', error)
-      // エラーが出てもモーダルは表示する
-    } finally {
-      setLoadingFeedback(false)
-    }
   }
 
   const confirmClockOut = async () => {
@@ -245,10 +233,28 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
         setShowStreakNotification(true)
         setTimeout(() => setShowStreakNotification(false), 3500)
       }
-      
+
       // ヘッダーのストリークバッジを更新
       if (onStreakUpdate) {
         onStreakUpdate(streaks)
+      }
+
+      // AIフィードバックを取得して表示
+      setLoadingFeedback(true)
+      try {
+        const feedback = await getAIFeedback(user.id, userProfile?.name || user.email)
+        setAiFeedback(feedback)
+        setShowAIFeedbackPopup(true)
+
+        // 上位3位以内なら紙吹雪を表示
+        if (feedback?.stats?.rank && feedback.stats.rank <= 3) {
+          setShowConfetti(true)
+          setTimeout(() => setShowConfetti(false), 4000)
+        }
+      } catch (error) {
+        console.error('Error getting AI feedback:', error)
+      } finally {
+        setLoadingFeedback(false)
       }
     } catch (error) {
       console.error('Error clocking out:', error)
@@ -435,6 +441,87 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
         </div>
       )}
 
+      {/* AIフィードバックポップアップ */}
+      {showAIFeedbackPopup && aiFeedback && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => setShowAIFeedbackPopup(false)}
+        >
+          <div
+            className={`max-w-lg w-full rounded-3xl shadow-2xl border p-8 ${
+              isDark
+                ? 'bg-gray-900/95 border-gray-800/50'
+                : 'bg-white/95 border-gray-200/50'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center mb-6">
+              <div className="text-6xl mb-4">
+                {aiFeedback.stats.rank === 1 ? '🥇' : aiFeedback.stats.rank === 2 ? '🥈' : aiFeedback.stats.rank === 3 ? '🥉' : '🎯'}
+              </div>
+              <h2 className={`text-3xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                お疲れ様でした！
+              </h2>
+            </div>
+
+            <div className={`mb-6 p-5 rounded-xl ${
+              aiFeedback.stats.rank === 1
+                ? isDark
+                  ? 'bg-gradient-to-br from-yellow-600/20 via-yellow-500/10 to-amber-600/20 border border-yellow-500/30'
+                  : 'bg-gradient-to-br from-yellow-50 via-amber-50 to-yellow-100 border border-yellow-300/50'
+                : aiFeedback.stats.rank === 2
+                ? isDark
+                  ? 'bg-gradient-to-br from-gray-500/20 via-slate-400/10 to-gray-600/20 border border-gray-400/30'
+                  : 'bg-gradient-to-br from-gray-100 via-slate-50 to-gray-200 border border-gray-300/50'
+                : aiFeedback.stats.rank === 3
+                ? isDark
+                  ? 'bg-gradient-to-br from-orange-700/20 via-amber-600/10 to-orange-800/20 border border-orange-600/30'
+                  : 'bg-gradient-to-br from-orange-100 via-amber-50 to-orange-200 border border-orange-300/50'
+                : isDark
+                ? 'bg-gray-800 border border-gray-700'
+                : 'bg-gray-50 border border-gray-200'
+            }`}>
+              {/* ランキング情報 */}
+              <div className={`text-lg font-bold mb-3 ${
+                aiFeedback.stats.rank <= 3
+                  ? aiFeedback.stats.rank === 1
+                    ? 'text-yellow-600 dark:text-yellow-400'
+                    : aiFeedback.stats.rank === 2
+                    ? 'text-gray-600 dark:text-gray-300'
+                    : 'text-orange-600 dark:text-orange-400'
+                  : isDark ? 'text-gray-400' : 'text-gray-600'
+              }`}>
+                今日の頑張り度: {aiFeedback.stats.rank}位 / {aiFeedback.stats.totalMembers}人中
+              </div>
+
+              {/* タスク統計 */}
+              <div className={`text-sm mb-4 space-y-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                <div>タスク: {aiFeedback.stats.completedTasks} / {aiFeedback.stats.taskCount}個完了</div>
+                <div>達成率: {aiFeedback.stats.completionRate}%</div>
+              </div>
+
+              {/* AIメッセージ */}
+              <p className={`text-base leading-relaxed whitespace-pre-wrap ${
+                isDark ? 'text-white' : 'text-gray-900'
+              }`}>
+                {aiFeedback.message}
+              </p>
+            </div>
+
+            <button
+              onClick={() => setShowAIFeedbackPopup(false)}
+              className={`w-full px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
+                isDark
+                  ? 'bg-white text-gray-900 hover:bg-gray-100'
+                  : 'bg-gray-900 text-white hover:bg-gray-800'
+              }`}
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 残業アラート */}
       {showOvertimeAlert && (
         <div
@@ -586,8 +673,8 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
 
       {/* 休憩時間入力モーダル */}
       {showBreakModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-          <div className={`rounded-2xl shadow-2xl p-8 max-w-lg w-full ${
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-fade-in">
+          <div className={`rounded-2xl shadow-2xl p-8 max-w-md w-full animate-scale-in ${
             isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white'
           }`}>
             <h3 className={`text-2xl font-semibold mb-4 ${
@@ -595,66 +682,6 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
             }`}>
               お疲れ様でした！
             </h3>
-
-            {/* AIフィードバック表示エリア */}
-            {loadingFeedback && (
-              <div className={`mb-6 p-4 rounded-xl ${
-                isDark ? 'bg-gray-800' : 'bg-gray-50'
-              }`}>
-                <div className="flex items-center gap-3">
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-400 border-t-transparent"></div>
-                  <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>
-                    今日の頑張りを分析中...
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {aiFeedback && !loadingFeedback && (
-              <div className={`mb-6 p-5 rounded-xl ${
-                aiFeedback.stats.rank === 1
-                  ? isDark
-                    ? 'bg-gradient-to-br from-yellow-600/20 via-yellow-500/10 to-amber-600/20 border border-yellow-500/30'
-                    : 'bg-gradient-to-br from-yellow-50 via-amber-50 to-yellow-100 border border-yellow-300/50'
-                  : aiFeedback.stats.rank === 2
-                  ? isDark
-                    ? 'bg-gradient-to-br from-gray-500/20 via-slate-400/10 to-gray-600/20 border border-gray-400/30'
-                    : 'bg-gradient-to-br from-gray-100 via-slate-50 to-gray-200 border border-gray-300/50'
-                  : aiFeedback.stats.rank === 3
-                  ? isDark
-                    ? 'bg-gradient-to-br from-orange-700/20 via-amber-600/10 to-orange-800/20 border border-orange-600/30'
-                    : 'bg-gradient-to-br from-orange-100 via-amber-50 to-orange-200 border border-orange-300/50'
-                  : isDark
-                  ? 'bg-gray-800 border border-gray-700'
-                  : 'bg-gray-50 border border-gray-200'
-              }`}>
-                {/* ランキング情報 */}
-                <div className={`text-sm font-semibold mb-3 ${
-                  aiFeedback.stats.rank <= 3
-                    ? aiFeedback.stats.rank === 1
-                      ? 'text-yellow-600 dark:text-yellow-400'
-                      : aiFeedback.stats.rank === 2
-                      ? 'text-gray-600 dark:text-gray-300'
-                      : 'text-orange-600 dark:text-orange-400'
-                    : isDark ? 'text-gray-400' : 'text-gray-600'
-                }`}>
-                  今日の頑張り度: {aiFeedback.stats.rank}位 / {aiFeedback.stats.totalMembers}人中
-                </div>
-
-                {/* タスク統計 */}
-                <div className={`text-xs mb-3 space-y-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                  <div>タスク: {aiFeedback.stats.completedTasks} / {aiFeedback.stats.taskCount}個完了</div>
-                  <div>達成率: {aiFeedback.stats.completionRate}%</div>
-                </div>
-
-                {/* AIメッセージ */}
-                <p className={`text-base leading-relaxed whitespace-pre-wrap ${
-                  isDark ? 'text-white' : 'text-gray-900'
-                }`}>
-                  {aiFeedback.message}
-                </p>
-              </div>
-            )}
 
             <p className={`mb-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
               今日の休憩時間を入力してください

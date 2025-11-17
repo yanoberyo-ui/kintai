@@ -790,8 +790,6 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                       loading="lazy"
                       decoding="async"
                       fetchpriority="low"
-                      decoding="async"
-                      fetchpriority="low"
                     />
                   ) : (
                     announcement.author.name?.charAt(0) || announcement.author.email.charAt(0).toUpperCase()

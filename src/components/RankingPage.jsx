@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useLayoutEffect } from 'react'
 import { supabase } from '../utils/supabase'
 
 export default function RankingPage({ isDark, user }) {
@@ -8,6 +8,8 @@ export default function RankingPage({ isDark, user }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const containerRef = useRef(null)
+  const fullscreenRef = useRef(null)
+  const cacheRef = useRef({})
 
   useEffect(() => {
     if (user) {
@@ -17,6 +19,18 @@ export default function RankingPage({ isDark, user }) {
 
   const loadRankings = async () => {
     try {
+      const cacheKey = `${selectedYear}-${selectedMonth}`
+
+      // キャッシュがあり、5分以内なら使用
+      if (cacheRef.current[cacheKey]) {
+        const { data, timestamp } = cacheRef.current[cacheKey]
+        if (Date.now() - timestamp < 5 * 60 * 1000) {
+          setRankings(data)
+          setLoading(false)
+          return
+        }
+      }
+
       setLoading(true)
 
       // Supabase Edge Functionを呼び出してスプレッドシートから直接取得
@@ -36,6 +50,12 @@ export default function RankingPage({ isDark, user }) {
         }))
 
         setRankings(rankingArray)
+
+        // キャッシュに保存
+        cacheRef.current[cacheKey] = {
+          data: rankingArray,
+          timestamp: Date.now()
+        }
       } else {
         setRankings([])
       }
@@ -47,154 +67,278 @@ export default function RankingPage({ isDark, user }) {
     }
   }
 
-  // CSS疑似全画面モードの切り替え（Safari対応）
-  const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen)
-  }
-
-  const getRankColor = (rank) => {
-    switch(rank) {
-      case 0: return 'from-yellow-400 via-yellow-500 to-yellow-600' // 1位: ゴールド
-      case 1: return 'from-gray-300 via-gray-400 to-gray-500' // 2位: シルバー
-      case 2: return 'from-orange-400 via-orange-500 to-orange-600' // 3位: ブロンズ
-      case 3: return 'from-gray-600 to-gray-700' // 4位: ダークグレー（ベニヤ板風）
-      default: return 'from-gray-400 to-gray-600'
+  // ブラウザのFullscreen APIを使用
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        // 全画面モードに入る
+        if (fullscreenRef.current) {
+          await fullscreenRef.current.requestFullscreen()
+        }
+      } else {
+        // 全画面モードを解除
+        await document.exitFullscreen()
+      }
+    } catch (error) {
+      console.error('Fullscreen error:', error)
     }
   }
 
-  const getRankEmoji = (rank) => {
-    switch(rank) {
-      case 0: return '👑'
-      case 1: return '🥈'
-      case 2: return '🥉'
-      case 3: return '📋'
-      default: return '🏆'
+  // 全画面状態の変化を監視
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
     }
-  }
 
-  const getRankSize = (rank) => {
-    switch(rank) {
-      case 0: return 'scale-110' // 1位は大きく
-      case 1: return 'scale-105'
-      case 2: return 'scale-100'
-      case 3: return 'scale-95'
-      default: return 'scale-100'
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
     }
-  }
+  }, [])
 
-  const getRankStyle = (rank) => {
-    switch(rank) {
-      case 0: return 'shadow-2xl shadow-yellow-500/50 border-4 border-yellow-400' // 1位: ゴールドの輝き
-      case 1: return 'shadow-2xl shadow-gray-400/50 border-4 border-gray-300' // 2位: シルバーの輝き
-      case 2: return 'shadow-2xl shadow-orange-500/50 border-4 border-orange-400' // 3位: ブロンズの輝き
-      case 3: return 'shadow-md border border-gray-600' // 4位: シンプルな影
-      default: return 'shadow-md'
+  // スケルトンローディング - プレーンなスケルトンをシャッフル
+  const [shuffleOrder, setShuffleOrder] = useState([0, 1, 2, 3])
+  const cardRefs = useRef({})
+  const positions = useRef({})
+
+  useEffect(() => {
+    if (loading) {
+      // ローディング中だけシャッフルを繰り返す
+      const shuffleInterval = setInterval(() => {
+        setShuffleOrder(prev => {
+          const newOrder = [...prev]
+          // ランダムに2つの位置を入れ替え
+          const i = Math.floor(Math.random() * 4)
+          const j = Math.floor(Math.random() * 4)
+          ;[newOrder[i], newOrder[j]] = [newOrder[j], newOrder[i]]
+          return newOrder
+        })
+      }, 1500) // 1.5秒ごとにシャッフル
+
+      return () => clearInterval(shuffleInterval)
+    } else {
+      // ローディング終了時は元の順序に戻す
+      setShuffleOrder([0, 1, 2, 3])
+      cardRefs.current = {}
+      positions.current = {}
     }
-  }
+  }, [loading])
 
-  const getRankBadgeStyle = (rank) => {
-    if (rank === 3) {
-      // 4位はベニヤ板風
-      return 'bg-gradient-to-br from-amber-900 to-amber-950 border-2 border-amber-800'
+  // FLIP animation: 位置変更時に滑らかにアニメーション
+  useLayoutEffect(() => {
+    if (!loading) return
+
+    const cards = cardRefs.current
+    const prevPositions = positions.current
+
+    // 変更後の各カードの位置を取得
+    const newPositions = {}
+    Object.keys(cards).forEach(id => {
+      const card = cards[id]
+      if (card) {
+        const rect = card.getBoundingClientRect()
+        newPositions[id] = { top: rect.top }
+      }
+    })
+
+    // 初回は位置を保存するだけ
+    if (Object.keys(prevPositions).length === 0) {
+      positions.current = newPositions
+      return
     }
-    // 1〜3位は豪華なグラデーション
-    return `bg-gradient-to-br ${getRankColor(rank)}`
-  }
 
-  if (loading) {
+    // 各カードをFLIPアニメーション
+    Object.keys(cards).forEach(id => {
+      const card = cards[id]
+      if (!card || !prevPositions[id] || !newPositions[id]) return
+
+      const deltaY = prevPositions[id].top - newPositions[id].top
+
+      if (deltaY === 0) return
+
+      // Invert: 変更前の位置に瞬時に戻す
+      card.style.transform = `translateY(${deltaY}px)`
+      card.style.transition = 'none'
+
+      // Play: アニメーションで元に戻す
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          card.style.transition = 'transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+          card.style.transform = 'translateY(0)'
+        })
+      })
+    })
+
+    // 新しい位置を保存
+    positions.current = newPositions
+  }, [shuffleOrder, loading])
+
+  const SkeletonCard = ({ id }) => {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${
-        isDark ? 'bg-gray-900' : 'bg-gray-50'
-      }`}>
-        <div className={`animate-pulse text-lg ${
-          isDark ? 'text-gray-400' : 'text-gray-600'
-        }`}>Loading...</div>
+      <div
+        ref={el => {
+          if (el) {
+            cardRefs.current[id] = el
+          }
+        }}
+      >
+        <div className={`relative p-6 md:p-8 rounded-2xl backdrop-blur-xl bg-gradient-to-br ${
+          isDark ? 'from-gray-800/50 to-gray-900/50' : 'from-gray-100 to-gray-50'
+        } border-2 ${
+          isDark ? 'border-gray-700' : 'border-gray-300'
+        } animate-pulse`}>
+          <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8">
+            {/* アイコンスケルトン */}
+            <div className="relative flex-shrink-0">
+              <div className={`w-24 h-24 md:w-28 md:h-28 rounded-2xl ${
+                isDark ? 'bg-gray-700' : 'bg-gray-300'
+              }`} />
+            </div>
+
+            {/* コンテンツ */}
+            <div className="flex-1 space-y-4 w-full">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                {/* ユニット名スケルトン */}
+                <div className={`h-10 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-300'}`} style={{ width: '60%' }} />
+                {/* スコアスケルトン */}
+                <div className={`h-16 w-32 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-300'}`} />
+              </div>
+              {/* プログレスバー */}
+              <div className={`h-8 md:h-10 rounded-xl ${isDark ? 'bg-gray-700' : 'bg-gray-300'}`} />
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
 
   return (
     <div
-      ref={containerRef}
-      className={`min-h-screen transition-all duration-500 ${
-        isDark ? 'bg-gray-900' : 'bg-gray-50'
-      } ${
-        isFullscreen
-          ? 'fixed inset-0 z-[9999] overflow-auto'
-          : ''
+      ref={fullscreenRef}
+      className={`relative min-h-screen transition-all duration-500 overflow-y-auto ${
+        isDark
+          ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-black'
+          : 'bg-gradient-to-br from-gray-50 via-white to-blue-50'
       }`}
     >
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* ヘッダー */}
-        <div className="mb-8 flex justify-between items-start">
-          <div>
-            <h1 className={`text-4xl font-bold mb-2 ${
-              isDark ? 'text-white' : 'text-gray-900'
-            }`}>
-              🏆 ユニット別ランキング
-            </h1>
-            <p className={`text-lg ${
+
+      {/* 背景の控えめなパーティクル */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-40">
+        <div className={`absolute top-20 left-10 w-96 h-96 rounded-full blur-3xl opacity-30 ${
+          isDark ? 'bg-yellow-500' : 'bg-yellow-400'
+        }`} />
+        <div className={`absolute bottom-20 right-10 w-96 h-96 rounded-full blur-3xl opacity-30 ${
+          isDark ? 'bg-purple-500' : 'bg-purple-400'
+        }`} />
+      </div>
+
+      {/* 全画面モード時の閉じるボタン */}
+      {isFullscreen && (
+        <button
+          onClick={toggleFullscreen}
+          className="fixed top-8 right-8 z-50 p-4 rounded-full bg-red-600 hover:bg-red-500 text-white font-bold transition-all duration-300 hover:scale-110 active:scale-95 shadow-2xl"
+          title="全画面を終了 (Esc)"
+        >
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
+
+      <div className="max-w-7xl mx-auto px-4 py-12 relative z-10">
+        {/* ヘッダー - シンプルで見やすく */}
+        <div className="mb-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="text-5xl">🏆</div>
+              <h1 className={`text-4xl md:text-5xl font-black tracking-tight ${
+                isDark
+                  ? 'text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400'
+                  : 'text-transparent bg-clip-text bg-gradient-to-r from-yellow-600 to-orange-600'
+              }`}>
+                ランキング
+              </h1>
+            </div>
+            <p className={`text-base md:text-lg font-medium ${
               isDark ? 'text-gray-400' : 'text-gray-600'
             }`}>
-              TODO達成率で競い合おう！
+              ユニット別TODO達成率トップ4
             </p>
           </div>
-          
-          {/* 全画面ボタン */}
-          <button
-            onClick={toggleFullscreen}
-            className={`px-4 py-2 rounded-xl font-medium transition-all hover:scale-105 ${
-              isDark 
-                ? 'bg-gray-800 hover:bg-gray-700 text-white' 
-                : 'bg-white hover:bg-gray-100 text-gray-900 border-2 border-gray-200'
-            }`}
-            title={isFullscreen ? '全画面を終了' : '全画面表示'}
-          >
-            {isFullscreen ? '⬇ 通常表示' : '⬆ 全画面'}
-          </button>
+
+          {/* 全画面ボタン（通常モード時のみ表示） */}
+          {!isFullscreen && (
+            <button
+              onClick={toggleFullscreen}
+              className={`px-6 py-3 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 active:scale-95 flex items-center gap-2 ${
+                isDark
+                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white shadow-lg'
+                  : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white shadow-lg'
+              }`}
+              title="ブラウザ全画面表示 (F11)"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+              </svg>
+              全画面表示
+            </button>
+          )}
         </div>
 
-        {/* 期間選択 */}
-        <div className={`mb-8 flex gap-4 items-center p-4 rounded-2xl ${
-          isDark ? 'bg-gray-800/50' : 'bg-white'
+        {/* 期間選択 - シンプルに */}
+        <div className={`mb-10 p-6 rounded-2xl backdrop-blur-xl border ${
+          isDark
+            ? 'bg-gray-900/50 border-gray-700/50'
+            : 'bg-white/50 border-gray-200/50'
         }`}>
-          <label className={`font-medium ${
-            isDark ? 'text-gray-300' : 'text-gray-700'
-          }`}>
-            期間選択:
-          </label>
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            className={`px-4 py-2 rounded-xl border-2 transition-colors ${
-              isDark
-                ? 'bg-gray-900 border-gray-700 text-white'
-                : 'bg-white border-gray-300 text-gray-900'
-            }`}
-          >
-            {[2024, 2025, 2026].map(year => (
-              <option key={year} value={year}>{year}年</option>
-            ))}
-          </select>
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-            className={`px-4 py-2 rounded-xl border-2 transition-colors ${
-              isDark
-                ? 'bg-gray-900 border-gray-700 text-white'
-                : 'bg-white border-gray-300 text-gray-900'
-            }`}
-          >
-            {[...Array(12)].map((_, i) => (
-              <option key={i + 1} value={i + 1}>{i + 1}月</option>
-            ))}
-          </select>
+          <div className="flex flex-col sm:flex-row gap-4 items-center">
+            <label className={`font-semibold ${
+              isDark ? 'text-gray-400' : 'text-gray-600'
+            }`}>
+              📅 期間:
+            </label>
+            <div className="flex gap-3">
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                className={`px-4 py-2 rounded-xl font-medium border-2 transition-all hover:scale-105 cursor-pointer ${
+                  isDark
+                    ? 'bg-gray-900 border-gray-700 text-white hover:border-gray-600'
+                    : 'bg-white border-gray-300 text-gray-900 hover:border-gray-400'
+                } outline-none focus:ring-2 focus:ring-blue-500`}
+              >
+                {[2024, 2025, 2026].map(year => (
+                  <option key={year} value={year}>{year}年</option>
+                ))}
+              </select>
+
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                className={`px-4 py-2 rounded-xl font-medium border-2 transition-all hover:scale-105 cursor-pointer ${
+                  isDark
+                    ? 'bg-gray-900 border-gray-700 text-white hover:border-gray-600'
+                    : 'bg-white border-gray-300 text-gray-900 hover:border-gray-400'
+                } outline-none focus:ring-2 focus:ring-blue-500`}
+              >
+                {[...Array(12)].map((_, i) => (
+                  <option key={i + 1} value={i + 1}>{i + 1}月</option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
 
-        {/* ランキング表示 - アーケードゲーム風ハイスコア */}
-        {rankings.length === 0 ? (
-          <div className={`text-center py-12 ${
-            isDark ? 'text-gray-400' : 'text-gray-600'
+        {/* ランキング表示 */}
+        {loading ? (
+          <div className="flex flex-col gap-6">
+            {shuffleOrder.map((id) => (
+              <SkeletonCard key={id} id={id} />
+            ))}
+          </div>
+        ) : rankings.length === 0 ? (
+          <div className={`text-center py-20 text-xl font-bold ${
+            isDark ? 'text-gray-500' : 'text-gray-400'
           }`}>
             データがありません
           </div>
@@ -202,127 +346,191 @@ export default function RankingPage({ isDark, user }) {
           <div className="space-y-6">
             {rankings.map((unit, index) => {
               const isTop3 = index < 3
-              
-              // ライトモードとダークモードで色を切り替え
-              const rankColors = isDark ? {
-                0: { border: 'border-yellow-400', glow: 'shadow-[0_0_40px_rgba(250,204,21,0.6)]', bg: 'from-yellow-500/20 to-orange-500/20', text: 'text-yellow-400', barBg: 'from-yellow-400 to-orange-500', cardBg: 'bg-yellow-500/10' },
-                1: { border: 'border-gray-300', glow: 'shadow-[0_0_30px_rgba(209,213,219,0.5)]', bg: 'from-gray-400/20 to-gray-500/20', text: 'text-gray-300', barBg: 'from-gray-300 to-gray-500', cardBg: 'bg-gray-400/10' },
-                2: { border: 'border-orange-400', glow: 'shadow-[0_0_30px_rgba(251,146,60,0.5)]', bg: 'from-orange-500/20 to-orange-600/20', text: 'text-orange-400', barBg: 'from-orange-400 to-orange-600', cardBg: 'bg-orange-500/10' },
-                3: { border: 'border-gray-600', glow: 'shadow-md', bg: 'from-gray-700/20 to-gray-800/20', text: 'text-gray-500', barBg: 'from-gray-600 to-gray-700', cardBg: 'bg-gray-700/10' }
-              } : {
-                0: { border: 'border-yellow-600', glow: 'shadow-[0_0_20px_rgba(202,138,4,0.4)]', bg: 'from-yellow-100 to-orange-100', text: 'text-yellow-800', barBg: 'from-yellow-500 to-orange-600', cardBg: 'bg-yellow-50' },
-                1: { border: 'border-gray-400', glow: 'shadow-[0_0_20px_rgba(156,163,175,0.3)]', bg: 'from-gray-100 to-gray-200', text: 'text-gray-700', barBg: 'from-gray-400 to-gray-600', cardBg: 'bg-gray-50' },
-                2: { border: 'border-orange-500', glow: 'shadow-[0_0_20px_rgba(249,115,22,0.3)]', bg: 'from-orange-100 to-orange-200', text: 'text-orange-700', barBg: 'from-orange-500 to-orange-700', cardBg: 'bg-orange-50' },
-                3: { border: 'border-gray-500', glow: 'shadow-md', bg: 'from-gray-200 to-gray-300', text: 'text-gray-600', barBg: 'from-gray-500 to-gray-700', cardBg: 'bg-gray-100' }
+              const medals = ['🥇', '🥈', '🥉', '4️⃣']
+
+              const rankStyles = {
+                0: {
+                  bg: isDark
+                    ? 'from-yellow-900/40 via-yellow-800/40 to-orange-900/40'
+                    : 'from-yellow-100 via-yellow-50 to-orange-100',
+                  border: 'border-yellow-500',
+                  glow: isDark
+                    ? 'shadow-[0_0_60px_rgba(250,204,21,0.6),0_0_100px_rgba(250,204,21,0.4)]'
+                    : 'shadow-[0_0_40px_rgba(202,138,4,0.4)]',
+                  badgeBg: 'from-yellow-400 via-yellow-500 to-orange-500',
+                  textColor: isDark ? 'text-yellow-300' : 'text-yellow-700',
+                  barBg: 'from-yellow-400 via-yellow-500 to-orange-600',
+                  scale: 'scale-110',
+                  rank: '1st'
+                },
+                1: {
+                  bg: isDark
+                    ? 'from-gray-700/40 via-gray-600/40 to-gray-700/40'
+                    : 'from-gray-100 via-gray-50 to-gray-100',
+                  border: 'border-gray-400',
+                  glow: isDark
+                    ? 'shadow-[0_0_50px_rgba(156,163,175,0.5)]'
+                    : 'shadow-[0_0_30px_rgba(107,114,128,0.3)]',
+                  badgeBg: 'from-gray-300 via-gray-400 to-gray-500',
+                  textColor: isDark ? 'text-gray-300' : 'text-gray-600',
+                  barBg: 'from-gray-300 via-gray-400 to-gray-600',
+                  scale: 'scale-105',
+                  rank: '2nd'
+                },
+                2: {
+                  bg: isDark
+                    ? 'from-orange-900/40 via-orange-800/40 to-orange-900/40'
+                    : 'from-orange-100 via-orange-50 to-orange-100',
+                  border: 'border-orange-500',
+                  glow: isDark
+                    ? 'shadow-[0_0_50px_rgba(251,146,60,0.5)]'
+                    : 'shadow-[0_0_30px_rgba(249,115,22,0.3)]',
+                  badgeBg: 'from-orange-400 via-orange-500 to-orange-600',
+                  textColor: isDark ? 'text-orange-300' : 'text-orange-700',
+                  barBg: 'from-orange-400 via-orange-500 to-orange-700',
+                  scale: 'scale-100',
+                  rank: '3rd'
+                },
+                3: {
+                  bg: isDark
+                    ? 'from-gray-800/30 via-gray-900/30 to-gray-800/30'
+                    : 'from-gray-50 via-white to-gray-50',
+                  border: 'border-gray-500',
+                  glow: 'shadow-xl',
+                  badgeBg: 'from-gray-500 via-gray-600 to-gray-700',
+                  textColor: isDark ? 'text-gray-400' : 'text-gray-600',
+                  barBg: 'from-gray-500 via-gray-600 to-gray-700',
+                  scale: 'scale-95',
+                  rank: '4th'
+                }
               }
-              
-              const colors = rankColors[index]
+
+              const style = rankStyles[index]
 
               return (
                 <div
                   key={unit.department}
-                  className={`relative transform transition-all duration-700 hover:scale-105 ${
-                    index === 0 ? 'scale-110' : index === 1 ? 'scale-105' : index === 2 ? 'scale-100' : 'scale-95 opacity-60'
+                  className={`group relative transition-all duration-500 hover:scale-[1.02] ${
+                    index === 0 ? 'md:scale-105' : index === 1 ? 'md:scale-102' : 'scale-100'
                   }`}
-                  style={{ transitionDelay: `${index * 100}ms` }}
+                  style={{
+                    animation: `slideIn 0.6s ease-out ${index * 100}ms backwards`
+                  }}
                 >
-                  <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${colors.bg} backdrop-blur-xl border-4 ${colors.border} ${colors.glow} ${
-                    isTop3 ? 'animate-neon-pulse' : ''
-                  }`}>
-                    {/* ピクセルグリッド背景 */}
-                    <div className="absolute inset-0 opacity-5" style={{
-                      backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, currentColor 2px, currentColor 4px), repeating-linear-gradient(90deg, transparent, transparent 2px, currentColor 2px, currentColor 4px)',
-                      backgroundSize: '20px 20px'
-                    }} />
+                  {/* カードデザイン - 見やすく改善 */}
+                  <div className={`relative p-6 md:p-8 rounded-2xl backdrop-blur-xl bg-gradient-to-br ${style.bg} border-3 ${style.border} ${style.glow} transition-all duration-300 hover:-translate-y-1`}>
 
-                    {/* 走査線エフェクト（トップ3のみ） */}
+                    {/* トップ3バッジ */}
                     {isTop3 && (
-                      <div className="absolute inset-0 opacity-10 animate-scan-line" style={{
-                        background: 'linear-gradient(transparent 50%, currentColor 50%)',
-                        backgroundSize: '100% 4px'
-                      }} />
-                    )}
-
-                    {/* スコアボード風レイアウト */}
-                    <div className={`relative ${index === 0 ? 'p-8' : index < 3 ? 'p-6' : 'p-4'} flex items-center gap-6`}>
-                      {/* 順位バッジ */}
-                      <div className="flex-shrink-0">
-                        <div className={`relative ${index === 0 ? 'w-28 h-28' : index < 3 ? 'w-20 h-20' : 'w-16 h-16'} rounded-xl bg-gradient-to-br ${colors.barBg} flex items-center justify-center border-4 border-white/20 ${
-                          isTop3 ? `shadow-[0_0_20px_currentColor] ${colors.text}` : ''
-                        }`}>
-                          {isTop3 && <div className="absolute inset-0 rounded-xl animate-ping-slow bg-current opacity-20" />}
-                          <div className="text-center relative z-10">
-                            <div className={`${index === 0 ? 'text-5xl' : index < 3 ? 'text-3xl' : 'text-2xl'} mb-1`}>
-                              {index === 0 ? '👑' : index === 1 ? '🥈' : index === 2 ? '🥉' : '📋'}
-                            </div>
-                            <div className={`text-white font-black pixel-font ${index === 0 ? 'text-xl' : index < 3 ? 'text-sm' : 'text-xs'}`}>
-                              {['1ST', '2ND', '3RD', '4TH'][index]}
-                            </div>
-                          </div>
+                      <div className="absolute -top-3 -right-3">
+                        <div className={`px-4 py-2 rounded-xl font-bold text-sm ${
+                          isDark ? 'bg-yellow-500 text-gray-900' : 'bg-yellow-400 text-white'
+                        } shadow-lg`}>
+                          TOP {index + 1}
                         </div>
                       </div>
+                    )}
 
-                      {/* ユニット名 + スコア表示 */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-3 gap-2">
-                          <h3 className={`font-black pixel-font ${colors.text} ${index === 0 ? 'text-2xl md:text-3xl' : index < 3 ? 'text-xl md:text-2xl' : 'text-base md:text-lg'} break-words`} style={{
-                            textShadow: isTop3 ? `0 0 20px currentColor` : 'none'
-                          }}>
+                    <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8">
+                      {/* 順位バッジ - 適切なサイズに */}
+                      <div className="relative flex-shrink-0">
+                        <div className={`relative w-24 h-24 md:w-28 md:h-28 rounded-2xl bg-gradient-to-br ${style.badgeBg} flex flex-col items-center justify-center border-4 border-white/30 shadow-xl transform transition-all duration-300 group-hover:scale-110`}
+                          style={{
+                            boxShadow: isTop3
+                              ? `0 0 40px currentColor, inset 0 0 20px rgba(255,255,255,0.3)`
+                              : '0 10px 25px rgba(0,0,0,0.3)'
+                          }}
+                        >
+                          {/* 光沢エフェクト */}
+                          <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/30 via-transparent to-transparent" />
+
+                          <div className="text-4xl md:text-5xl mb-1">
+                            {medals[index]}
+                          </div>
+                          <div className="text-white font-black text-sm md:text-base tracking-wide drop-shadow-md">
+                            {style.rank.toUpperCase()}
+                          </div>
+                        </div>
+
+                        {/* パルスリング */}
+                        {isTop3 && (
+                          <div className={`absolute inset-0 rounded-2xl border-2 ${style.border} animate-ping-slow opacity-40`} />
+                        )}
+                      </div>
+
+                      {/* コンテンツ */}
+                      <div className="flex-1 space-y-4 w-full">
+                        {/* ユニット名とスコア */}
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                          <h3 className={`text-2xl md:text-3xl font-black ${style.textColor}`}>
                             {unit.department}
                           </h3>
 
-                          {/* スコア表示（ゲーム風） */}
-                          <div className="text-center md:text-right md:ml-4 flex-shrink-0">
-                            <div className={`${colors.text} font-black pixel-font ${index === 0 ? 'text-4xl md:text-5xl' : index < 3 ? 'text-3xl md:text-4xl' : 'text-xl md:text-2xl'}`} style={{
-                              textShadow: isTop3 ? `0 0 30px currentColor, 0 0 60px currentColor` : 'none'
-                            }}>
+                          {/* スコア表示 - 見やすいサイズに */}
+                          <div className="text-center md:text-right">
+                            <div className={`text-5xl md:text-6xl font-black ${style.textColor} transition-all duration-300 group-hover:scale-110`}
+                              style={{
+                                textShadow: isTop3
+                                  ? `0 0 20px currentColor, 0 4px 8px rgba(0,0,0,0.4)`
+                                  : '0 2px 4px rgba(0,0,0,0.3)'
+                              }}
+                            >
                               {unit.achievementRate}
-                              <span className={index === 0 ? 'text-2xl md:text-3xl' : index < 3 ? 'text-xl md:text-2xl' : 'text-base md:text-lg'}>%</span>
+                              <span className="text-3xl md:text-4xl">%</span>
                             </div>
-                            {isTop3 && (
-                              <div className={`text-xs pixel-font mt-1 ${isDark ? 'text-white/60' : 'text-gray-600'}`}>SCORE</div>
-                            )}
+                            <div className={`text-xs font-bold tracking-wider uppercase mt-1 ${
+                              isDark ? 'text-white/60' : 'text-gray-500'
+                            }`}>
+                              SCORE
+                            </div>
                           </div>
                         </div>
 
-                        {/* プログレスバー（ゲージ風） */}
-                        <div className={`relative ${index === 0 ? 'h-6' : index < 3 ? 'h-5' : 'h-4'} rounded-full bg-gray-900/50 border-2 ${colors.border} overflow-hidden`}>
-                          <div
-                            className={`h-full bg-gradient-to-r ${colors.barBg} transition-all duration-1000 relative`}
-                            style={{ width: `${unit.achievementRate}%` }}
-                          >
-                            {isTop3 && (
-                              <div className="absolute inset-0 animate-shimmer" style={{
-                                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
-                                backgroundSize: '200% 100%'
-                              }} />
-                            )}
-                            {/* ピクセル風のドット */}
-                            <div className="absolute inset-0 opacity-30" style={{
-                              backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 3px, rgba(255,255,255,0.3) 3px, rgba(255,255,255,0.3) 6px)'
-                            }} />
-                          </div>
+                        {/* プログレスバー - シンプルで見やすく */}
+                        <div className="relative">
+                          <div className={`relative h-8 md:h-10 rounded-xl ${
+                            isDark ? 'bg-gray-950/70' : 'bg-white/70'
+                          } border-2 ${style.border} overflow-hidden shadow-md`}>
+                            {/* プログレス本体 */}
+                            <div
+                              className={`h-full bg-gradient-to-r ${style.barBg} relative transition-all duration-1000 ease-out`}
+                              style={{
+                                width: `${unit.achievementRate}%`,
+                                boxShadow: isTop3 ? `0 0 20px currentColor` : 'none'
+                              }}
+                            >
+                              {/* 光沢エフェクト */}
+                              {isTop3 && (
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer-fast" />
+                              )}
 
-                          {/* ゲージの目盛り */}
-                          <div className="absolute inset-0 flex items-center">
-                            {[25, 50, 75].map(mark => (
-                              <div key={mark} className="absolute h-full w-px bg-white/20" style={{ left: `${mark}%` }} />
-                            ))}
+                              {/* グラデーションオーバーレイ */}
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-white/20" />
+
+                              {/* パーセンテージ表示 */}
+                              {unit.achievementRate > 15 && (
+                                <div className="absolute inset-0 flex items-center px-3 text-sm md:text-base font-bold text-white drop-shadow-md">
+                                  {unit.achievementRate}%
+                                </div>
+                              )}
+                            </div>
+
+                            {/* 目盛り */}
+                            <div className="absolute inset-0 flex items-center">
+                              {[25, 50, 75].map(mark => (
+                                <div
+                                  key={mark}
+                                  className={`absolute h-full w-px ${
+                                    isDark ? 'bg-white/30' : 'bg-gray-400/30'
+                                  }`}
+                                  style={{ left: `${mark}%` }}
+                                />
+                              ))}
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
-
-                    {/* コンボ表示（1位のみ） */}
-                    {index === 0 && (
-                      <div className={`absolute top-2 right-2 px-3 py-1 rounded-lg animate-bounce-slow ${
-                        isDark ? 'bg-yellow-400' : 'bg-yellow-500'
-                      }`}>
-                        <span className={`text-xs font-black pixel-font ${
-                          isDark ? 'text-gray-900' : 'text-white'
-                        }`}>★ TOP ★</span>
-                      </div>
-                    )}
                   </div>
                 </div>
               )
@@ -330,53 +538,57 @@ export default function RankingPage({ isDark, user }) {
           </div>
         )}
 
-        {/* 説明 */}
-        <div className={`mt-8 p-6 rounded-2xl ${
-          isDark ? 'bg-gray-800/30' : 'bg-blue-50'
+        {/* フッター情報 */}
+        <div className={`mt-12 p-6 rounded-2xl backdrop-blur-xl border ${
+          isDark
+            ? 'bg-blue-900/20 border-blue-800/30'
+            : 'bg-blue-50 border-blue-200/50'
         }`}>
-          <p className={`text-sm ${
-            isDark ? 'text-gray-400' : 'text-gray-600'
-          }`}>
-            💡 各ユニットの達成率はGoogleスプレッドシート「報告/MG粗利11月」から自動的に取得されています。
-          </p>
+          <div className="flex items-start gap-4">
+            <div className="text-3xl">💡</div>
+            <div className="flex-1">
+              <h3 className={`text-lg font-bold mb-2 ${
+                isDark ? 'text-blue-300' : 'text-blue-700'
+              }`}>
+                データソース
+              </h3>
+              <p className={`text-sm leading-relaxed ${
+                isDark ? 'text-gray-300' : 'text-gray-700'
+              }`}>
+                各ユニットの達成率は<span className="font-semibold">Googleスプレッドシート「報告/MG粗利11月」</span>から自動取得されています。
+                データは<span className="font-semibold">5分間キャッシュ</span>され、パフォーマンスを最適化しています。
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* カスタムアニメーション */}
       <style jsx>{`
-        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
-
-        .pixel-font {
-          font-family: 'Press Start 2P', cursive;
-          letter-spacing: 0.05em;
-        }
-
-        @keyframes neon-glow {
-          0%, 100% {
-            box-shadow: 0 0 50px rgba(250, 204, 21, 0.5),
-                        0 0 100px rgba(250, 204, 21, 0.3),
-                        inset 0 0 30px rgba(250, 204, 21, 0.1);
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateX(-50px);
           }
-          50% {
-            box-shadow: 0 0 70px rgba(250, 204, 21, 0.7),
-                        0 0 120px rgba(250, 204, 21, 0.5),
-                        inset 0 0 40px rgba(250, 204, 21, 0.2);
+          to {
+            opacity: 1;
+            transform: translateX(0);
           }
         }
 
-        @keyframes pulse-glow {
-          0%, 100% {
-            box-shadow: 0 0 30px rgba(250, 204, 21, 0.8);
+        @keyframes shimmer-fast {
+          0% {
+            transform: translateX(-100%);
           }
-          50% {
-            box-shadow: 0 0 50px rgba(250, 204, 21, 1);
+          100% {
+            transform: translateX(100%);
           }
         }
 
         @keyframes ping-slow {
           0% {
             transform: scale(1);
-            opacity: 0.2;
+            opacity: 0.6;
           }
           100% {
             transform: scale(1.3);
@@ -384,68 +596,119 @@ export default function RankingPage({ isDark, user }) {
           }
         }
 
-        @keyframes scan-line {
+        @keyframes ping-fast {
           0% {
-            transform: translateY(-100%);
+            transform: scale(1);
+            opacity: 1;
+          }
+          50% {
+            transform: scale(1.5);
+            opacity: 0.5;
           }
           100% {
-            transform: translateY(100%);
+            transform: scale(1);
+            opacity: 1;
           }
         }
 
-        @keyframes shimmer {
+        @keyframes shuffle {
+          0%, 100% {
+            transform: translateY(0) scale(1);
+          }
+          25% {
+            transform: translateY(-10px) scale(1.02);
+          }
+          50% {
+            transform: translateY(5px) scale(0.98);
+          }
+          75% {
+            transform: translateY(-5px) scale(1.01);
+          }
+        }
+
+        @keyframes wave {
           0% {
-            background-position: -200% 0;
+            width: 0%;
+          }
+          50% {
+            width: 100%;
           }
           100% {
-            background-position: 200% 0;
+            width: 0%;
           }
         }
 
-        .animate-neon-glow {
-          animation: neon-glow 2s ease-in-out infinite;
+        @keyframes count-up {
+          0%, 100% {
+            transform: translateY(0) rotate(0deg);
+          }
+          25% {
+            transform: translateY(-5px) rotate(5deg);
+          }
+          75% {
+            transform: translateY(-3px) rotate(-5deg);
+          }
         }
 
-        .animate-pulse-glow {
-          animation: pulse-glow 2s ease-in-out infinite;
+        @keyframes pulse-slow {
+          0%, 100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 0.8;
+            transform: scale(1.05);
+          }
+        }
+
+        @keyframes bounce-slow {
+          0%, 100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-8px);
+          }
+        }
+
+        @keyframes spin-slow {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        .animate-shimmer-fast {
+          animation: shimmer-fast 2s linear infinite;
         }
 
         .animate-ping-slow {
           animation: ping-slow 2s cubic-bezier(0, 0, 0.2, 1) infinite;
         }
 
-        .animate-scan-line {
-          animation: scan-line 8s linear infinite;
+        .animate-ping-fast {
+          animation: ping-fast 1s ease-in-out infinite;
         }
 
-        .animate-shimmer {
-          animation: shimmer 2s linear infinite;
-        }
-
-        @keyframes neon-pulse {
-          0%, 100% {
-            filter: brightness(1);
-          }
-          50% {
-            filter: brightness(1.2);
-          }
-        }
-
-        @keyframes bounce-slow {
-          0%, 100% {
-            transform: translateY(0) scale(1);
-          }
-          50% {
-            transform: translateY(-5px) scale(1.05);
-          }
-        }
-
-        .animate-neon-pulse {
-          animation: neon-pulse 3s ease-in-out infinite;
+        .animate-pulse-slow {
+          animation: pulse-slow 2s ease-in-out infinite;
         }
 
         .animate-bounce-slow {
           animation: bounce-slow 2s ease-in-out infinite;
+        }
+
+        .animate-spin-slow {
+          animation: spin-slow 4s linear infinite;
+        }
+
+        .animate-count-up {
+          animation: count-up 1.5s ease-in-out infinite;
+        }
+
+        .animate-wave {
+          animation: wave 2s ease-in-out infinite;
         }
       `}</style>
     </div>

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../utils/supabase'
 import ProfileEdit from './ProfileEdit'
 
-export default function SettingsPage({ user, isDark, setIsDark }) {
+export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) {
   const [userData, setUserData] = useState({
     name: '',
     slack_user_id: '',
@@ -380,7 +380,10 @@ export default function SettingsPage({ user, isDark, setIsDark }) {
         <ProfileEdit
           user={{ ...user, avatar_url: userData.avatar_url }}
           onClose={() => setShowProfileEdit(false)}
-          onUpdate={loadUserData}
+          onUpdate={() => {
+            loadUserData()
+            onUserUpdate?.()
+          }}
         />
       )}
     </div>
