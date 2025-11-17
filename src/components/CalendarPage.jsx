@@ -6,6 +6,7 @@ import {
   deleteTodoItem,
   calculateProgress,
 } from '../utils/todo'
+import TodoList from './TodoList'
 
 export default function CalendarPage({ user, isDark }) {
   const [selectedDate, setSelectedDate] = useState(new Date())
@@ -290,6 +291,9 @@ export default function CalendarPage({ user, isDark }) {
           )}
         </div>
       </div>
+
+      {/* TODOリスト */}
+      {user && <TodoList user={user} isDark={isDark} />}
     </div>
   )
 }

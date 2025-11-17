@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../utils/supabase'
 import { calculateProgress } from '../utils/todo'
+import TodoList from './TodoList'
 
-export default function MembersPage({ isDark }) {
+export default function MembersPage({ user, isDark }) {
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedMember, setSelectedMember] = useState(null)
@@ -887,84 +888,7 @@ export default function MembersPage({ isDark }) {
               </div>
 
               {/* TODOリスト */}
-              <div className={`backdrop-blur-xl rounded-3xl shadow-lg border ${
-                isDark
-                  ? 'bg-gray-800/50 border-gray-700/50'
-                  : 'bg-gray-50/50 border-gray-200/50'
-              }`}>
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                      {new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/')}のToDo
-                    </h3>
-                    {memberTasks?.todo_items && memberTasks.todo_items.length > 0 && (
-                      <div className={`px-4 py-2 rounded-full font-bold text-lg ${
-                        calculateProgress(memberTasks.todo_items) >= 70
-                          ? isDark
-                            ? 'bg-white text-gray-900'
-                            : 'bg-gray-900 text-white'
-                          : calculateProgress(memberTasks.todo_items) >= 40
-                          ? isDark
-                            ? 'bg-gray-300 text-gray-900'
-                            : 'bg-gray-700 text-white'
-                          : isDark
-                          ? 'bg-gray-700 text-gray-300'
-                          : 'bg-gray-300 text-gray-700'
-                      }`}>
-                        {calculateProgress(memberTasks.todo_items)}%
-                      </div>
-                    )}
-                  </div>
-
-                  {memberTasks?.todo_items && memberTasks.todo_items.length > 0 ? (
-                    <div className="space-y-2">
-                      {memberTasks.todo_items
-                        .sort((a, b) => a.order_index - b.order_index)
-                        .map((item) => (
-                          <div
-                            key={item.id}
-                            className={`flex items-center gap-3 p-3 rounded-xl ${
-                              isDark ? 'bg-gray-900/50' : 'bg-white/50'
-                            }`}
-                            style={{ paddingLeft: `${(item.indent_level || 0) * 24 + 12}px` }}
-                          >
-                            <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${
-                              item.is_completed
-                                ? isDark
-                                  ? 'bg-gray-700 text-white'
-                                  : 'bg-gray-300 text-gray-700'
-                                : isDark
-                                ? 'bg-white text-gray-900'
-                                : 'bg-gray-900 text-white'
-                            }`}>
-                              {item.is_completed ? (
-                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                </svg>
-                              ) : (
-                                <span className="text-xs font-bold transform -rotate-90">▼</span>
-                              )}
-                            </div>
-                            <span className={`flex-1 text-sm ${
-                              item.is_completed
-                                ? isDark ? 'text-gray-600 line-through' : 'text-gray-400 line-through'
-                                : isDark ? 'text-gray-100' : 'text-gray-900'
-                            }`}>
-                              {item.content}
-                            </span>
-                          </div>
-                        ))}
-                    </div>
-                  ) : (
-                    <div className={`text-center py-12 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                      <svg className="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
-                      <p>今日のタスクはまだありません</p>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <TodoList user={selectedMember} isDark={isDark} />
             </div>
           </div>
         </div>
