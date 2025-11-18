@@ -921,8 +921,22 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
 
   const handleSave = async () => {
     if (editContent.trim() && editContent !== item.content) {
-      // TODO: タスク内容の更新API呼び出し
-      item.content = editContent.trim()
+      try {
+        if (item.is_routine) {
+          // 定常TODOの更新
+          await supabase
+            .from('routine_todos')
+            .update({ content: editContent.trim() })
+            .eq('id', item.id)
+        } else {
+          // 通常TODOの更新
+          await updateTodoItem(item.id, { content: editContent.trim() })
+        }
+        item.content = editContent.trim()
+      } catch (error) {
+        console.error('Error updating task:', error)
+        alert('タスクの更新に失敗しました')
+      }
     }
     setIsEditing(false)
   }
