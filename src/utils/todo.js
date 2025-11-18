@@ -245,7 +245,7 @@ export async function deleteTodoItem(itemId) {
  * TODOアイテムの完了状態を切り替え
  */
 export async function toggleTodoItem(itemId, isCompleted) {
-  return updateTodoItem(itemId, { is_completed: isCompleted });
+  return updateTodoItem(itemId, { is_completed: !isCompleted });
 }
 
 /**
