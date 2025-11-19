@@ -151,13 +151,14 @@ export async function addTodoItemAtPosition(listId, content, indentLevel = 0, af
       .gt('order_index', afterOrderIndex)
       .order('order_index', { ascending: false });
 
-    // order_indexを更新
-    for (const item of itemsToUpdate || []) {
-      await supabase
+    // order_indexを並列で一括更新
+    const updatePromises = (itemsToUpdate || []).map(item =>
+      supabase
         .from('todo_items')
         .update({ order_index: item.order_index + 1 })
-        .eq('id', item.id);
-    }
+        .eq('id', item.id)
+    );
+    await Promise.all(updatePromises);
   }
 
   // 新しいアイテムを挿入
