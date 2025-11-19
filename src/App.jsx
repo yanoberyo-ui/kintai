@@ -189,6 +189,15 @@ function App() {
             setUser(session.user)
             loadStreaks(session.user.id)
             loadHeatmapData(session.user.id)
+
+            // バックグラウンドで完全なユーザーデータを取得
+            supabase.from('users').select('*').eq('id', session.user.id).single()
+              .then(({ data: userData }) => {
+                if (userData && mounted) {
+                  setUser(userData)
+                }
+              })
+              .catch(err => console.warn('Background user data fetch failed:', err))
           }
         } else {
           setUser(null)
@@ -237,6 +246,15 @@ function App() {
             setUser(session.user)
             loadStreaks(session.user.id)
             loadHeatmapData(session.user.id)
+
+            // バックグラウンドで完全なユーザーデータを取得
+            supabase.from('users').select('*').eq('id', session.user.id).single()
+              .then(({ data: userData }) => {
+                if (userData && mounted) {
+                  setUser(userData)
+                }
+              })
+              .catch(err => console.warn('Background user data fetch failed:', err))
           }
         } else {
           setUser(null)
