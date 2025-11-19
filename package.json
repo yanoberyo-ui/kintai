@@ -1,7 +1,7 @@
 {
-  "name": "fdgroup-kintai",
+  "name": "fd-hub",
   "version": "1.0.1",
-  "description": "FDGroup勤怠管理システム",
+  "description": "FD hub - 勤怠管理システム",
   "type": "module",
   "scripts": {
     "dev": "vite",

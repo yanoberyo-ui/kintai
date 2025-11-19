@@ -1,7 +1,7 @@
 {
-  "name": "FDGroup 勤怠管理システム",
-  "short_name": "FDGroup勤怠",
-  "description": "FDGroup勤怠管理システム - 1分単位の正確な時間計測",
+  "name": "FD hub",
+  "short_name": "FD hub",
+  "description": "FD hub - 勤怠管理システム",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
