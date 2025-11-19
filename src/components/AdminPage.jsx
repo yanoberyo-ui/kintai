@@ -444,18 +444,18 @@ export default function AdminPage({ isDark }) {
 
       {/* タブ */}
       <div className={`mb-6 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
-        <div className="flex gap-4 overflow-x-auto">
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
           {[
-            { value: 'dashboard', label: 'ダッシュボード', icon: '📈' },
-            { value: 'attendance', label: '出勤管理', icon: '📊' },
-            { value: 'salary', label: '給料管理', icon: '💰' },
-            { value: 'todo_achievement', label: 'TODO達成率', icon: '✅' },
-            { value: 'users', label: 'ユーザー管理', icon: '👥' }
-          ].map(({ value, label, icon }) => (
+            { value: 'dashboard', label: 'ダッシュボード', icon: '📈', shortLabel: 'ダッシュボード' },
+            { value: 'attendance', label: '出勤管理', icon: '📊', shortLabel: '出勤' },
+            { value: 'salary', label: '給料管理', icon: '💰', shortLabel: '給料' },
+            { value: 'todo_achievement', label: 'TODO', icon: '✅', shortLabel: 'TODO' },
+            { value: 'users', label: 'ユーザー', icon: '👥', shortLabel: 'ユーザー' }
+          ].map(({ value, label, icon, shortLabel }) => (
             <button
               key={value}
               onClick={() => setActiveTab(value)}
-              className={`flex items-center gap-2 px-4 py-3 font-medium transition-all duration-200 relative ${
+              className={`flex items-center gap-1.5 px-3 md:px-4 py-2 md:py-3 font-medium transition-all duration-200 relative whitespace-nowrap text-sm md:text-base ${
                 activeTab === value
                   ? isDark
                     ? 'text-white'
@@ -465,8 +465,9 @@ export default function AdminPage({ isDark }) {
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              <span>{icon}</span>
-              <span>{label}</span>
+              <span className="text-base md:text-lg">{icon}</span>
+              <span className="hidden md:inline">{label}</span>
+              <span className="md:hidden">{shortLabel}</span>
               {activeTab === value && (
                 <div className={`absolute bottom-0 left-0 right-0 h-1 rounded-full ${
                   isDark ? 'bg-white' : 'bg-gray-900'
@@ -478,54 +479,56 @@ export default function AdminPage({ isDark }) {
       </div>
 
       {/* 年月選択とユニット選択 */}
-      <div className="mb-6 flex gap-3">
-        <select
-          value={selectedYear}
-          onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-          className={`px-4 py-2 rounded-xl transition-colors ${
-            isDark
-              ? 'bg-gray-800 text-white border border-gray-700'
-              : 'bg-white text-gray-900 border border-gray-300'
-          } focus:outline-none`}
-        >
-          {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(year => (
-            <option key={year} value={year}>{year}年</option>
-          ))}
-        </select>
-        <select
-          value={selectedMonth}
-          onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-          className={`px-4 py-2 rounded-xl transition-colors ${
-            isDark
-              ? 'bg-gray-800 text-white border border-gray-700'
-              : 'bg-white text-gray-900 border border-gray-300'
-          } focus:outline-none`}
-        >
-          {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
-            <option key={month} value={month}>{month}月</option>
-          ))}
-        </select>
-        {(activeTab === 'dashboard' || activeTab === 'attendance') && (
+      <div className="mb-6 space-y-3">
+        <div className="flex flex-wrap gap-2">
           <select
-            value={selectedDepartment}
-            onChange={(e) => setSelectedDepartment(e.target.value)}
-            className={`px-4 py-2 rounded-xl transition-colors ${
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+            className={`px-3 py-2 text-sm md:text-base rounded-xl transition-colors flex-1 min-w-[100px] ${
               isDark
                 ? 'bg-gray-800 text-white border border-gray-700'
                 : 'bg-white text-gray-900 border border-gray-300'
             } focus:outline-none`}
           >
-            <option value="all">全ユニット</option>
-            {departments.map(dept => (
-              <option key={dept} value={dept}>{dept}</option>
+            {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(year => (
+              <option key={year} value={year}>{year}年</option>
             ))}
           </select>
-        )}
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+            className={`px-3 py-2 text-sm md:text-base rounded-xl transition-colors flex-1 min-w-[80px] ${
+              isDark
+                ? 'bg-gray-800 text-white border border-gray-700'
+                : 'bg-white text-gray-900 border border-gray-300'
+            } focus:outline-none`}
+          >
+            {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+              <option key={month} value={month}>{month}月</option>
+            ))}
+          </select>
+          {(activeTab === 'dashboard' || activeTab === 'attendance') && (
+            <select
+              value={selectedDepartment}
+              onChange={(e) => setSelectedDepartment(e.target.value)}
+              className={`px-3 py-2 text-sm md:text-base rounded-xl transition-colors flex-1 min-w-[120px] ${
+                isDark
+                  ? 'bg-gray-800 text-white border border-gray-700'
+                  : 'bg-white text-gray-900 border border-gray-300'
+              } focus:outline-none`}
+            >
+              <option value="all">全ユニット</option>
+              {departments.map(dept => (
+                <option key={dept} value={dept}>{dept}</option>
+              ))}
+            </select>
+          )}
+        </div>
         {activeTab === 'dashboard' && (
           <button
             onClick={importRevenueFromSheets}
             disabled={importingFromSheets}
-            className={`px-4 py-2 rounded-xl transition-colors ${
+            className={`w-full md:w-auto px-4 py-2 text-sm md:text-base rounded-xl transition-colors ${
               isDark
                 ? 'bg-blue-600 hover:bg-blue-700 text-white'
                 : 'bg-blue-500 hover:bg-blue-600 text-white'
@@ -542,38 +545,38 @@ export default function AdminPage({ isDark }) {
           isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'
         }`}>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full text-sm md:text-base">
               <thead className={isDark ? 'bg-gray-800/50' : 'bg-gray-50'}>
                 <tr>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+                  <th className={`px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium uppercase tracking-wider ${
                     isDark ? 'text-gray-400' : 'text-gray-500'
                   }`}>
                     名前
                   </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+                  <th className={`px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium uppercase tracking-wider ${
                     isDark ? 'text-gray-400' : 'text-gray-500'
                   }`}>
                     ユニット
                   </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+                  <th className={`px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium uppercase tracking-wider ${
                     isDark ? 'text-gray-400' : 'text-gray-500'
                   }`}>
-                    出勤日数
+                    出勤
                   </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+                  <th className={`px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium uppercase tracking-wider ${
                     isDark ? 'text-gray-400' : 'text-gray-500'
                   }`}>
-                    合計勤務時間
+                    合計
                   </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+                  <th className={`px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium uppercase tracking-wider ${
                     isDark ? 'text-gray-400' : 'text-gray-500'
                   }`}>
-                    平均勤務時間
+                    平均
                   </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+                  <th className={`px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium uppercase tracking-wider ${
                     isDark ? 'text-gray-400' : 'text-gray-500'
                   }`}>
-                    TODO達成率
+                    TODO
                   </th>
                 </tr>
               </thead>
@@ -582,22 +585,22 @@ export default function AdminPage({ isDark }) {
                   .filter(user => selectedDepartment === 'all' || user.department === selectedDepartment)
                   .map((user, index) => (
                   <tr key={index} className={isDark ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'}>
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    <td className={`px-3 md:px-6 py-3 md:py-4 whitespace-nowrap text-xs md:text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
                       {user.name}
                     </td>
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
+                    <td className={`px-3 md:px-6 py-3 md:py-4 whitespace-nowrap text-xs md:text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
                       {user.department}
                     </td>
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
+                    <td className={`px-3 md:px-6 py-3 md:py-4 whitespace-nowrap text-xs md:text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
                       {user.attendanceDays}
                     </td>
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
+                    <td className={`px-3 md:px-6 py-3 md:py-4 whitespace-nowrap text-xs md:text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
                       {Math.floor(user.totalWorkMinutes / 60)}:{String(user.totalWorkMinutes % 60).padStart(2, '0')}
                     </td>
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
+                    <td className={`px-3 md:px-6 py-3 md:py-4 whitespace-nowrap text-xs md:text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
                       {Math.floor(user.avgWorkMinutes / 60)}:{String(user.avgWorkMinutes % 60).padStart(2, '0')}
                     </td>
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
+                    <td className={`px-3 md:px-6 py-3 md:py-4 whitespace-nowrap text-xs md:text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
                       {user.todoTotal > 0 ? `${user.todoRate}%` : '-'}
                     </td>
                   </tr>
@@ -784,15 +787,15 @@ export default function AdminPage({ isDark }) {
           isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'
         }`}>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full text-sm md:text-base">
               <thead className={isDark ? 'bg-gray-800/50' : 'bg-gray-50'}>
                 <tr>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>ユニット</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>メンバー数</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>合計稼働時間</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>合計粗利</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>時間あたり採算</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>TODO達成率</th>
+                  <th className={`px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>ユニット</th>
+                  <th className={`px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>メンバー</th>
+                  <th className={`px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>稼働時間</th>
+                  <th className={`px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>合計粗利</th>
+                  <th className={`px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>時間採算</th>
+                  <th className={`px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>TODO</th>
                 </tr>
               </thead>
               <tbody className={`divide-y ${isDark ? 'divide-gray-800' : 'divide-gray-200'}`}>
@@ -800,32 +803,32 @@ export default function AdminPage({ isDark }) {
                   .filter(unit => selectedDepartment === 'all' || unit.department === selectedDepartment)
                   .map((unit, index) => (
                   <tr key={index} className={isDark ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'}>
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    <td className={`px-3 md:px-6 py-3 md:py-4 whitespace-nowrap text-xs md:text-sm font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                       {unit.department}
                     </td>
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
-                      {unit.memberCount}人
+                    <td className={`px-3 md:px-6 py-3 md:py-4 whitespace-nowrap text-xs md:text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
+                      {unit.memberCount}
                     </td>
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
+                    <td className={`px-3 md:px-6 py-3 md:py-4 whitespace-nowrap text-xs md:text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
                       {unit.totalHours}:{String(unit.totalMinutes).padStart(2, '0')}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>¥</span>
+                    <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-1 md:gap-2">
+                        <span className={`text-xs md:text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>¥</span>
                         <input
                           type="number"
                           value={unit.totalRevenue}
                           onChange={(e) => handleUpdateRevenue(unit.department, selectedYear, selectedMonth, e.target.value)}
-                          className={`w-32 px-2 py-1 text-sm rounded font-medium ${
+                          className={`w-20 md:w-32 px-1 md:px-2 py-1 text-xs md:text-sm rounded font-medium ${
                             isDark
                               ? 'bg-gray-800 text-green-400 border border-gray-700'
                               : 'bg-white text-green-600 border border-gray-300'
-                          } focus:outline-none focus:ring-2 focus:ring-green-500`}
+                          } focus:outline-none focus:ring-1 md:focus:ring-2 focus:ring-green-500`}
                         />
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                    <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap">
+                      <span className={`px-2 md:px-3 py-0.5 md:py-1 rounded-full text-xs md:text-sm font-bold ${
                         unit.profitPerHour >= 5000 ? 'bg-green-100 text-green-800' :
                         unit.profitPerHour >= 3000 ? 'bg-yellow-100 text-yellow-800' :
                         unit.profitPerHour > 0 ? 'bg-orange-100 text-orange-800' :
@@ -834,8 +837,8 @@ export default function AdminPage({ isDark }) {
                         {unit.profitPerHour > 0 ? `¥${Math.round(unit.profitPerHour).toLocaleString()}/h` : '-'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                    <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap">
+                      <span className={`px-2 md:px-3 py-0.5 md:py-1 rounded-full text-xs font-bold ${
                         unit.todoRate === 100 ? 'bg-green-100 text-green-800' :
                         unit.todoRate >= 80 ? 'bg-yellow-100 text-yellow-800' :
                         unit.todoRate >= 50 ? 'bg-orange-100 text-orange-800' :
