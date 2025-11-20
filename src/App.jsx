@@ -1583,14 +1583,22 @@ function LoginScreen({ isDark }) {
       console.log('🔐 パスワードリセットリクエスト:', resetEmail)
       console.log('📍 リダイレクト先:', `${window.location.origin}/reset-password`)
       
-      const { data, error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+      // タイムアウトを設定（30秒）
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('タイムアウト: サーバーからの応答がありませんでした')), 30000)
+      })
+
+      const resetPromise = supabase.auth.resetPasswordForEmail(resetEmail, {
         redirectTo: `${window.location.origin}/reset-password`,
       })
+
+      const { data, error } = await Promise.race([resetPromise, timeoutPromise])
 
       if (error) {
         console.error('❌ パスワードリセットエラー:', error)
         console.error('エラーコード:', error.status)
         console.error('エラーメッセージ:', error.message)
+        console.error('エラー詳細:', JSON.stringify(error, null, 2))
         throw error
       }
 
@@ -1599,17 +1607,22 @@ function LoginScreen({ isDark }) {
       setResetEmail('')
     } catch (error) {
       console.error('❌ パスワードリセットエラー:', error)
+      console.error('エラーオブジェクト:', error)
       
       // より詳細なエラーメッセージを表示
-      let errorMessage = error.message || 'パスワードリセットメールの送信に失敗しました'
+      let errorMessage = 'パスワードリセットメールの送信に失敗しました'
       
-      // よくあるエラーの日本語メッセージ
-      if (error.message?.includes('rate limit')) {
+      // エラーステータスコードに基づくメッセージ
+      if (error.status === 504 || error.message?.includes('504') || error.message?.includes('timeout') || error.message?.includes('タイムアウト')) {
+        errorMessage = 'サーバーからの応答がタイムアウトしました。これは通常、Supabaseのメール送信設定が正しくない場合に発生します。\n\n解決方法:\n1. SupabaseダッシュボードでカスタムSMTPを設定してください（Gmail推奨）\n2. 設定方法は docs/free-smtp-setup.md を参照してください\n3. しばらく待ってから再度お試しください'
+      } else if (error.status === 429 || error.message?.includes('rate limit')) {
         errorMessage = 'メール送信の制限に達しました。しばらく待ってから再度お試しください。'
-      } else if (error.message?.includes('not found')) {
+      } else if (error.status === 404 || error.message?.includes('not found')) {
         errorMessage = 'このメールアドレスは登録されていません。'
-      } else if (error.message?.includes('invalid')) {
+      } else if (error.status === 400 || error.message?.includes('invalid')) {
         errorMessage = 'メールアドレスの形式が正しくありません。'
+      } else if (error.message) {
+        errorMessage = `エラー: ${error.message}`
       }
       
       setResetError(errorMessage)
@@ -1896,7 +1909,7 @@ function LoginScreen({ isDark }) {
                   </div>
 
                   {resetError && (
-                    <div className={`text-sm px-4 py-3 rounded-xl font-light ${
+                    <div className={`text-sm px-4 py-3 rounded-xl font-light whitespace-pre-line ${
                       isDark ? 'text-red-400 bg-red-900/20' : 'text-red-600 bg-red-50'
                     }`}>
                       {resetError}
