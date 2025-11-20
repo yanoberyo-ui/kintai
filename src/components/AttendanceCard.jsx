@@ -110,16 +110,47 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
         .eq('id', user.id)
         .single()
 
-      // TODOリストを取得
+      // 通常のTODOリストを取得
       const todoList = await getTodayTodoList(user.id)
-      const todoItems = todoList?.todo_items || []
+      const normalTodos = todoList?.todo_items || []
+
+      // 定常TODOリストを取得
+      const today = new Date().toISOString().split('T')[0]
+      const { data: routineTodos, error: routineError } = await supabase
+        .from('routine_todos')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('order_index', { ascending: true })
+
+      if (routineError) throw routineError
+
+      // 定常TODOの完了状態を取得
+      const { data: completions, error: completionsError } = await supabase
+        .from('routine_todo_completions')
+        .select('routine_todo_id')
+        .eq('user_id', user.id)
+        .eq('completed_date', today)
+
+      if (completionsError) throw completionsError
+
+      const completionSet = new Set(completions?.map(c => c.routine_todo_id) || [])
+
+      // 定常TODOを通常のTODO形式に変換
+      const routineTodoItems = (routineTodos || []).map(todo => ({
+        content: todo.content,
+        is_completed: completionSet.has(todo.id),
+        indent_level: todo.indent_level || 0
+      }))
+
+      // 通常のTODOと定常TODOを結合
+      const allTodoItems = [...normalTodos, ...routineTodoItems]
 
       // Slack通知を送信
       await sendSlackNotification(
         'clock_in',
         { id: user.id, name: userData?.name || user.email },
         result,
-        todoItems
+        allTodoItems
       )
 
       // 誕生日チェック
@@ -211,16 +242,47 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
         .eq('id', user.id)
         .single()
 
-      // TODOリストを取得
+      // 通常のTODOリストを取得
       const todoList = await getTodayTodoList(user.id)
-      const todoItems = todoList?.todo_items || []
+      const normalTodos = todoList?.todo_items || []
+
+      // 定常TODOリストを取得
+      const today = new Date().toISOString().split('T')[0]
+      const { data: routineTodos, error: routineError } = await supabase
+        .from('routine_todos')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('order_index', { ascending: true })
+
+      if (routineError) throw routineError
+
+      // 定常TODOの完了状態を取得
+      const { data: completions, error: completionsError } = await supabase
+        .from('routine_todo_completions')
+        .select('routine_todo_id')
+        .eq('user_id', user.id)
+        .eq('completed_date', today)
+
+      if (completionsError) throw completionsError
+
+      const completionSet = new Set(completions?.map(c => c.routine_todo_id) || [])
+
+      // 定常TODOを通常のTODO形式に変換
+      const routineTodoItems = (routineTodos || []).map(todo => ({
+        content: todo.content,
+        is_completed: completionSet.has(todo.id),
+        indent_level: todo.indent_level || 0
+      }))
+
+      // 通常のTODOと定常TODOを結合
+      const allTodoItems = [...normalTodos, ...routineTodoItems]
 
       // Slack通知を送信（TODOリスト付き）
       await sendSlackNotification(
         'clock_out',
         { id: user.id, name: userData?.name || user.email },
         result,
-        todoItems
+        allTodoItems
       )
 
       setBreakMinutes('')
@@ -281,16 +343,47 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
         .eq('id', user.id)
         .single()
 
-      // TODOリストを取得
+      // 通常のTODOリストを取得
       const todoList = await getTodayTodoList(user.id)
-      const todoItems = todoList?.todo_items || []
+      const normalTodos = todoList?.todo_items || []
+
+      // 定常TODOリストを取得
+      const today = new Date().toISOString().split('T')[0]
+      const { data: routineTodos, error: routineError } = await supabase
+        .from('routine_todos')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('order_index', { ascending: true })
+
+      if (routineError) throw routineError
+
+      // 定常TODOの完了状態を取得
+      const { data: completions, error: completionsError } = await supabase
+        .from('routine_todo_completions')
+        .select('routine_todo_id')
+        .eq('user_id', user.id)
+        .eq('completed_date', today)
+
+      if (completionsError) throw completionsError
+
+      const completionSet = new Set(completions?.map(c => c.routine_todo_id) || [])
+
+      // 定常TODOを通常のTODO形式に変換
+      const routineTodoItems = (routineTodos || []).map(todo => ({
+        content: todo.content,
+        is_completed: completionSet.has(todo.id),
+        indent_level: todo.indent_level || 0
+      }))
+
+      // 通常のTODOと定常TODOを結合
+      const allTodoItems = [...normalTodos, ...routineTodoItems]
 
       // Slack通知を送信
       await sendSlackNotification(
         'clock_in',
         { id: user.id, name: userData?.name || user.email },
         result,
-        todoItems
+        allTodoItems
       )
     } catch (error) {
       console.error('Error re-clocking in:', error)

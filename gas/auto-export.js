@@ -671,8 +671,8 @@ function syncUnitAchievementRates() {
     const units = [
       { name: '第1ユニット', cell: 'L17' },
       { name: '第2ユニット', cell: 'L21' },
-      { name: '第3ユニット', cell: 'L52' },
-      { name: '第4ユニット', cell: 'L37' }
+      { name: '第3ユニット', cell: 'L29' },
+      { name: '第5ユニット', cell: 'L37' }
     ];
 
     const achievementRates = [];

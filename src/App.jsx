@@ -524,6 +524,22 @@ function App() {
     }
   }, [user, currentPage])
 
+  // パスワードリセットページのチェック
+  const [isPasswordResetPage, setIsPasswordResetPage] = useState(false)
+  
+  useEffect(() => {
+    // URLハッシュからパスワードリセットトークンをチェック
+    const hashParams = new URLSearchParams(window.location.hash.substring(1))
+    const type = hashParams.get('type')
+    const accessToken = hashParams.get('access_token')
+    
+    if (type === 'recovery' && accessToken) {
+      setIsPasswordResetPage(true)
+    } else if (window.location.pathname === '/reset-password') {
+      setIsPasswordResetPage(true)
+    }
+  }, [])
+
   if (loading) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${
@@ -536,6 +552,11 @@ function App() {
         }`}>Loading...</div>
       </div>
     )
+  }
+
+  // パスワードリセットページの場合は、ログイン状態に関係なく表示
+  if (isPasswordResetPage) {
+    return <PasswordResetPage isDark={isDark} onResetComplete={() => setIsPasswordResetPage(false)} />
   }
 
   if (!user) {
@@ -1464,6 +1485,11 @@ function LoginScreen({ isDark }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
+  const [showPasswordReset, setShowPasswordReset] = useState(false)
+  const [resetEmail, setResetEmail] = useState('')
+  const [resetLoading, setResetLoading] = useState(false)
+  const [resetSuccess, setResetSuccess] = useState(false)
+  const [resetError, setResetError] = useState('')
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -1544,6 +1570,51 @@ function LoginScreen({ isDark }) {
       setError(error.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handlePasswordReset = async (e) => {
+    e.preventDefault()
+    setResetLoading(true)
+    setResetError('')
+    setResetSuccess(false)
+
+    try {
+      console.log('🔐 パスワードリセットリクエスト:', resetEmail)
+      console.log('📍 リダイレクト先:', `${window.location.origin}/reset-password`)
+      
+      const { data, error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+
+      if (error) {
+        console.error('❌ パスワードリセットエラー:', error)
+        console.error('エラーコード:', error.status)
+        console.error('エラーメッセージ:', error.message)
+        throw error
+      }
+
+      console.log('✅ パスワードリセットメール送信成功:', data)
+      setResetSuccess(true)
+      setResetEmail('')
+    } catch (error) {
+      console.error('❌ パスワードリセットエラー:', error)
+      
+      // より詳細なエラーメッセージを表示
+      let errorMessage = error.message || 'パスワードリセットメールの送信に失敗しました'
+      
+      // よくあるエラーの日本語メッセージ
+      if (error.message?.includes('rate limit')) {
+        errorMessage = 'メール送信の制限に達しました。しばらく待ってから再度お試しください。'
+      } else if (error.message?.includes('not found')) {
+        errorMessage = 'このメールアドレスは登録されていません。'
+      } else if (error.message?.includes('invalid')) {
+        errorMessage = 'メールアドレスの形式が正しくありません。'
+      }
+      
+      setResetError(errorMessage)
+    } finally {
+      setResetLoading(false)
     }
   }
 
@@ -1745,7 +1816,315 @@ function LoginScreen({ isDark }) {
             >
               {loading ? (isSignUp ? '登録中...' : 'ログイン中...') : (isSignUp ? '新規登録' : 'ログイン')}
             </button>
+
+            {/* パスワードを忘れた場合のリンク（ログインモードの時のみ表示） */}
+            {!isSignUp && (
+              <div className="text-center mt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPasswordReset(true)
+                    setResetEmail(email) // ログインフォームのメールアドレスを自動入力
+                    setResetError('')
+                    setResetSuccess(false)
+                  }}
+                  className={`text-sm font-light transition-colors ${
+                    isDark
+                      ? 'text-gray-400 hover:text-white'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  パスワードを忘れた場合
+                </button>
+              </div>
+            )}
           </form>
+
+          {/* パスワードリセットフォーム */}
+          {showPasswordReset && (
+            <div className={`mt-6 pt-6 border-t ${
+              isDark ? 'border-gray-800' : 'border-gray-200'
+            }`}>
+              <h3 className={`text-lg font-medium mb-4 ${
+                isDark ? 'text-white' : 'text-gray-900'
+              }`}>
+                パスワードリセット
+              </h3>
+              
+              {resetSuccess ? (
+                <div className={`p-4 rounded-xl ${
+                  isDark ? 'bg-green-900/20 border border-green-700/50' : 'bg-green-50 border border-green-200'
+                }`}>
+                  <p className={`text-sm ${
+                    isDark ? 'text-green-300' : 'text-green-800'
+                  }`}>
+                    パスワードリセット用のメールを送信しました。メールボックスをご確認ください。
+                  </p>
+                  <button
+                    onClick={() => {
+                      setShowPasswordReset(false)
+                      setResetSuccess(false)
+                      setResetEmail('')
+                    }}
+                    className={`mt-3 text-sm font-medium ${
+                      isDark ? 'text-green-400 hover:text-green-300' : 'text-green-600 hover:text-green-700'
+                    }`}
+                  >
+                    閉じる
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handlePasswordReset} className="space-y-4">
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${
+                      isDark ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      メールアドレス
+                    </label>
+                    <input
+                      type="email"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
+                        isDark
+                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
+                          : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
+                      }`}
+                      placeholder="email@example.com"
+                      required
+                    />
+                  </div>
+
+                  {resetError && (
+                    <div className={`text-sm px-4 py-3 rounded-xl font-light ${
+                      isDark ? 'text-red-400 bg-red-900/20' : 'text-red-600 bg-red-50'
+                    }`}>
+                      {resetError}
+                    </div>
+                  )}
+
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPasswordReset(false)
+                        setResetEmail('')
+                        setResetError('')
+                        setResetSuccess(false)
+                      }}
+                      className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
+                        isDark
+                          ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      キャンセル
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={resetLoading}
+                      className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                        isDark
+                          ? 'bg-white text-gray-900 hover:bg-gray-100'
+                          : 'bg-gray-900 text-white hover:bg-gray-800'
+                      }`}
+                    >
+                      {resetLoading ? '送信中...' : '送信'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PasswordResetPage({ isDark, onResetComplete }) {
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+
+  useEffect(() => {
+    // URLハッシュからトークンを取得
+    const hashParams = new URLSearchParams(window.location.hash.substring(1))
+    const type = hashParams.get('type')
+    const accessToken = hashParams.get('access_token')
+
+    if (type === 'recovery' && accessToken) {
+      // トークンが有効か確認
+      // Supabaseは自動的にセッションを設定するので、ここでは何もしない
+    } else {
+      // トークンがない場合はエラー
+      setError('無効なリンクです。パスワードリセットメールから再度アクセスしてください。')
+    }
+  }, [])
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+
+    if (password !== confirmPassword) {
+      setError('パスワードが一致しません')
+      setLoading(false)
+      return
+    }
+
+    if (password.length < 6) {
+      setError('パスワードは6文字以上である必要があります')
+      setLoading(false)
+      return
+    }
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: password
+      })
+
+      if (error) throw error
+
+      setSuccess(true)
+      // 3秒後にログイン画面に戻る
+      setTimeout(() => {
+        window.location.hash = ''
+        onResetComplete()
+      }, 3000)
+    } catch (error) {
+      console.error('Password reset error:', error)
+      setError(error.message || 'パスワードのリセットに失敗しました')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className={`min-h-screen flex items-center justify-center px-4 transition-colors duration-500 ${
+      isDark
+        ? 'bg-gradient-to-br from-gray-900 via-black to-gray-900'
+        : 'bg-gradient-to-br from-gray-50 via-white to-gray-50'
+    }`}>
+      <div className="w-full max-w-md">
+        {/* ロゴ */}
+        <div className="text-center mb-12">
+          <img
+            src="/images/logo.png"
+            alt="FD GROUP"
+            className={`h-12 mx-auto mb-4 transition-all duration-500 ${
+              isDark ? '' : 'invert'
+            }`}
+          />
+          <p className={`font-light ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+            パスワードリセット
+          </p>
+        </div>
+
+        {/* パスワードリセットカード */}
+        <div className={`backdrop-blur-xl rounded-3xl shadow-2xl border p-8 transition-colors duration-500 ${
+          isDark
+            ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
+            : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
+        }`}>
+          {success ? (
+            <div className="text-center space-y-4">
+              <div className="text-4xl mb-4">✅</div>
+              <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                パスワードをリセットしました
+              </h2>
+              <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                新しいパスワードでログインできます。
+                <br />
+                3秒後にログイン画面に戻ります...
+              </p>
+            </div>
+          ) : (
+            <form onSubmit={handleResetPassword} className="space-y-6">
+              <h2 className={`text-xl font-bold mb-6 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                新しいパスワードを設定
+              </h2>
+
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${
+                  isDark ? 'text-gray-300' : 'text-gray-700'
+                }`}>
+                  新しいパスワード
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
+                    isDark
+                      ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
+                      : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
+                  }`}
+                  placeholder="6文字以上"
+                  required
+                  minLength={6}
+                />
+              </div>
+
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${
+                  isDark ? 'text-gray-300' : 'text-gray-700'
+                }`}>
+                  パスワード（確認）
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
+                    isDark
+                      ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
+                      : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
+                  }`}
+                  placeholder="パスワードを再入力"
+                  required
+                  minLength={6}
+                />
+              </div>
+
+              {error && (
+                <div className={`text-sm px-4 py-3 rounded-xl font-light ${
+                  isDark ? 'text-red-400 bg-red-900/20' : 'text-red-600 bg-red-50'
+                }`}>
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className={`w-full font-medium py-3 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg ${
+                  isDark
+                    ? 'bg-white text-gray-900 hover:bg-gray-100 shadow-white/20'
+                    : 'bg-gray-900 text-white hover:bg-gray-800 shadow-gray-900/20'
+                }`}
+              >
+                {loading ? '設定中...' : 'パスワードを設定'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.hash = ''
+                  onResetComplete()
+                }}
+                className={`w-full text-sm font-light py-2 transition-colors ${
+                  isDark
+                    ? 'text-gray-400 hover:text-white'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                ログイン画面に戻る
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </div>
