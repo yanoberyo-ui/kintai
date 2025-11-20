@@ -402,6 +402,150 @@ export default function AdminPage({ isDark }) {
     }
   }
 
+  const handleUpdateUserRole = async (userId, newRole) => {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ role: newRole })
+        .eq('id', userId)
+
+      if (error) throw error
+
+      // ユーザー一覧を再読み込み
+      loadUsers()
+      alert('権限を更新しました')
+    } catch (error) {
+      console.error('Error updating user role:', error)
+      alert(`エラー: ${error.message}`)
+    }
+  }
+
+  const handleCreateSalary = async (userId) => {
+    try {
+      // 既存のレコードをチェック
+      const { data: existing } = await supabase
+        .from('salaries')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('year', selectedYear)
+        .eq('month', selectedMonth)
+        .single()
+
+      if (existing) {
+        alert('このユーザーの給料レコードは既に存在します')
+        return
+      }
+
+      const { error } = await supabase
+        .from('salaries')
+        .insert({
+          user_id: userId,
+          year: selectedYear,
+          month: selectedMonth,
+          base_salary: 0,
+          overtime_pay: 0,
+          bonuses: 0,
+          deductions: 0,
+          total_salary: 0,
+          payment_status: 'pending'
+        })
+
+      if (error) throw error
+
+      loadSalaries()
+    } catch (error) {
+      console.error('Error creating salary:', error)
+      alert(`エラー: ${error.message}`)
+    }
+  }
+
+  const handleUpdateSalary = async (salaryId, field, value) => {
+    try {
+      const numValue = parseFloat(value) || 0
+      const updates = { [field]: numValue }
+
+      // total_salaryを計算
+      const salary = salaries.find(s => s.id === salaryId)
+      if (salary) {
+        const baseSalary = field === 'base_salary' ? numValue : salary.base_salary
+        const overtimePay = field === 'overtime_pay' ? numValue : salary.overtime_pay
+        const bonuses = field === 'bonuses' ? numValue : salary.bonuses
+        const deductions = field === 'deductions' ? numValue : salary.deductions
+        updates.total_salary = baseSalary + overtimePay + bonuses - deductions
+      }
+
+      const { error } = await supabase
+        .from('salaries')
+        .update(updates)
+        .eq('id', salaryId)
+
+      if (error) throw error
+
+      loadSalaries()
+    } catch (error) {
+      console.error('Error updating salary:', error)
+      alert(`エラー: ${error.message}`)
+    }
+  }
+
+  const handleUpdatePaymentStatus = async (salaryId, status) => {
+    try {
+      const { error } = await supabase
+        .from('salaries')
+        .update({ payment_status: status })
+        .eq('id', salaryId)
+
+      if (error) throw error
+
+      loadSalaries()
+    } catch (error) {
+      console.error('Error updating payment status:', error)
+      alert(`エラー: ${error.message}`)
+    }
+  }
+
+  const handleUpdateRevenue = async (department, year, month, value) => {
+    try {
+      const numValue = parseFloat(value) || 0
+
+      // 既存のレコードをチェック
+      const { data: existing } = await supabase
+        .from('revenues')
+        .select('id')
+        .eq('department', department)
+        .eq('year', year)
+        .eq('month', month)
+        .single()
+
+      if (existing) {
+        // 更新
+        const { error } = await supabase
+          .from('revenues')
+          .update({ gross_profit: numValue })
+          .eq('id', existing.id)
+
+        if (error) throw error
+      } else {
+        // 新規作成
+        const { error } = await supabase
+          .from('revenues')
+          .insert({
+            department,
+            year,
+            month,
+            gross_profit: numValue
+          })
+
+        if (error) throw error
+      }
+
+      loadDashboard()
+    } catch (error) {
+      console.error('Error updating revenue:', error)
+      alert(`エラー: ${error.message}`)
+    }
+  }
+
 
   if (loading) {
     return (
