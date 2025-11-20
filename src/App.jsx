@@ -1613,7 +1613,9 @@ function LoginScreen({ isDark }) {
       let errorMessage = 'パスワードリセットメールの送信に失敗しました'
       
       // エラーステータスコードに基づくメッセージ
-      if (error.status === 504 || error.message?.includes('504') || error.message?.includes('timeout') || error.message?.includes('タイムアウト')) {
+      if (error.status === 500 || error.message?.includes('Error sending recovery email') || error.message?.includes('500')) {
+        errorMessage = 'メール送信に失敗しました。これは通常、SMTP設定に問題がある場合に発生します。\n\n確認事項:\n1. SupabaseダッシュボードでSMTP設定を確認してください\n2. Hostが正しいか確認（Gmailの場合は smtp.gmail.com）\n3. 送信者メールアドレスとSMTP設定が一致しているか確認\n4. アプリパスワードが正しいか確認\n5. Supabaseダッシュボードでテストメールを送信して確認'
+      } else if (error.status === 504 || error.message?.includes('504') || error.message?.includes('timeout') || error.message?.includes('タイムアウト')) {
         errorMessage = 'サーバーからの応答がタイムアウトしました。これは通常、Supabaseのメール送信設定が正しくない場合に発生します。\n\n解決方法:\n1. SupabaseダッシュボードでカスタムSMTPを設定してください（Gmail推奨）\n2. 設定方法は docs/free-smtp-setup.md を参照してください\n3. しばらく待ってから再度お試しください'
       } else if (error.status === 429 || error.message?.includes('rate limit')) {
         errorMessage = 'メール送信の制限に達しました。しばらく待ってから再度お試しください。'
