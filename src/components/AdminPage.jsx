@@ -137,11 +137,11 @@ export default function AdminPage({ isDark }) {
 
       // 3つのクエリを並列実行
       const [
-        { data: attendanceData },
+        { data: attendanceData, error: attendanceError },
         { data: revenueData, error: revenueError },
         { data: todoData }
       ] = await Promise.all([
-        // 勤怠データ取得
+        // 勤怠データ取得（status='completed'だけでなく、clock_inとclock_outが存在するレコードも含める）
         supabase
           .from('attendances')
           .select(`
@@ -154,7 +154,7 @@ export default function AdminPage({ isDark }) {
           `)
           .gte('date', startDate)
           .lte('date', endDate)
-          .eq('status', 'completed'),
+          .or('status.eq.completed,and(clock_in.not.is.null,clock_out.not.is.null)'),
 
         // 粗利データ取得
         supabase
@@ -181,14 +181,31 @@ export default function AdminPage({ isDark }) {
           .lte('date', endDate)
       ])
 
+      if (attendanceError) {
+        console.error('Error loading attendance data:', attendanceError)
+        throw attendanceError
+      }
+
       // ユニーク部署リストを取得
-      const allDepartments = [...new Set(attendanceData?.map(a => a.user.department).filter(Boolean))]
+      const allDepartments = [...new Set(attendanceData?.map(a => a.user?.department).filter(Boolean))]
       setDepartments(allDepartments)
 
       // ユニット（部署）ごとに集計
       const unitSummary = {}
 
       attendanceData?.forEach(record => {
+        // userが存在しない場合はスキップ
+        if (!record.user || !record.user.id) {
+          console.warn('Skipping record with missing user:', record)
+          return
+        }
+
+        // clock_inとclock_outが存在しない場合はスキップ
+        if (!record.clock_in || !record.clock_out) {
+          console.warn('Skipping record without clock_in/clock_out:', record)
+          return
+        }
+
         let dept = record.user.department || '未設定'
         
         // アドコンとムードメーカーを統合
@@ -208,27 +225,39 @@ export default function AdminPage({ isDark }) {
 
         unitSummary[dept].memberCount.add(record.user.id)
         
-        // total_work_minutesを計算（データベースの値が0またはnullの場合は再計算）
-        let workMinutes = record.total_work_minutes || 0
+        // total_work_minutesを計算
+        let workMinutes = 0
         
-        // clock_inとclock_outが存在する場合は、それらから直接計算
-        if (record.clock_in && record.clock_out) {
-          const clockIn = new Date(record.clock_in)
-          const clockOut = new Date(record.clock_out)
-          const totalMinutes = Math.floor((clockOut - clockIn) / 60000)
-          const breakMinutes = record.break_minutes_used || 0
-          const calculatedMinutes = totalMinutes - breakMinutes
-          
-          // 計算値が正の値で、データベースの値が0またはnullの場合は計算値を使用
-          if (calculatedMinutes > 0 && (!record.total_work_minutes || record.total_work_minutes === 0)) {
-            workMinutes = calculatedMinutes
-          } else if (record.total_work_minutes > 0) {
-            // データベースの値が存在する場合はそれを使用
-            workMinutes = record.total_work_minutes
-          } else {
-            // 計算値を使用
-            workMinutes = calculatedMinutes
-          }
+        const clockIn = new Date(record.clock_in)
+        const clockOut = new Date(record.clock_out)
+        
+        // 時刻が無効な場合はスキップ
+        if (isNaN(clockIn.getTime()) || isNaN(clockOut.getTime())) {
+          console.warn('Invalid date in record:', record)
+          return
+        }
+        
+        // clock_outがclock_inより前の場合はスキップ
+        if (clockOut <= clockIn) {
+          console.warn('clock_out is before clock_in:', record)
+          return
+        }
+        
+        const totalMinutes = Math.floor((clockOut - clockIn) / 60000)
+        const breakMinutes = record.break_minutes_used || 0
+        const calculatedMinutes = Math.max(0, totalMinutes - breakMinutes) // 負の値を防ぐ
+        
+        // データベースの値が存在し、正の値の場合はそれを使用、そうでない場合は計算値を使用
+        if (record.total_work_minutes && record.total_work_minutes > 0) {
+          workMinutes = record.total_work_minutes
+        } else {
+          workMinutes = calculatedMinutes
+        }
+        
+        // 異常に大きな値（24時間以上）を除外
+        if (workMinutes > 24 * 60) {
+          console.warn('Work minutes exceeds 24 hours:', { record, workMinutes })
+          workMinutes = Math.min(workMinutes, 24 * 60)
         }
         
         unitSummary[dept].totalMinutes += workMinutes
@@ -285,9 +314,10 @@ export default function AdminPage({ isDark }) {
       const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0]
 
       const [
-        { data: attendanceData },
+        { data: attendanceData, error: attendanceError },
         { data: todoData }
       ] = await Promise.all([
+        // status='completed'だけでなく、clock_inとclock_outが存在するレコードも含める
         supabase
           .from('attendances')
           .select(`
@@ -300,7 +330,7 @@ export default function AdminPage({ isDark }) {
           `)
           .gte('date', startDate)
           .lte('date', endDate)
-          .eq('status', 'completed'),
+          .or('status.eq.completed,and(clock_in.not.is.null,clock_out.not.is.null)'),
 
         supabase
           .from('todo_lists')
@@ -314,10 +344,21 @@ export default function AdminPage({ isDark }) {
           .lte('date', endDate)
       ])
 
+      if (attendanceError) {
+        console.error('Error loading attendances:', attendanceError)
+        throw attendanceError
+      }
+
       // ユーザーごとに集計
       const userStats = {}
 
       attendanceData?.forEach(record => {
+        // userが存在しない場合はスキップ
+        if (!record.user || !record.user.id) {
+          console.warn('Skipping record with missing user:', record)
+          return
+        }
+
         const userId = record.user.id
         if (!userStats[userId]) {
           userStats[userId] = {
@@ -330,29 +371,48 @@ export default function AdminPage({ isDark }) {
           }
         }
 
+        // clock_inとclock_outが存在する場合のみカウント
+        if (!record.clock_in || !record.clock_out) {
+          console.warn('Skipping record without clock_in/clock_out:', record)
+          return
+        }
+
         userStats[userId].attendanceDays++
         
-        // total_work_minutesを計算（データベースの値が0またはnullの場合は再計算）
-        let workMinutes = record.total_work_minutes || 0
+        // total_work_minutesを計算
+        let workMinutes = 0
         
         // clock_inとclock_outが存在する場合は、それらから直接計算
-        if (record.clock_in && record.clock_out) {
-          const clockIn = new Date(record.clock_in)
-          const clockOut = new Date(record.clock_out)
-          const totalMinutes = Math.floor((clockOut - clockIn) / 60000)
-          const breakMinutes = record.break_minutes_used || 0
-          const calculatedMinutes = totalMinutes - breakMinutes
-          
-          // 計算値が正の値で、データベースの値が0またはnullの場合は計算値を使用
-          if (calculatedMinutes > 0 && (!record.total_work_minutes || record.total_work_minutes === 0)) {
-            workMinutes = calculatedMinutes
-          } else if (record.total_work_minutes > 0) {
-            // データベースの値が存在する場合はそれを使用
-            workMinutes = record.total_work_minutes
-          } else {
-            // 計算値を使用
-            workMinutes = calculatedMinutes
-          }
+        const clockIn = new Date(record.clock_in)
+        const clockOut = new Date(record.clock_out)
+        
+        // 時刻が無効な場合はスキップ
+        if (isNaN(clockIn.getTime()) || isNaN(clockOut.getTime())) {
+          console.warn('Invalid date in record:', record)
+          return
+        }
+        
+        // clock_outがclock_inより前の場合はスキップ
+        if (clockOut <= clockIn) {
+          console.warn('clock_out is before clock_in:', record)
+          return
+        }
+        
+        const totalMinutes = Math.floor((clockOut - clockIn) / 60000)
+        const breakMinutes = record.break_minutes_used || 0
+        const calculatedMinutes = Math.max(0, totalMinutes - breakMinutes) // 負の値を防ぐ
+        
+        // データベースの値が存在し、正の値の場合はそれを使用、そうでない場合は計算値を使用
+        if (record.total_work_minutes && record.total_work_minutes > 0) {
+          workMinutes = record.total_work_minutes
+        } else {
+          workMinutes = calculatedMinutes
+        }
+        
+        // 異常に大きな値（24時間以上）を除外
+        if (workMinutes > 24 * 60) {
+          console.warn('Work minutes exceeds 24 hours:', { record, workMinutes })
+          workMinutes = Math.min(workMinutes, 24 * 60)
         }
         
         userStats[userId].totalWorkMinutes += workMinutes
