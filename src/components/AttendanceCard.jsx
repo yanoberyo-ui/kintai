@@ -24,6 +24,7 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
   const [showOvertimeAlert, setShowOvertimeAlert] = useState(false)
   const [overtimeAlertShown, setOvertimeAlertShown] = useState(false)
   const [showAIFeedbackPopup, setShowAIFeedbackPopup] = useState(false)
+  const [showWorkTypeModal, setShowWorkTypeModal] = useState(false)
 
   useEffect(() => {
     loadAttendance()
@@ -97,10 +98,16 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
     }
   }
 
-  const handleClockIn = async () => {
+  const handleClockIn = () => {
+    // 出勤タイプ選択モーダルを表示
+    setShowWorkTypeModal(true)
+  }
+
+  const confirmClockIn = async (workType) => {
     try {
       setLoading(true)
-      const result = await clockIn(user.id)
+      setShowWorkTypeModal(false)
+      const result = await clockIn(user.id, workType)
       await loadAttendance()
 
       // ユーザー情報を取得（最新のデータを確実に取得）
@@ -763,6 +770,62 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
           )}
         </div>
       </div>
+
+      {/* 勤務タイプ選択モーダル */}
+      {showWorkTypeModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-fade-in">
+          <div className={`rounded-2xl shadow-2xl p-8 max-w-md w-full animate-scale-in ${
+            isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white'
+          }`}>
+            <h3 className={`text-2xl font-semibold mb-4 ${
+              isDark ? 'text-white' : 'text-gray-900'
+            }`}>
+              出勤タイプを選択
+            </h3>
+
+            <p className={`mb-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              今日の勤務タイプを選択してください
+            </p>
+
+            <div className="space-y-3 mb-6">
+              <button
+                onClick={() => confirmClockIn('remote')}
+                disabled={loading}
+                className={`w-full font-medium py-4 rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg ${
+                  isDark
+                    ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-600/20'
+                    : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20'
+                }`}
+              >
+                🏠 リモート
+              </button>
+              <button
+                onClick={() => confirmClockIn('office')}
+                disabled={loading}
+                className={`w-full font-medium py-4 rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg ${
+                  isDark
+                    ? 'bg-green-600 text-white hover:bg-green-700 shadow-green-600/20'
+                    : 'bg-green-500 text-white hover:bg-green-600 shadow-green-500/20'
+                }`}
+              >
+                🏢 出社
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowWorkTypeModal(false)}
+              disabled={loading}
+              className={`w-full py-2 text-sm font-medium rounded-lg transition-colors ${
+                isDark
+                  ? 'text-gray-400 hover:text-gray-300'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 休憩時間入力モーダル */}
       {showBreakModal && (

@@ -26,21 +26,28 @@ export async function getTodayAttendance(userId) {
 /**
  * 出勤打刻
  */
-export async function clockIn(userId) {
+export async function clockIn(userId, workType = null) {
   // 日本時間で今日の日付と現在時刻を取得（より確実な方法）
   const currentTime = new Date()
   const jstDate = new Date(currentTime.getTime() + (9 * 60 * 60 * 1000)) // UTC + 9時間
   const today = jstDate.toISOString().split('T')[0];
   const now = currentTime.toISOString(); // 実際の時刻はUTCで保存
 
+  const attendanceData = {
+    user_id: userId,
+    date: today,
+    clock_in: now,
+    status: 'working'
+  }
+
+  // work_typeが指定されている場合は追加
+  if (workType) {
+    attendanceData.work_type = workType
+  }
+
   const { data, error } = await supabase
     .from('attendances')
-    .upsert({
-      user_id: userId,
-      date: today,
-      clock_in: now,
-      status: 'working'
-    }, {
+    .upsert(attendanceData, {
       onConflict: 'user_id,date'
     })
     .select()
@@ -49,7 +56,7 @@ export async function clockIn(userId) {
   if (error) throw error;
 
   // ログ記録
-  await logAttendanceAction(data.id, 'clock_in', userId, null, { clock_in: now });
+  await logAttendanceAction(data.id, 'clock_in', userId, null, { clock_in: now, work_type: workType });
 
   return data;
 }
