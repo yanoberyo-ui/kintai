@@ -269,8 +269,32 @@ export default function AdminPage({ isDark }) {
           }
         } else {
           // clock_outが存在しない場合（まだ退勤していない、または退勤打刻を忘れた）
-          // データベースのtotal_work_minutesを使用、なければ0
-          workMinutes = record.total_work_minutes || 0
+          // データベースのtotal_work_minutesが存在する場合はそれを使用
+          // そうでない場合は、その日の終了時刻（または今日の場合は現在時刻）から計算
+          if (record.total_work_minutes && record.total_work_minutes > 0) {
+            workMinutes = record.total_work_minutes
+          } else {
+            // その日の終了時刻を計算（過去の日付の場合は23:59:59、今日の場合は現在時刻）
+            const recordDate = new Date(record.date + 'T00:00:00Z')
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+            const recordDateOnly = new Date(recordDate)
+            recordDateOnly.setHours(0, 0, 0, 0)
+            
+            let clockOutTime
+            if (recordDateOnly.getTime() === today.getTime()) {
+              // 今日の場合は現在時刻を使用
+              clockOutTime = new Date()
+            } else {
+              // 過去の日付の場合はその日の23:59:59を使用
+              clockOutTime = new Date(recordDate)
+              clockOutTime.setHours(23, 59, 59, 999)
+            }
+            
+            const totalMinutes = Math.floor((clockOutTime - clockIn) / 60000)
+            const breakMinutes = record.break_minutes_used || 0
+            workMinutes = Math.max(0, totalMinutes - breakMinutes)
+          }
         }
         
         // 異常に大きな値（24時間以上）を除外
@@ -465,17 +489,44 @@ export default function AdminPage({ isDark }) {
           }
         } else {
           // clock_outが存在しない場合（まだ退勤していない、または退勤打刻を忘れた）
-          // データベースのtotal_work_minutesを使用、なければ0
-          workMinutes = record.total_work_minutes || 0
-          
-          // デバッグ用：clock_outがないレコードをログに記録
-          if (record.user.name === 'Noda Kanta') {
-            console.log('Noda Kanta - Record without clock_out:', {
-              date: record.date,
-              clock_in: record.clock_in,
-              total_work_minutes: record.total_work_minutes,
-              status: record.status
-            })
+          // データベースのtotal_work_minutesが存在する場合はそれを使用
+          // そうでない場合は、その日の終了時刻（または今日の場合は現在時刻）から計算
+          if (record.total_work_minutes && record.total_work_minutes > 0) {
+            workMinutes = record.total_work_minutes
+          } else {
+            // その日の終了時刻を計算（過去の日付の場合は23:59:59、今日の場合は現在時刻）
+            const recordDate = new Date(record.date + 'T00:00:00Z')
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+            const recordDateOnly = new Date(recordDate)
+            recordDateOnly.setHours(0, 0, 0, 0)
+            
+            let clockOutTime
+            if (recordDateOnly.getTime() === today.getTime()) {
+              // 今日の場合は現在時刻を使用
+              clockOutTime = new Date()
+            } else {
+              // 過去の日付の場合はその日の23:59:59を使用
+              clockOutTime = new Date(recordDate)
+              clockOutTime.setHours(23, 59, 59, 999)
+            }
+            
+            const totalMinutes = Math.floor((clockOutTime - clockIn) / 60000)
+            const breakMinutes = record.break_minutes_used || 0
+            workMinutes = Math.max(0, totalMinutes - breakMinutes)
+            
+            // デバッグ用：clock_outがないレコードをログに記録
+            if (record.user.name === 'Noda Kanta') {
+              console.log('Noda Kanta - Record without clock_out (calculated):', {
+                date: record.date,
+                clock_in: record.clock_in,
+                clock_out_estimated: clockOutTime.toISOString(),
+                total_work_minutes_db: record.total_work_minutes,
+                calculated_minutes: workMinutes,
+                status: record.status,
+                is_today: recordDateOnly.getTime() === today.getTime()
+              })
+            }
           }
         }
         
