@@ -141,7 +141,7 @@ export default function AdminPage({ isDark }) {
         { data: revenueData, error: revenueError },
         { data: todoData }
       ] = await Promise.all([
-        // 勤怠データ取得（status='completed'だけでなく、clock_inとclock_outが存在するレコードも含める）
+        // 勤怠データ取得（clock_inが存在するレコードをすべて取得）
         supabase
           .from('attendances')
           .select(`
@@ -154,8 +154,7 @@ export default function AdminPage({ isDark }) {
           `)
           .gte('date', startDate)
           .lte('date', endDate)
-          .not('clock_in', 'is', null)
-          .not('clock_out', 'is', null),
+          .not('clock_in', 'is', null),
 
         // 粗利データ取得
         supabase
@@ -201,9 +200,9 @@ export default function AdminPage({ isDark }) {
           return
         }
 
-        // clock_inとclock_outが存在しない場合はスキップ
-        if (!record.clock_in || !record.clock_out) {
-          console.warn('Skipping record without clock_in/clock_out:', record)
+        // clock_inが存在しない場合はスキップ
+        if (!record.clock_in) {
+          console.warn('Skipping record without clock_in:', record)
           return
         }
 
@@ -230,29 +229,42 @@ export default function AdminPage({ isDark }) {
         let workMinutes = 0
         
         const clockIn = new Date(record.clock_in)
-        const clockOut = new Date(record.clock_out)
         
-        // 時刻が無効な場合はスキップ
-        if (isNaN(clockIn.getTime()) || isNaN(clockOut.getTime())) {
-          console.warn('Invalid date in record:', record)
+        // clock_inが無効な場合はスキップ
+        if (isNaN(clockIn.getTime())) {
+          console.warn('Invalid clock_in date in record:', record)
           return
         }
         
-        // clock_outがclock_inより前の場合はスキップ
-        if (clockOut <= clockIn) {
-          console.warn('clock_out is before clock_in:', record)
-          return
-        }
-        
-        const totalMinutes = Math.floor((clockOut - clockIn) / 60000)
-        const breakMinutes = record.break_minutes_used || 0
-        const calculatedMinutes = Math.max(0, totalMinutes - breakMinutes) // 負の値を防ぐ
-        
-        // データベースの値が存在し、正の値の場合はそれを使用、そうでない場合は計算値を使用
-        if (record.total_work_minutes && record.total_work_minutes > 0) {
-          workMinutes = record.total_work_minutes
+        // clock_outが存在する場合
+        if (record.clock_out) {
+          const clockOut = new Date(record.clock_out)
+          
+          // clock_outが無効な場合はデータベースの値を使用
+          if (isNaN(clockOut.getTime())) {
+            console.warn('Invalid clock_out date, using total_work_minutes:', record)
+            workMinutes = record.total_work_minutes || 0
+          } else if (clockOut <= clockIn) {
+            // clock_outがclock_inより前の場合はデータベースの値を使用
+            console.warn('clock_out is before clock_in, using total_work_minutes:', record)
+            workMinutes = record.total_work_minutes || 0
+          } else {
+            // clock_inとclock_outから計算
+            const totalMinutes = Math.floor((clockOut - clockIn) / 60000)
+            const breakMinutes = record.break_minutes_used || 0
+            const calculatedMinutes = Math.max(0, totalMinutes - breakMinutes)
+            
+            // データベースの値が存在し、正の値の場合はそれを使用、そうでない場合は計算値を使用
+            if (record.total_work_minutes && record.total_work_minutes > 0) {
+              workMinutes = record.total_work_minutes
+            } else {
+              workMinutes = calculatedMinutes
+            }
+          }
         } else {
-          workMinutes = calculatedMinutes
+          // clock_outが存在しない場合（まだ退勤していない、または退勤打刻を忘れた）
+          // データベースのtotal_work_minutesを使用、なければ0
+          workMinutes = record.total_work_minutes || 0
         }
         
         // 異常に大きな値（24時間以上）を除外
@@ -329,7 +341,7 @@ export default function AdminPage({ isDark }) {
         { data: attendanceData, error: attendanceError },
         { data: todoData }
       ] = await Promise.all([
-        // status='completed'だけでなく、clock_inとclock_outが存在するレコードも含める
+        // clock_inが存在するレコードをすべて取得（clock_outがなくても出勤としてカウント）
         supabase
           .from('attendances')
           .select(`
@@ -342,8 +354,7 @@ export default function AdminPage({ isDark }) {
           `)
           .gte('date', startDate)
           .lte('date', endDate)
-          .not('clock_in', 'is', null)
-          .not('clock_out', 'is', null),
+          .not('clock_in', 'is', null),
 
         supabase
           .from('todo_lists')
@@ -384,42 +395,65 @@ export default function AdminPage({ isDark }) {
           }
         }
 
-        // clock_inとclock_outが存在する場合のみカウント
-        if (!record.clock_in || !record.clock_out) {
-          console.warn('Skipping record without clock_in/clock_out:', record)
+        // clock_inが存在しない場合はスキップ
+        if (!record.clock_in) {
+          console.warn('Skipping record without clock_in:', record)
           return
         }
 
+        // 出勤日数としてカウント（clock_outがなくても出勤として扱う）
         userStats[userId].attendanceDays++
         
         // total_work_minutesを計算
         let workMinutes = 0
         
-        // clock_inとclock_outが存在する場合は、それらから直接計算
         const clockIn = new Date(record.clock_in)
-        const clockOut = new Date(record.clock_out)
         
-        // 時刻が無効な場合はスキップ
-        if (isNaN(clockIn.getTime()) || isNaN(clockOut.getTime())) {
-          console.warn('Invalid date in record:', record)
+        // clock_inが無効な場合はスキップ
+        if (isNaN(clockIn.getTime())) {
+          console.warn('Invalid clock_in date in record:', record)
           return
         }
         
-        // clock_outがclock_inより前の場合はスキップ
-        if (clockOut <= clockIn) {
-          console.warn('clock_out is before clock_in:', record)
-          return
-        }
-        
-        const totalMinutes = Math.floor((clockOut - clockIn) / 60000)
-        const breakMinutes = record.break_minutes_used || 0
-        const calculatedMinutes = Math.max(0, totalMinutes - breakMinutes) // 負の値を防ぐ
-        
-        // データベースの値が存在し、正の値の場合はそれを使用、そうでない場合は計算値を使用
-        if (record.total_work_minutes && record.total_work_minutes > 0) {
-          workMinutes = record.total_work_minutes
+        // clock_outが存在する場合
+        if (record.clock_out) {
+          const clockOut = new Date(record.clock_out)
+          
+          // clock_outが無効な場合はデータベースの値を使用
+          if (isNaN(clockOut.getTime())) {
+            console.warn('Invalid clock_out date, using total_work_minutes:', record)
+            workMinutes = record.total_work_minutes || 0
+          } else if (clockOut <= clockIn) {
+            // clock_outがclock_inより前の場合はデータベースの値を使用
+            console.warn('clock_out is before clock_in, using total_work_minutes:', record)
+            workMinutes = record.total_work_minutes || 0
+          } else {
+            // clock_inとclock_outから計算
+            const totalMinutes = Math.floor((clockOut - clockIn) / 60000)
+            const breakMinutes = record.break_minutes_used || 0
+            const calculatedMinutes = Math.max(0, totalMinutes - breakMinutes)
+            
+            // データベースの値が存在し、正の値の場合はそれを使用、そうでない場合は計算値を使用
+            if (record.total_work_minutes && record.total_work_minutes > 0) {
+              workMinutes = record.total_work_minutes
+            } else {
+              workMinutes = calculatedMinutes
+            }
+          }
         } else {
-          workMinutes = calculatedMinutes
+          // clock_outが存在しない場合（まだ退勤していない、または退勤打刻を忘れた）
+          // データベースのtotal_work_minutesを使用、なければ0
+          workMinutes = record.total_work_minutes || 0
+          
+          // デバッグ用：clock_outがないレコードをログに記録
+          if (record.user.name === 'Noda Kanta') {
+            console.log('Noda Kanta - Record without clock_out:', {
+              date: record.date,
+              clock_in: record.clock_in,
+              total_work_minutes: record.total_work_minutes,
+              status: record.status
+            })
+          }
         }
         
         // 異常に大きな値（24時間以上）を除外
@@ -429,6 +463,18 @@ export default function AdminPage({ isDark }) {
         }
         
         userStats[userId].totalWorkMinutes += workMinutes
+        
+        // Noda Kantaさんのデバッグ情報
+        if (record.user.name === 'Noda Kanta') {
+          console.log('Noda Kanta - Processing record:', {
+            date: record.date,
+            clock_in: record.clock_in,
+            clock_out: record.clock_out,
+            total_work_minutes: record.total_work_minutes,
+            calculated: workMinutes,
+            status: record.status
+          })
+        }
       })
 
       // TODO達成率を集計
@@ -452,6 +498,7 @@ export default function AdminPage({ isDark }) {
       console.log('Attendance Summary:', {
         totalRecords: attendanceData?.length || 0,
         userCount: attendanceArray.length,
+        dateRange: { startDate, endDate },
         users: attendanceArray.map(u => ({
           name: u.name,
           department: u.department,
@@ -461,6 +508,33 @@ export default function AdminPage({ isDark }) {
           avgMinutes: u.avgWorkMinutes
         }))
       })
+      
+      // Noda Kantaさんの詳細情報を出力
+      const nodaKanta = attendanceArray.find(u => u.name === 'Noda Kanta')
+      if (nodaKanta) {
+        console.log('Noda Kanta - Final Summary:', {
+          name: nodaKanta.name,
+          department: nodaKanta.department,
+          attendanceDays: nodaKanta.attendanceDays,
+          totalWorkMinutes: nodaKanta.totalWorkMinutes,
+          totalHours: Math.floor(nodaKanta.totalWorkMinutes / 60),
+          avgWorkMinutes: nodaKanta.avgWorkMinutes
+        })
+        
+        // Noda Kantaさんの全レコードを確認
+        const nodaRecords = attendanceData?.filter(r => r.user?.name === 'Noda Kanta') || []
+        console.log('Noda Kanta - All Records:', nodaRecords.map(r => ({
+          date: r.date,
+          clock_in: r.clock_in,
+          clock_out: r.clock_out,
+          total_work_minutes: r.total_work_minutes,
+          status: r.status
+        })))
+      } else {
+        console.warn('Noda Kanta not found in attendance array')
+        const nodaRecords = attendanceData?.filter(r => r.user?.name === 'Noda Kanta') || []
+        console.log('Noda Kanta - Raw Records:', nodaRecords)
+      }
 
       setAttendances(attendanceArray)
     } catch (error) {
