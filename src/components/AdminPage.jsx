@@ -207,7 +207,31 @@ export default function AdminPage({ isDark }) {
         }
 
         unitSummary[dept].memberCount.add(record.user.id)
-        unitSummary[dept].totalMinutes += record.total_work_minutes || 0
+        
+        // total_work_minutesを計算（データベースの値が0またはnullの場合は再計算）
+        let workMinutes = record.total_work_minutes || 0
+        
+        // clock_inとclock_outが存在する場合は、それらから直接計算
+        if (record.clock_in && record.clock_out) {
+          const clockIn = new Date(record.clock_in)
+          const clockOut = new Date(record.clock_out)
+          const totalMinutes = Math.floor((clockOut - clockIn) / 60000)
+          const breakMinutes = record.break_minutes_used || 0
+          const calculatedMinutes = totalMinutes - breakMinutes
+          
+          // 計算値が正の値で、データベースの値が0またはnullの場合は計算値を使用
+          if (calculatedMinutes > 0 && (!record.total_work_minutes || record.total_work_minutes === 0)) {
+            workMinutes = calculatedMinutes
+          } else if (record.total_work_minutes > 0) {
+            // データベースの値が存在する場合はそれを使用
+            workMinutes = record.total_work_minutes
+          } else {
+            // 計算値を使用
+            workMinutes = calculatedMinutes
+          }
+        }
+        
+        unitSummary[dept].totalMinutes += workMinutes
       })
 
       // 粗利を集計
@@ -307,7 +331,31 @@ export default function AdminPage({ isDark }) {
         }
 
         userStats[userId].attendanceDays++
-        userStats[userId].totalWorkMinutes += record.total_work_minutes || 0
+        
+        // total_work_minutesを計算（データベースの値が0またはnullの場合は再計算）
+        let workMinutes = record.total_work_minutes || 0
+        
+        // clock_inとclock_outが存在する場合は、それらから直接計算
+        if (record.clock_in && record.clock_out) {
+          const clockIn = new Date(record.clock_in)
+          const clockOut = new Date(record.clock_out)
+          const totalMinutes = Math.floor((clockOut - clockIn) / 60000)
+          const breakMinutes = record.break_minutes_used || 0
+          const calculatedMinutes = totalMinutes - breakMinutes
+          
+          // 計算値が正の値で、データベースの値が0またはnullの場合は計算値を使用
+          if (calculatedMinutes > 0 && (!record.total_work_minutes || record.total_work_minutes === 0)) {
+            workMinutes = calculatedMinutes
+          } else if (record.total_work_minutes > 0) {
+            // データベースの値が存在する場合はそれを使用
+            workMinutes = record.total_work_minutes
+          } else {
+            // 計算値を使用
+            workMinutes = calculatedMinutes
+          }
+        }
+        
+        userStats[userId].totalWorkMinutes += workMinutes
       })
 
       // TODO達成率を集計
