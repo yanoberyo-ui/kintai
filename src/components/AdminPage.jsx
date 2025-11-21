@@ -154,7 +154,8 @@ export default function AdminPage({ isDark }) {
           `)
           .gte('date', startDate)
           .lte('date', endDate)
-          .or('status.eq.completed,and(clock_in.not.is.null,clock_out.not.is.null)'),
+          .not('clock_in', 'is', null)
+          .not('clock_out', 'is', null),
 
         // 粗利データ取得
         supabase
@@ -302,6 +303,17 @@ export default function AdminPage({ isDark }) {
         todoRate: unit.todoTotal > 0 ? Math.round((unit.todoCompleted / unit.todoTotal) * 100) : 0
       }))
 
+      // デバッグ情報を出力
+      console.log('Dashboard Summary:', {
+        totalRecords: attendanceData?.length || 0,
+        units: dashboardArray.map(u => ({
+          department: u.department,
+          members: u.memberCount,
+          totalMinutes: u.totalHours * 60 + u.totalMinutes,
+          totalHours: u.totalHours
+        }))
+      })
+
       setDashboardData(dashboardArray)
     } catch (error) {
       console.error('Error loading dashboard:', error)
@@ -330,7 +342,8 @@ export default function AdminPage({ isDark }) {
           `)
           .gte('date', startDate)
           .lte('date', endDate)
-          .or('status.eq.completed,and(clock_in.not.is.null,clock_out.not.is.null)'),
+          .not('clock_in', 'is', null)
+          .not('clock_out', 'is', null),
 
         supabase
           .from('todo_lists')
@@ -434,6 +447,20 @@ export default function AdminPage({ isDark }) {
         avgWorkMinutes: user.attendanceDays > 0 ? Math.round(user.totalWorkMinutes / user.attendanceDays) : 0,
         todoRate: user.todoTotal > 0 ? Math.round((user.todoCompleted / user.todoTotal) * 100) : 0
       }))
+
+      // デバッグ情報を出力
+      console.log('Attendance Summary:', {
+        totalRecords: attendanceData?.length || 0,
+        userCount: attendanceArray.length,
+        users: attendanceArray.map(u => ({
+          name: u.name,
+          department: u.department,
+          days: u.attendanceDays,
+          totalMinutes: u.totalWorkMinutes,
+          totalHours: Math.floor(u.totalWorkMinutes / 60),
+          avgMinutes: u.avgWorkMinutes
+        }))
+      })
 
       setAttendances(attendanceArray)
     } catch (error) {
