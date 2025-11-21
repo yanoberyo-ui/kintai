@@ -255,10 +255,16 @@ export default function AdminPage({ isDark }) {
             const calculatedMinutes = Math.max(0, totalMinutes - breakMinutes)
             
             // データベースの値が存在し、正の値の場合はそれを使用、そうでない場合は計算値を使用
-            if (record.total_work_minutes && record.total_work_minutes > 0) {
-              workMinutes = record.total_work_minutes
+            // ただし、計算値が0以下の場合はデータベースの値を使用
+            if (calculatedMinutes > 0) {
+              if (record.total_work_minutes && record.total_work_minutes > 0) {
+                workMinutes = record.total_work_minutes
+              } else {
+                workMinutes = calculatedMinutes
+              }
             } else {
-              workMinutes = calculatedMinutes
+              // 計算値が0以下の場合はデータベースの値を使用
+              workMinutes = record.total_work_minutes || 0
             }
           }
         } else {
@@ -335,7 +341,10 @@ export default function AdminPage({ isDark }) {
   const loadAttendances = async () => {
     try {
       const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
+      // 正しい月末日を計算（selectedMonth月の最終日）
       const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0]
+      
+      console.log('loadAttendances - Date Range:', { selectedYear, selectedMonth, startDate, endDate })
 
       const [
         { data: attendanceData, error: attendanceError },
@@ -372,6 +381,20 @@ export default function AdminPage({ isDark }) {
         console.error('Error loading attendances:', attendanceError)
         throw attendanceError
       }
+
+      console.log('loadAttendances - Raw Data:', {
+        totalRecords: attendanceData?.length || 0,
+        nodaKantaRecords: attendanceData?.filter(r => r.user?.name === 'Noda Kanta').length || 0,
+        allUsers: [...new Set(attendanceData?.map(r => r.user?.name).filter(Boolean))],
+        sampleRecords: attendanceData?.slice(0, 5).map(r => ({
+          date: r.date,
+          user: r.user?.name,
+          clock_in: r.clock_in,
+          clock_out: r.clock_out,
+          total_work_minutes: r.total_work_minutes,
+          status: r.status
+        }))
+      })
 
       // ユーザーごとに集計
       const userStats = {}
@@ -466,13 +489,22 @@ export default function AdminPage({ isDark }) {
         
         // Noda Kantaさんのデバッグ情報
         if (record.user.name === 'Noda Kanta') {
+          const clockIn = new Date(record.clock_in)
+          const clockOut = record.clock_out ? new Date(record.clock_out) : null
+          const totalMinutes = clockOut ? Math.floor((clockOut - clockIn) / 60000) : 0
+          const breakMinutes = record.break_minutes_used || 0
+          const calculatedMinutes = clockOut ? Math.max(0, totalMinutes - breakMinutes) : 0
+          
           console.log('Noda Kanta - Processing record:', {
             date: record.date,
             clock_in: record.clock_in,
             clock_out: record.clock_out,
             total_work_minutes: record.total_work_minutes,
-            calculated: workMinutes,
-            status: record.status
+            break_minutes_used: breakMinutes,
+            calculated_from_times: calculatedMinutes,
+            final_workMinutes: workMinutes,
+            status: record.status,
+            has_clock_out: !!record.clock_out
           })
         }
       })
@@ -511,29 +543,45 @@ export default function AdminPage({ isDark }) {
       
       // Noda Kantaさんの詳細情報を出力
       const nodaKanta = attendanceArray.find(u => u.name === 'Noda Kanta')
-      if (nodaKanta) {
-        console.log('Noda Kanta - Final Summary:', {
+      const nodaRecords = attendanceData?.filter(r => r.user?.name === 'Noda Kanta') || []
+      
+      console.log('Noda Kanta - Detailed Analysis:', {
+        foundInSummary: !!nodaKanta,
+        rawRecordsCount: nodaRecords.length,
+        summary: nodaKanta ? {
           name: nodaKanta.name,
           department: nodaKanta.department,
           attendanceDays: nodaKanta.attendanceDays,
           totalWorkMinutes: nodaKanta.totalWorkMinutes,
           totalHours: Math.floor(nodaKanta.totalWorkMinutes / 60),
+          totalMinutes: nodaKanta.totalWorkMinutes % 60,
           avgWorkMinutes: nodaKanta.avgWorkMinutes
+        } : null,
+        allRecords: nodaRecords.map(r => {
+          const clockIn = r.clock_in ? new Date(r.clock_in) : null
+          const clockOut = r.clock_out ? new Date(r.clock_out) : null
+          const totalMinutes = (clockIn && clockOut) ? Math.floor((clockOut - clockIn) / 60000) : 0
+          const breakMinutes = r.break_minutes_used || 0
+          const calculatedMinutes = Math.max(0, totalMinutes - breakMinutes)
+          
+          return {
+            date: r.date,
+            clock_in: r.clock_in,
+            clock_out: r.clock_out,
+            total_work_minutes: r.total_work_minutes,
+            break_minutes_used: breakMinutes,
+            calculated_minutes: calculatedMinutes,
+            status: r.status,
+            has_clock_out: !!r.clock_out
+          }
         })
-        
-        // Noda Kantaさんの全レコードを確認
-        const nodaRecords = attendanceData?.filter(r => r.user?.name === 'Noda Kanta') || []
-        console.log('Noda Kanta - All Records:', nodaRecords.map(r => ({
-          date: r.date,
-          clock_in: r.clock_in,
-          clock_out: r.clock_out,
-          total_work_minutes: r.total_work_minutes,
-          status: r.status
-        })))
-      } else {
-        console.warn('Noda Kanta not found in attendance array')
-        const nodaRecords = attendanceData?.filter(r => r.user?.name === 'Noda Kanta') || []
-        console.log('Noda Kanta - Raw Records:', nodaRecords)
+      })
+      
+      if (!nodaKanta && nodaRecords.length > 0) {
+        console.error('Noda Kanta records found but not in summary!', {
+          records: nodaRecords,
+          userStats: userStats
+        })
       }
 
       setAttendances(attendanceArray)
