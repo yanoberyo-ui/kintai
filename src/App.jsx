@@ -1706,9 +1706,13 @@ function LoginScreen({ isDark }) {
   const [isSignUp, setIsSignUp] = useState(false)
   const [showPasswordReset, setShowPasswordReset] = useState(false)
   const [resetEmail, setResetEmail] = useState('')
+  const [resetHint, setResetHint] = useState('')
   const [resetLoading, setResetLoading] = useState(false)
   const [resetSuccess, setResetSuccess] = useState(false)
   const [resetError, setResetError] = useState('')
+  const [hintVerified, setHintVerified] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -1792,61 +1796,88 @@ function LoginScreen({ isDark }) {
     }
   }
 
-  const handlePasswordReset = async (e) => {
+  const handleHintVerification = async (e) => {
     e.preventDefault()
     setResetLoading(true)
     setResetError('')
-    setResetSuccess(false)
+    setHintVerified(false)
 
     try {
-      console.log('🔐 パスワードリセットリクエスト:', resetEmail)
-      console.log('📍 リダイレクト先:', `${window.location.origin}/reset-password`)
-      
-      // タイムアウトを設定（30秒）
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('タイムアウト: サーバーからの応答がありませんでした')), 30000)
-      })
+      // メールアドレスとヒントでユーザーを検証
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id, email, password_hint')
+        .eq('email', resetEmail)
+        .single()
 
-      const resetPromise = supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      })
+      if (userError || !userData) {
+        throw new Error('このメールアドレスは登録されていません。')
+      }
 
-      const { data, error } = await Promise.race([resetPromise, timeoutPromise])
+      if (!userData.password_hint) {
+        throw new Error('このアカウントにはパスワードヒントが設定されていません。設定ページでヒントを設定してください。')
+      }
+
+      // ヒントを比較（大文字小文字を区別しない）
+      if (userData.password_hint.toLowerCase().trim() !== resetHint.toLowerCase().trim()) {
+        throw new Error('ヒントが一致しません。もう一度お試しください。')
+      }
+
+      // ヒントが一致したら、パスワード変更画面を表示
+      setHintVerified(true)
+      setResetError('')
+    } catch (error) {
+      console.error('❌ ヒント認証エラー:', error)
+      setResetError(error.message || 'ヒントの確認に失敗しました')
+    } finally {
+      setResetLoading(false)
+    }
+  }
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault()
+    setResetLoading(true)
+    setResetError('')
+
+    if (newPassword !== confirmPassword) {
+      setResetError('パスワードが一致しません')
+      setResetLoading(false)
+      return
+    }
+
+    if (newPassword.length < 6) {
+      setResetError('パスワードは6文字以上である必要があります')
+      setResetLoading(false)
+      return
+    }
+
+    try {
+      // Edge Functionを呼び出してパスワードを変更
+      const { data, error } = await supabase.functions.invoke('reset-password-with-hint', {
+        body: {
+          email: resetEmail,
+          hint: resetHint,
+          newPassword: newPassword,
+        },
+      })
 
       if (error) {
-        console.error('❌ パスワードリセットエラー:', error)
-        console.error('エラーコード:', error.status)
-        console.error('エラーメッセージ:', error.message)
-        console.error('エラー詳細:', JSON.stringify(error, null, 2))
-        throw error
+        throw new Error(error.message || 'パスワードの変更に失敗しました')
       }
 
-      console.log('✅ パスワードリセットメール送信成功:', data)
+      if (data?.error) {
+        throw new Error(data.error)
+      }
+
       setResetSuccess(true)
       setResetEmail('')
+      setResetHint('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setHintVerified(false)
     } catch (error) {
-      console.error('❌ パスワードリセットエラー:', error)
-      console.error('エラーオブジェクト:', error)
-      
-      // より詳細なエラーメッセージを表示
-      let errorMessage = 'パスワードリセットメールの送信に失敗しました'
-      
-      // エラーステータスコードに基づくメッセージ
-      if (error.status === 500 || error.message?.includes('Error sending recovery email') || error.message?.includes('500')) {
-        errorMessage = 'メール送信に失敗しました。これは通常、SMTP設定に問題がある場合に発生します。\n\n確認事項:\n1. SupabaseダッシュボードでSMTP設定を確認してください\n2. Hostが正しいか確認（Gmailの場合は smtp.gmail.com）\n3. 送信者メールアドレスとSMTP設定が一致しているか確認\n4. アプリパスワードが正しいか確認\n5. Supabaseダッシュボードでテストメールを送信して確認'
-      } else if (error.status === 504 || error.message?.includes('504') || error.message?.includes('timeout') || error.message?.includes('タイムアウト')) {
-        errorMessage = 'サーバーからの応答がタイムアウトしました。これは通常、Supabaseのメール送信設定が正しくない場合に発生します。\n\n解決方法:\n1. SupabaseダッシュボードでカスタムSMTPを設定してください（Gmail推奨）\n2. 設定方法は docs/free-smtp-setup.md を参照してください\n3. しばらく待ってから再度お試しください'
-      } else if (error.status === 429 || error.message?.includes('rate limit')) {
-        errorMessage = 'メール送信の制限に達しました。しばらく待ってから再度お試しください。'
-      } else if (error.status === 404 || error.message?.includes('not found')) {
-        errorMessage = 'このメールアドレスは登録されていません。'
-      } else if (error.status === 400 || error.message?.includes('invalid')) {
-        errorMessage = 'メールアドレスの形式が正しくありません。'
-      } else if (error.message) {
-        errorMessage = `エラー: ${error.message}`
-      }
-      
-      setResetError(errorMessage)
+      console.error('❌ パスワード変更エラー:', error)
+      setResetError(error.message || 'パスワードの変更に失敗しました')
     } finally {
       setResetLoading(false)
     }
@@ -2092,13 +2123,17 @@ function LoginScreen({ isDark }) {
                   <p className={`text-sm ${
                     isDark ? 'text-green-300' : 'text-green-800'
                   }`}>
-                    パスワードリセット用のメールを送信しました。メールボックスをご確認ください。
+                    ✅ パスワードを変更しました！新しいパスワードでログインしてください。
                   </p>
                   <button
                     onClick={() => {
                       setShowPasswordReset(false)
                       setResetSuccess(false)
                       setResetEmail('')
+                      setResetHint('')
+                      setNewPassword('')
+                      setConfirmPassword('')
+                      setHintVerified(false)
                     }}
                     className={`mt-3 text-sm font-medium ${
                       isDark ? 'text-green-400 hover:text-green-300' : 'text-green-600 hover:text-green-700'
@@ -2107,8 +2142,112 @@ function LoginScreen({ isDark }) {
                     閉じる
                   </button>
                 </div>
+              ) : hintVerified ? (
+                <form onSubmit={handlePasswordChange} className="space-y-4">
+                  <div className={`p-4 rounded-xl ${
+                    isDark ? 'bg-blue-900/20 border border-blue-700/50' : 'bg-blue-50 border border-blue-200'
+                  }`}>
+                    <p className={`text-sm ${
+                      isDark ? 'text-blue-300' : 'text-blue-800'
+                    }`}>
+                      ✅ ヒントが確認できました。新しいパスワードを設定してください。
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${
+                      isDark ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      新しいパスワード
+                    </label>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
+                        isDark
+                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
+                          : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
+                      }`}
+                      placeholder="6文字以上"
+                      required
+                      minLength={6}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${
+                      isDark ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      パスワード（確認）
+                    </label>
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
+                        isDark
+                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
+                          : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
+                      }`}
+                      placeholder="もう一度入力"
+                      required
+                      minLength={6}
+                    />
+                  </div>
+
+                  {resetError && (
+                    <div className={`text-sm px-4 py-3 rounded-xl font-light whitespace-pre-line ${
+                      isDark ? 'text-red-400 bg-red-900/20' : 'text-red-600 bg-red-50'
+                    }`}>
+                      {resetError}
+                    </div>
+                  )}
+
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHintVerified(false)
+                        setNewPassword('')
+                        setConfirmPassword('')
+                        setResetError('')
+                      }}
+                      className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
+                        isDark
+                          ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      戻る
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={resetLoading}
+                      className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                        isDark
+                          ? 'bg-white text-gray-900 hover:bg-gray-100'
+                          : 'bg-gray-900 text-white hover:bg-gray-800'
+                      }`}
+                    >
+                      {resetLoading ? '変更中...' : 'パスワードを変更'}
+                    </button>
+                  </div>
+                </form>
               ) : (
-                <form onSubmit={handlePasswordReset} className="space-y-4">
+                <form onSubmit={handleHintVerification} className="space-y-4">
+                  <div className={`p-4 rounded-xl mb-4 ${
+                    isDark ? 'bg-blue-900/20 border border-blue-700/50' : 'bg-blue-50 border border-blue-200'
+                  }`}>
+                    <p className={`text-sm ${
+                      isDark ? 'text-blue-300' : 'text-blue-800'
+                    }`}>
+                      💡 設定ページで設定したパスワードヒントを入力してください。
+                      <br />
+                      例: 「ちっちゃい頃の車」「好きな食べ物」など
+                    </p>
+                  </div>
+
                   <div>
                     <label className={`block text-sm font-medium mb-2 ${
                       isDark ? 'text-gray-300' : 'text-gray-700'
@@ -2129,6 +2268,26 @@ function LoginScreen({ isDark }) {
                     />
                   </div>
 
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${
+                      isDark ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      パスワードヒント
+                    </label>
+                    <input
+                      type="text"
+                      value={resetHint}
+                      onChange={(e) => setResetHint(e.target.value)}
+                      className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
+                        isDark
+                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
+                          : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
+                      }`}
+                      placeholder="例: ちっちゃい頃の車"
+                      required
+                    />
+                  </div>
+
                   {resetError && (
                     <div className={`text-sm px-4 py-3 rounded-xl font-light whitespace-pre-line ${
                       isDark ? 'text-red-400 bg-red-900/20' : 'text-red-600 bg-red-50'
@@ -2143,8 +2302,9 @@ function LoginScreen({ isDark }) {
                       onClick={() => {
                         setShowPasswordReset(false)
                         setResetEmail('')
+                        setResetHint('')
                         setResetError('')
-                        setResetSuccess(false)
+                        setHintVerified(false)
                       }}
                       className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
                         isDark
@@ -2163,7 +2323,7 @@ function LoginScreen({ isDark }) {
                           : 'bg-gray-900 text-white hover:bg-gray-800'
                       }`}
                     >
-                      {resetLoading ? '送信中...' : '送信'}
+                      {resetLoading ? '確認中...' : '確認'}
                     </button>
                   </div>
                 </form>

@@ -9,6 +9,7 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
     department: '',
     birthday: '',
     avatar_url: null,
+    password_hint: '',
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -35,6 +36,7 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
         department: data.department || '',
         birthday: data.birthday || '',
         avatar_url: data.avatar_url || null,
+        password_hint: data.password_hint || '',
       })
     } catch (error) {
       console.error('Error loading user data:', error)
@@ -56,6 +58,7 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
           slack_user_id: userData.slack_user_id || null,
           department: userData.department || null,
           birthday: userData.birthday || null,
+          password_hint: userData.password_hint || null,
         })
         .eq('id', user.id)
 
@@ -256,6 +259,45 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
                 </div>
               )}
             </div>
+          </div>
+
+          {/* パスワードヒント */}
+          <div className="md:col-span-2">
+            <label className={`block text-sm font-medium mb-2 ${
+              isDark ? 'text-gray-300' : 'text-gray-700'
+            }`}>
+              パスワードヒント
+            </label>
+            {isEditing ? (
+              <>
+                <input
+                  type="text"
+                  value={userData.password_hint}
+                  onChange={(e) => setUserData({ ...userData, password_hint: e.target.value })}
+                  className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
+                    isDark
+                      ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
+                      : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
+                  }`}
+                  placeholder="例: ちっちゃい頃の車"
+                />
+                <p className={`mt-2 text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  💡 パスワードを忘れた場合、このヒントとメールアドレスでパスワードをリセットできます。
+                  <br />
+                  例: 「ちっちゃい頃の車」「好きな食べ物」「ペットの名前」など、自分だけが知っている情報を設定してください。
+                </p>
+              </>
+            ) : (
+              <div className={`px-4 py-3 rounded-xl ${
+                isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
+              }`}>
+                {userData?.password_hint ? (
+                  <span className="opacity-60">設定済み（セキュリティのため非表示）</span>
+                ) : (
+                  <span className="opacity-40">未設定</span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* メッセージ */}
