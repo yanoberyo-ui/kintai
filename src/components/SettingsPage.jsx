@@ -9,8 +9,10 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
     department: '',
     birthday: '',
     avatar_url: null,
-    password_hint: '',
+    password_hint: null,
   })
+  const [hintQuestion, setHintQuestion] = useState('')
+  const [hintAnswer, setHintAnswer] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
@@ -23,7 +25,8 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
   const [passwordChanging, setPasswordChanging] = useState(false)
   const [passwordMessage, setPasswordMessage] = useState('')
   const [showHintSetting, setShowHintSetting] = useState(false)
-  const [tempHint, setTempHint] = useState('')
+  const [tempHintQuestion, setTempHintQuestion] = useState('')
+  const [tempHintAnswer, setTempHintAnswer] = useState('')
   const [hintSaving, setHintSaving] = useState(false)
 
   useEffect(() => {
@@ -39,14 +42,23 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
         .single()
 
       if (error) throw error
+      const passwordHint = data.password_hint || null
       setUserData({
         name: data.name || '',
         slack_user_id: data.slack_user_id || '',
         department: data.department || '',
         birthday: data.birthday || '',
         avatar_url: data.avatar_url || null,
-        password_hint: data.password_hint || '',
+        password_hint: passwordHint,
       })
+      // Set hint question and answer if exists
+      if (passwordHint && typeof passwordHint === 'object') {
+        setHintQuestion(passwordHint.question || '')
+        setHintAnswer(passwordHint.answer || '')
+      } else {
+        setHintQuestion('')
+        setHintAnswer('')
+      }
     } catch (error) {
       console.error('Error loading user data:', error)
     } finally {
@@ -60,6 +72,15 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
     setMessage('')
 
     try {
+      // Prepare password hint data
+      let passwordHintData = null
+      if (hintQuestion.trim() && hintAnswer.trim()) {
+        passwordHintData = {
+          question: hintQuestion.trim(),
+          answer: hintAnswer.trim(),
+        }
+      }
+
       const { error } = await supabase
         .from('users')
         .update({
@@ -67,7 +88,7 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
           slack_user_id: userData.slack_user_id || null,
           department: userData.department || null,
           birthday: userData.birthday || null,
-          password_hint: userData.password_hint || null,
+          password_hint: passwordHintData,
         })
         .eq('id', user.id)
 
@@ -135,8 +156,13 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
   }
 
   const handleHintSave = async () => {
-    if (!tempHint.trim()) {
-      setPasswordMessage('❌ ヒントを入力してください')
+    if (!tempHintQuestion.trim()) {
+      setPasswordMessage('❌ 質問を入力してください')
+      return
+    }
+
+    if (!tempHintAnswer.trim()) {
+      setPasswordMessage('❌ 答えを入力してください')
       return
     }
 
@@ -144,16 +170,24 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
     setPasswordMessage('')
 
     try {
+      const hintData = {
+        question: tempHintQuestion.trim(),
+        answer: tempHintAnswer.trim(),
+      }
+
       const { error } = await supabase
         .from('users')
-        .update({ password_hint: tempHint.trim() })
+        .update({ password_hint: hintData })
         .eq('id', user.id)
 
       if (error) throw error
 
       setPasswordMessage('✅ パスワードヒントを設定しました！')
-      setUserData({ ...userData, password_hint: tempHint.trim() })
-      setTempHint('')
+      setUserData({ ...userData, password_hint: hintData })
+      setHintQuestion(tempHintQuestion.trim())
+      setHintAnswer(tempHintAnswer.trim())
+      setTempHintQuestion('')
+      setTempHintAnswer('')
       setShowHintSetting(false)
       setTimeout(() => setPasswordMessage(''), 3000)
     } catch (error) {
@@ -356,33 +390,73 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
             <label className={`block text-sm font-medium mb-2 ${
               isDark ? 'text-gray-300' : 'text-gray-700'
             }`}>
-              パスワードヒント
+              パスワードヒント（質問と答え）
             </label>
             {isEditing ? (
               <>
-                <input
-                  type="text"
-                  value={userData.password_hint}
-                  onChange={(e) => setUserData({ ...userData, password_hint: e.target.value })}
-                  className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
-                    isDark
-                      ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                      : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
-                  }`}
-                  placeholder="例: ちっちゃい頃の車"
-                />
+                <div className="space-y-3">
+                  <div>
+                    <label className={`block text-xs font-medium mb-1 ${
+                      isDark ? 'text-gray-400' : 'text-gray-600'
+                    }`}>
+                      質問
+                    </label>
+                    <input
+                      type="text"
+                      value={hintQuestion}
+                      onChange={(e) => setHintQuestion(e.target.value)}
+                      className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
+                        isDark
+                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
+                          : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
+                      }`}
+                      placeholder="例: ちっちゃい頃の車は？"
+                    />
+                  </div>
+                  <div>
+                    <label className={`block text-xs font-medium mb-1 ${
+                      isDark ? 'text-gray-400' : 'text-gray-600'
+                    }`}>
+                      答え
+                    </label>
+                    <input
+                      type="text"
+                      value={hintAnswer}
+                      onChange={(e) => setHintAnswer(e.target.value)}
+                      className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
+                        isDark
+                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
+                          : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
+                      }`}
+                      placeholder="例: ハイエース"
+                    />
+                  </div>
+                </div>
                 <p className={`mt-2 text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                  💡 パスワードを忘れた場合、このヒントとメールアドレスでパスワードをリセットできます。
+                  💡 パスワードを忘れた場合、この質問と答えでパスワードをリセットできます。
                   <br />
-                  例: 「ちっちゃい頃の車」「好きな食べ物」「ペットの名前」など、自分だけが知っている情報を設定してください。
+                  例: 質問「ちっちゃい頃の車は？」→ 答え「ハイエース」
                 </p>
               </>
             ) : (
               <div className={`px-4 py-3 rounded-xl ${
                 isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
               }`}>
-                {userData?.password_hint ? (
-                  <span className="opacity-60">設定済み（セキュリティのため非表示）</span>
+                {userData?.password_hint && typeof userData.password_hint === 'object' ? (
+                  <div className="space-y-2">
+                    <div>
+                      <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                        質問: 
+                      </span>
+                      <span className="ml-2">{userData.password_hint.question || '-'}</span>
+                    </div>
+                    <div>
+                      <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                        答え: 
+                      </span>
+                      <span className="ml-2 opacity-60">設定済み（セキュリティのため非表示）</span>
+                    </div>
+                  </div>
                 ) : (
                   <span className="opacity-40">未設定</span>
                 )}
@@ -543,27 +617,53 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
             <p className={`text-sm mb-4 ${
               isDark ? 'text-gray-400' : 'text-gray-600'
             }`}>
-              パスワードを忘れた場合、このヒントとメールアドレスでパスワードをリセットできます。
+              パスワードを忘れた場合、この質問と答えでパスワードをリセットできます。
               <br />
-              例: 「ちっちゃい頃の車」「好きな食べ物」「ペットの名前」など
+              例: 質問「ちっちゃい頃の車は？」→ 答え「ハイエース」
             </p>
             <div className="space-y-3">
-              <input
-                type="text"
-                value={tempHint}
-                onChange={(e) => setTempHint(e.target.value)}
-                className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
-                  isDark
-                    ? 'bg-gray-700/50 border-gray-600 text-white focus:border-gray-500'
-                    : 'bg-white border-gray-300 text-gray-900 focus:border-gray-400'
-                }`}
-                placeholder="例: ちっちゃい頃の車"
-              />
+              <div>
+                <label className={`block text-xs font-medium mb-1 ${
+                  isDark ? 'text-gray-400' : 'text-gray-600'
+                }`}>
+                  質問
+                </label>
+                <input
+                  type="text"
+                  value={tempHintQuestion}
+                  onChange={(e) => setTempHintQuestion(e.target.value)}
+                  className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
+                    isDark
+                      ? 'bg-gray-700/50 border-gray-600 text-white focus:border-gray-500'
+                      : 'bg-white border-gray-300 text-gray-900 focus:border-gray-400'
+                  }`}
+                  placeholder="例: ちっちゃい頃の車は？"
+                />
+              </div>
+              <div>
+                <label className={`block text-xs font-medium mb-1 ${
+                  isDark ? 'text-gray-400' : 'text-gray-600'
+                }`}>
+                  答え
+                </label>
+                <input
+                  type="text"
+                  value={tempHintAnswer}
+                  onChange={(e) => setTempHintAnswer(e.target.value)}
+                  className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
+                    isDark
+                      ? 'bg-gray-700/50 border-gray-600 text-white focus:border-gray-500'
+                      : 'bg-white border-gray-300 text-gray-900 focus:border-gray-400'
+                  }`}
+                  placeholder="例: ハイエース"
+                />
+              </div>
               <div className="flex gap-2">
                 <button
                   onClick={() => {
                     setShowHintSetting(false)
-                    setTempHint('')
+                    setTempHintQuestion('')
+                    setTempHintAnswer('')
                     setPasswordMessage('')
                   }}
                   className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${

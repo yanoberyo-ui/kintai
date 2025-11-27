@@ -1716,6 +1716,7 @@ function LoginScreen({ isDark }) {
   const [showPasswordReset, setShowPasswordReset] = useState(false)
   const [resetEmail, setResetEmail] = useState('')
   const [resetHint, setResetHint] = useState('')
+  const [hintQuestion, setHintQuestion] = useState('')
   const [resetLoading, setResetLoading] = useState(false)
   const [resetSuccess, setResetSuccess] = useState(false)
   const [resetError, setResetError] = useState('')
@@ -1827,17 +1828,35 @@ function LoginScreen({ isDark }) {
         throw new Error('このアカウントにはパスワードヒントが設定されていません。設定ページでヒントを設定してください。')
       }
 
-      // ヒントを比較（大文字小文字を区別しない）
-      if (userData.password_hint.toLowerCase().trim() !== resetHint.toLowerCase().trim()) {
-        throw new Error('ヒントが一致しません。もう一度お試しください。')
+      // JSON形式のヒントを確認
+      let hintData = userData.password_hint
+      if (typeof hintData === 'string') {
+        try {
+          hintData = JSON.parse(hintData)
+        } catch {
+          // 古い形式の場合は、単純なテキストとして扱う
+          hintData = { question: '', answer: hintData }
+        }
       }
 
-      // ヒントが一致したら、パスワード変更画面を表示
+      if (!hintData || !hintData.question || !hintData.answer) {
+        throw new Error('このアカウントにはパスワードヒントが正しく設定されていません。設定ページでヒントを設定してください。')
+      }
+
+      // 質問を保存して表示
+      setHintQuestion(hintData.question)
+
+      // 答えを比較（大文字小文字を区別しない）
+      if (hintData.answer.toLowerCase().trim() !== resetHint.toLowerCase().trim()) {
+        throw new Error('答えが一致しません。もう一度お試しください。')
+      }
+
+      // 答えが一致したら、パスワード変更画面を表示
       setHintVerified(true)
       setResetError('')
     } catch (error) {
       console.error('❌ ヒント認証エラー:', error)
-      setResetError(error.message || 'ヒントの確認に失敗しました')
+      setResetError(error.message || '答えの確認に失敗しました')
     } finally {
       setResetLoading(false)
     }
@@ -1865,7 +1884,7 @@ function LoginScreen({ isDark }) {
       const { data, error } = await supabase.functions.invoke('reset-password-with-hint', {
         body: {
           email: resetEmail,
-          hint: resetHint,
+          answer: resetHint, // 答えを送信
           newPassword: newPassword,
         },
       })
@@ -1881,6 +1900,7 @@ function LoginScreen({ isDark }) {
       setResetSuccess(true)
       setResetEmail('')
       setResetHint('')
+      setHintQuestion('')
       setNewPassword('')
       setConfirmPassword('')
       setHintVerified(false)
@@ -2251,9 +2271,9 @@ function LoginScreen({ isDark }) {
                     <p className={`text-sm ${
                       isDark ? 'text-blue-300' : 'text-blue-800'
                     }`}>
-                      💡 設定ページで設定したパスワードヒントを入力してください。
+                      💡 メールアドレスを入力すると、設定した質問が表示されます。
                       <br />
-                      例: 「ちっちゃい頃の車」「好きな食べ物」など
+                      その質問の答えを入力してパスワードをリセットできます。
                     </p>
                   </div>
 
@@ -2266,7 +2286,37 @@ function LoginScreen({ isDark }) {
                     <input
                       type="email"
                       value={resetEmail}
-                      onChange={(e) => setResetEmail(e.target.value)}
+                      onChange={async (e) => {
+                        setResetEmail(e.target.value)
+                        setResetHint('')
+                        setHintQuestion('')
+                        // メールアドレスが変更されたら、質問を取得
+                        if (e.target.value) {
+                          try {
+                            const { data: userData } = await supabase
+                              .from('users')
+                              .select('password_hint')
+                              .eq('email', e.target.value)
+                              .single()
+                            
+                            if (userData?.password_hint) {
+                              let hintData = userData.password_hint
+                              if (typeof hintData === 'string') {
+                                try {
+                                  hintData = JSON.parse(hintData)
+                                } catch {
+                                  hintData = { question: '', answer: hintData }
+                                }
+                              }
+                              if (hintData && hintData.question) {
+                                setHintQuestion(hintData.question)
+                              }
+                            }
+                          } catch (error) {
+                            // エラーは無視（ユーザーが見つからない場合など）
+                          }
+                        }
+                      }}
                       className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
                         isDark
                           ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
@@ -2277,11 +2327,28 @@ function LoginScreen({ isDark }) {
                     />
                   </div>
 
+                  {hintQuestion && (
+                    <div className={`p-4 rounded-xl border ${
+                      isDark ? 'bg-green-900/20 border-green-700/50' : 'bg-green-50 border-green-200'
+                    }`}>
+                      <div className={`text-sm font-medium mb-2 ${
+                        isDark ? 'text-green-300' : 'text-green-800'
+                      }`}>
+                        💡 質問
+                      </div>
+                      <div className={`text-base ${
+                        isDark ? 'text-green-200' : 'text-green-900'
+                      }`}>
+                        {hintQuestion}
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <label className={`block text-sm font-medium mb-2 ${
                       isDark ? 'text-gray-300' : 'text-gray-700'
                     }`}>
-                      パスワードヒント
+                      {hintQuestion ? '答え' : 'パスワードヒント'}
                     </label>
                     <input
                       type="text"
@@ -2292,8 +2359,9 @@ function LoginScreen({ isDark }) {
                           ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
                           : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
                       }`}
-                      placeholder="例: ちっちゃい頃の車"
+                      placeholder={hintQuestion ? "質問の答えを入力" : "メールアドレスを入力してください"}
                       required
+                      disabled={!hintQuestion}
                     />
                   </div>
 

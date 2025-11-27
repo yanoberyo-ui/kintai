@@ -13,12 +13,12 @@ serve(async (req) => {
   }
 
   try {
-    const { email, hint, newPassword } = await req.json()
+    const { email, answer, newPassword } = await req.json()
 
     // Validate input
-    if (!email || !hint || !newPassword) {
+    if (!email || !answer || !newPassword) {
       return new Response(
-        JSON.stringify({ error: 'メールアドレス、ヒント、新しいパスワードは必須です' }),
+        JSON.stringify({ error: 'メールアドレス、答え、新しいパスワードは必須です' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -63,10 +63,28 @@ serve(async (req) => {
       )
     }
 
-    // Compare hint (case-insensitive)
-    if (userData.password_hint.toLowerCase().trim() !== hint.toLowerCase().trim()) {
+    // Parse hint data (support both JSON and legacy text format)
+    let hintData = userData.password_hint
+    if (typeof hintData === 'string') {
+      try {
+        hintData = JSON.parse(hintData)
+      } catch {
+        // Legacy format: treat as simple text answer
+        hintData = { question: '', answer: hintData }
+      }
+    }
+
+    if (!hintData || !hintData.answer) {
       return new Response(
-        JSON.stringify({ error: 'ヒントが一致しません' }),
+        JSON.stringify({ error: 'このアカウントにはパスワードヒントが正しく設定されていません' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Compare answer (case-insensitive)
+    if (hintData.answer.toLowerCase().trim() !== answer.toLowerCase().trim()) {
+      return new Response(
+        JSON.stringify({ error: '答えが一致しません' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
