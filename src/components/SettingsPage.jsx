@@ -22,6 +22,9 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordChanging, setPasswordChanging] = useState(false)
   const [passwordMessage, setPasswordMessage] = useState('')
+  const [showHintSetting, setShowHintSetting] = useState(false)
+  const [tempHint, setTempHint] = useState('')
+  const [hintSaving, setHintSaving] = useState(false)
 
   useEffect(() => {
     loadUserData()
@@ -128,6 +131,36 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
       setPasswordMessage('❌ エラー: ' + (error.message || 'パスワードの変更に失敗しました'))
     } finally {
       setPasswordChanging(false)
+    }
+  }
+
+  const handleHintSave = async () => {
+    if (!tempHint.trim()) {
+      setPasswordMessage('❌ ヒントを入力してください')
+      return
+    }
+
+    setHintSaving(true)
+    setPasswordMessage('')
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ password_hint: tempHint.trim() })
+        .eq('id', user.id)
+
+      if (error) throw error
+
+      setPasswordMessage('✅ パスワードヒントを設定しました！')
+      setUserData({ ...userData, password_hint: tempHint.trim() })
+      setTempHint('')
+      setShowHintSetting(false)
+      setTimeout(() => setPasswordMessage(''), 3000)
+    } catch (error) {
+      console.error('Hint save error:', error)
+      setPasswordMessage('❌ エラー: ' + (error.message || 'ヒントの設定に失敗しました'))
+    } finally {
+      setHintSaving(false)
     }
   }
 
@@ -468,23 +501,110 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
             </p>
           </div>
           {!showPasswordChange && (
-            <button
-              onClick={() => setShowPasswordChange(true)}
-              className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
-                isDark
-                  ? 'bg-white text-gray-900 hover:bg-gray-100'
-                  : 'bg-gray-900 text-white hover:bg-gray-800'
-              }`}
-            >
-              🔒 パスワードを変更
-            </button>
+            <div className="flex gap-2">
+              {!userData.password_hint && (
+                <button
+                  onClick={() => setShowHintSetting(true)}
+                  className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                    isDark
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-blue-500 text-white hover:bg-blue-600'
+                  }`}
+                >
+                  💡 ヒントを設定
+                </button>
+              )}
+              <button
+                onClick={() => setShowPasswordChange(true)}
+                className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                  isDark
+                    ? 'bg-white text-gray-900 hover:bg-gray-100'
+                    : 'bg-gray-900 text-white hover:bg-gray-800'
+                }`}
+              >
+                🔒 パスワードを変更
+              </button>
+            </div>
           )}
         </div>
+
+        {/* パスワードヒント設定フォーム */}
+        {showHintSetting && (
+          <div className={`mb-6 p-4 rounded-xl border ${
+            isDark 
+              ? 'bg-gray-800/50 border-gray-700' 
+              : 'bg-gray-50 border-gray-200'
+          }`}>
+            <h3 className={`text-lg font-medium mb-3 ${
+              isDark ? 'text-white' : 'text-gray-900'
+            }`}>
+              💡 パスワードヒントを設定
+            </h3>
+            <p className={`text-sm mb-4 ${
+              isDark ? 'text-gray-400' : 'text-gray-600'
+            }`}>
+              パスワードを忘れた場合、このヒントとメールアドレスでパスワードをリセットできます。
+              <br />
+              例: 「ちっちゃい頃の車」「好きな食べ物」「ペットの名前」など
+            </p>
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={tempHint}
+                onChange={(e) => setTempHint(e.target.value)}
+                className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
+                  isDark
+                    ? 'bg-gray-700/50 border-gray-600 text-white focus:border-gray-500'
+                    : 'bg-white border-gray-300 text-gray-900 focus:border-gray-400'
+                }`}
+                placeholder="例: ちっちゃい頃の車"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setShowHintSetting(false)
+                    setTempHint('')
+                    setPasswordMessage('')
+                  }}
+                  className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                    isDark
+                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={handleHintSave}
+                  disabled={hintSaving}
+                  className={`flex-1 px-4 py-2 rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                    isDark
+                      ? 'bg-white text-gray-900 hover:bg-gray-100'
+                      : 'bg-gray-900 text-white hover:bg-gray-800'
+                  }`}
+                >
+                  {hintSaving ? '保存中...' : '💾 保存'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* メッセージ表示 */}
+        {passwordMessage && !showPasswordChange && (
+          <div className={`mb-4 p-4 rounded-xl ${
+            passwordMessage.includes('✅')
+              ? isDark ? 'bg-green-900/20 text-green-300' : 'bg-green-50 text-green-800'
+              : isDark ? 'bg-red-900/20 text-red-300' : 'bg-red-50 text-red-800'
+          }`}>
+            {passwordMessage}
+          </div>
+        )}
 
         {showPasswordChange && (
           <form onSubmit={handlePasswordChange} className="space-y-4">
             {/* パスワードヒント表示 */}
-            {userData.password_hint && (
+            {userData.password_hint ? (
               <div className={`p-4 rounded-xl border ${
                 isDark 
                   ? 'bg-blue-900/20 border-blue-700/50' 
@@ -505,6 +625,37 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
                 }`}>
                   パスワードを忘れた場合は、このヒントを使ってリセットできます
                 </div>
+              </div>
+            ) : (
+              <div className={`p-4 rounded-xl border ${
+                isDark 
+                  ? 'bg-yellow-900/20 border-yellow-700/50' 
+                  : 'bg-yellow-50 border-yellow-200'
+              }`}>
+                <div className={`text-sm font-medium mb-1 ${
+                  isDark ? 'text-yellow-300' : 'text-yellow-800'
+                }`}>
+                  ⚠️ パスワードヒントが設定されていません
+                </div>
+                <div className={`text-xs mt-2 ${
+                  isDark ? 'text-yellow-300/70' : 'text-yellow-600/70'
+                }`}>
+                  パスワードを忘れた場合に備えて、ヒントを設定することをおすすめします
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPasswordChange(false)
+                    setShowHintSetting(true)
+                  }}
+                  className={`mt-3 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                    isDark
+                      ? 'bg-yellow-700 text-white hover:bg-yellow-600'
+                      : 'bg-yellow-500 text-white hover:bg-yellow-600'
+                  }`}
+                >
+                  💡 ヒントを設定する
+                </button>
               </div>
             )}
 
