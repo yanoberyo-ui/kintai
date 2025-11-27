@@ -16,6 +16,12 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
   const [message, setMessage] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [showProfileEdit, setShowProfileEdit] = useState(false)
+  const [showPasswordChange, setShowPasswordChange] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordChanging, setPasswordChanging] = useState(false)
+  const [passwordMessage, setPasswordMessage] = useState('')
 
   useEffect(() => {
     loadUserData()
@@ -71,6 +77,57 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
       setMessage('❌ エラー: ' + error.message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault()
+    setPasswordChanging(true)
+    setPasswordMessage('')
+
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage('❌ パスワードが一致しません')
+      setPasswordChanging(false)
+      return
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordMessage('❌ パスワードは6文字以上である必要があります')
+      setPasswordChanging(false)
+      return
+    }
+
+    try {
+      // 現在のパスワードで再認証（セキュリティのため）
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      })
+
+      if (reauthError) {
+        throw new Error('現在のパスワードが正しくありません')
+      }
+
+      // パスワードを変更
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword,
+      })
+
+      if (updateError) {
+        throw updateError
+      }
+
+      setPasswordMessage('✅ パスワードを変更しました！')
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setShowPasswordChange(false)
+      setTimeout(() => setPasswordMessage(''), 5000)
+    } catch (error) {
+      console.error('Password change error:', error)
+      setPasswordMessage('❌ エラー: ' + (error.message || 'パスワードの変更に失敗しました'))
+    } finally {
+      setPasswordChanging(false)
     }
   }
 
@@ -393,6 +450,145 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
             </div>
           </div>
         </div>
+      </div>
+
+      {/* パスワード変更 */}
+      <div className={`backdrop-blur-xl rounded-3xl shadow-lg border p-8 transition-colors duration-500 ${
+        isDark
+          ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
+          : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
+      }`}>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              パスワード変更
+            </h2>
+            <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              アカウントのパスワードを変更します
+            </p>
+          </div>
+          {!showPasswordChange && (
+            <button
+              onClick={() => setShowPasswordChange(true)}
+              className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                isDark
+                  ? 'bg-white text-gray-900 hover:bg-gray-100'
+                  : 'bg-gray-900 text-white hover:bg-gray-800'
+              }`}
+            >
+              🔒 パスワードを変更
+            </button>
+          )}
+        </div>
+
+        {showPasswordChange && (
+          <form onSubmit={handlePasswordChange} className="space-y-4">
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${
+                isDark ? 'text-gray-300' : 'text-gray-700'
+              }`}>
+                現在のパスワード
+              </label>
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
+                  isDark
+                    ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
+                    : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
+                }`}
+                placeholder="現在のパスワードを入力"
+                required
+              />
+            </div>
+
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${
+                isDark ? 'text-gray-300' : 'text-gray-700'
+              }`}>
+                新しいパスワード
+              </label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
+                  isDark
+                    ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
+                    : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
+                }`}
+                placeholder="6文字以上"
+                required
+                minLength={6}
+              />
+            </div>
+
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${
+                isDark ? 'text-gray-300' : 'text-gray-700'
+              }`}>
+                新しいパスワード（確認）
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
+                  isDark
+                    ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
+                    : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
+                }`}
+                placeholder="もう一度入力"
+                required
+                minLength={6}
+              />
+            </div>
+
+            {passwordMessage && (
+              <div className={`p-4 rounded-xl ${
+                passwordMessage.includes('✅')
+                  ? isDark ? 'bg-green-900/20 text-green-300' : 'bg-green-50 text-green-800'
+                  : isDark ? 'bg-red-900/20 text-red-300' : 'bg-red-50 text-red-800'
+              }`}>
+                {passwordMessage}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPasswordChange(false)
+                  setCurrentPassword('')
+                  setNewPassword('')
+                  setConfirmPassword('')
+                  setPasswordMessage('')
+                }}
+                className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
+                  isDark
+                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                キャンセル
+              </button>
+              <button
+                type="submit"
+                disabled={passwordChanging}
+                className={`flex-1 py-3 rounded-xl font-medium transition-all duration-200 ${
+                  passwordChanging
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : isDark
+                    ? 'bg-white text-gray-900 hover:bg-gray-100'
+                    : 'bg-gray-900 text-white hover:bg-gray-800'
+                }`}
+              >
+                {passwordChanging ? '変更中...' : '💾 パスワードを変更'}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
       {/* 危険な操作 */}
