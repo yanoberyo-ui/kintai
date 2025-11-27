@@ -521,7 +521,6 @@ function App() {
   }, [user])
 
   // ページ読み込み時やホームページに戻った時に未表示の通知をチェック
-  // userが初めてセットされた時だけ実行（複数回実行を防ぐ）
   useEffect(() => {
     if (!user?.id || currentPage !== 'home') return
 
@@ -543,6 +542,20 @@ function App() {
 
         const isDismissed = (type, id) => {
           return dismissedMap[`${type}_${id}`] === true
+        }
+
+        // 既に表示中の通知が非表示になっているかチェック
+        if (eventNotification && isDismissed('event', eventNotification.id)) {
+          setEventNotification(null)
+        }
+        if (todayEventNotification && isDismissed('today', todayEventNotification.id)) {
+          setTodayEventNotification(null)
+        }
+        if (requestNotification && isDismissed('request', requestNotification.id)) {
+          setRequestNotification(null)
+        }
+        if (followUpNotification && isDismissed('followup', followUpNotification.id)) {
+          setFollowUpNotification(null)
         }
 
         // 投票期限のあるイベントで、まだ通知していないものをチェック
@@ -642,12 +655,8 @@ function App() {
       }
     }
 
-    // 初回ログイン時のみ実行
-    const hasChecked = sessionStorage.getItem('has_checked_notifications')
-    if (!hasChecked) {
-      checkPendingNotifications()
-      sessionStorage.setItem('has_checked_notifications', 'true')
-    }
+    // ホームページに戻るたびに実行
+    checkPendingNotifications()
   }, [user, currentPage])
 
   // パスワードリセットページのチェック

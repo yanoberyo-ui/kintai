@@ -483,6 +483,31 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
 
         {showPasswordChange && (
           <form onSubmit={handlePasswordChange} className="space-y-4">
+            {/* パスワードヒント表示 */}
+            {userData.password_hint && (
+              <div className={`p-4 rounded-xl border ${
+                isDark 
+                  ? 'bg-blue-900/20 border-blue-700/50' 
+                  : 'bg-blue-50 border-blue-200'
+              }`}>
+                <div className={`text-sm font-medium mb-1 ${
+                  isDark ? 'text-blue-300' : 'text-blue-800'
+                }`}>
+                  💡 パスワードヒント
+                </div>
+                <div className={`text-sm ${
+                  isDark ? 'text-blue-200' : 'text-blue-700'
+                }`}>
+                  {userData.password_hint}
+                </div>
+                <div className={`text-xs mt-2 ${
+                  isDark ? 'text-blue-300/70' : 'text-blue-600/70'
+                }`}>
+                  パスワードを忘れた場合は、このヒントを使ってリセットできます
+                </div>
+              </div>
+            )}
+
             <div>
               <label className={`block text-sm font-medium mb-2 ${
                 isDark ? 'text-gray-300' : 'text-gray-700'
