@@ -30,6 +30,7 @@ function App() {
   const [eventNotification, setEventNotification] = useState(null)
   const [todayEventNotification, setTodayEventNotification] = useState(null)
   const [followUpNotification, setFollowUpNotification] = useState(null)
+  const [requestNotification, setRequestNotification] = useState(null)
   const [announcementsUnreadCount, setAnnouncementsUnreadCount] = useState(0)
   const [pomodoroTimer, setPomodoroTimer] = useState(null) // { timeLeft, totalTime, state }
 
@@ -123,23 +124,37 @@ function App() {
   }
 
   // 通知を閉じる関数
-  const dismissNotification = (notificationId, notificationType) => {
-    if (!notificationId) {
-      console.error('dismissNotification called with null notificationId')
+  const dismissNotification = async (notificationId, notificationType) => {
+    if (!notificationId || !user?.id) {
+      console.error('dismissNotification called with null notificationId or user')
       return
     }
-    // localStorageに記録
-    const dismissedKey = `dismissed_${notificationType}_notifications`
-    const dismissed = JSON.parse(localStorage.getItem(dismissedKey) || '[]')
-    if (!dismissed.includes(notificationId)) {
-      dismissed.push(notificationId)
-      localStorage.setItem(dismissedKey, JSON.stringify(dismissed))
+    
+    try {
+      // Supabaseに保存
+      const { error } = await supabase
+        .from('notification_dismissals')
+        .insert({
+          user_id: user.id,
+          notification_type: notificationType,
+          notification_id: notificationId
+        })
+
+      if (error) {
+        // 既に存在する場合はエラーになるが、それは問題ない
+        if (!error.message.includes('duplicate') && !error.message.includes('already exists')) {
+          console.error('Error dismissing notification:', error)
+        }
+      }
+    } catch (error) {
+      console.error('Error dismissing notification:', error)
     }
     
     // 通知を閉じる
     if (notificationType === 'event') setEventNotification(null)
     if (notificationType === 'today') setTodayEventNotification(null)
     if (notificationType === 'followup') setFollowUpNotification(null)
+    if (notificationType === 'request') setRequestNotification(null)
   }
 
   // 17:00以降かどうかをチェック
@@ -306,9 +321,19 @@ function App() {
 
           // 投票期限があり、かつ日程投票がある場合のみ通知
           if (newEvent.voting_deadline) {
-            // 既に閉じた通知かチェック
-            const dismissed = JSON.parse(localStorage.getItem('dismissed_event_notifications') || '[]')
-            if (dismissed.includes(newEvent.id)) return
+            // 既に閉じた通知かチェック（Supabaseから確認）
+            const { data: dismissal } = await supabase
+              .from('notification_dismissals')
+              .select('id')
+              .eq('user_id', user.id)
+              .eq('notification_type', 'event')
+              .eq('notification_id', newEvent.id)
+              .maybeSingle()
+
+            if (dismissal) return
+
+            // 既に表示中のイベントがある場合はスキップ
+            if (eventNotification) return
 
             // イベント作成者の情報を取得
             const { data: author } = await supabase
@@ -322,6 +347,44 @@ function App() {
               author
             })
           }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'announcements',
+          filter: 'category=eq.announcement'
+        },
+        async (payload) => {
+          const newRequest = payload.new
+
+          // 既に閉じた通知かチェック（Supabaseから確認）
+          const { data: dismissal } = await supabase
+            .from('notification_dismissals')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('notification_type', 'request')
+            .eq('notification_id', newRequest.id)
+            .maybeSingle()
+
+          if (dismissal) return
+
+          // 既に表示中のリクエストがある場合はスキップ
+          if (requestNotification) return
+
+          // お願いもの作成者の情報を取得
+          const { data: author } = await supabase
+            .from('users')
+            .select('name, email')
+            .eq('id', newRequest.author_id)
+            .single()
+
+          setRequestNotification({
+            ...newRequest,
+            author
+          })
         }
       )
       .subscribe()
@@ -362,13 +425,18 @@ function App() {
 
       // まだ通知していないイベントがあれば表示
       if (todayEvents && todayEvents.length > 0) {
-        const notifiedEvents = JSON.parse(localStorage.getItem('notifiedTodayEvents') || '[]')
-        const unnotifiedEvent = todayEvents.find(event => !notifiedEvents.includes(event.id))
+        // Supabaseから非表示状態を取得
+        const { data: dismissals } = await supabase
+          .from('notification_dismissals')
+          .select('notification_id')
+          .eq('user_id', user.id)
+          .eq('notification_type', 'today')
+
+        const dismissedIds = new Set(dismissals?.map(d => d.notification_id) || [])
+        const unnotifiedEvent = todayEvents.find(event => !dismissedIds.has(event.id))
 
         if (unnotifiedEvent) {
           setTodayEventNotification(unnotifiedEvent)
-          // 通知済みとしてマーク
-          localStorage.setItem('notifiedTodayEvents', JSON.stringify([...notifiedEvents, unnotifiedEvent.id]))
         }
       }
     }
@@ -395,6 +463,20 @@ function App() {
         },
         async (payload) => {
           const message = payload.new
+
+          // 既に閉じた通知かチェック（Supabaseから確認）
+          const { data: dismissal } = await supabase
+            .from('notification_dismissals')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('notification_type', 'followup')
+            .eq('notification_id', message.id)
+            .maybeSingle()
+
+          if (dismissal) return
+
+          // 既に表示中のメッセージがある場合はスキップ
+          if (followUpNotification) return
 
           // 自分が対象かどうかチェック
           const { data: announcement } = await supabase
@@ -445,69 +527,113 @@ function App() {
 
     const checkPendingNotifications = async () => {
       try {
+        // Supabaseから非表示状態を取得
+        const { data: dismissals } = await supabase
+          .from('notification_dismissals')
+          .select('notification_type, notification_id')
+          .eq('user_id', user.id)
+
+        const dismissedMap = {}
+        if (dismissals) {
+          dismissals.forEach(d => {
+            const key = `${d.notification_type}_${d.notification_id}`
+            dismissedMap[key] = true
+          })
+        }
+
+        const isDismissed = (type, id) => {
+          return dismissedMap[`${type}_${id}`] === true
+        }
+
         // 投票期限のあるイベントで、まだ通知していないものをチェック
-        const dismissed = JSON.parse(localStorage.getItem('dismissed_event_notifications') || '[]')
+        // 既に表示中のイベントがある場合はチェックしない
+        if (!eventNotification) {
+          const { data: pendingEvents } = await supabase
+            .from('announcements')
+            .select(`
+              *,
+              author:users!announcements_author_id_fkey (
+                id,
+                name,
+                email
+              )
+            `)
+            .eq('category', 'event')
+            .not('voting_deadline', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(10)
 
-        const { data: pendingEvents } = await supabase
-          .from('announcements')
-          .select(`
-            *,
-            author:users!announcements_author_id_fkey (
-              id,
-              name,
-              email
-            )
-          `)
-          .eq('category', 'event')
-          .not('voting_deadline', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(1)
+          if (pendingEvents && pendingEvents.length > 0) {
+            // 閉じていない最新のイベントを探す
+            const unnotifiedEvent = pendingEvents.find(event => !isDismissed('event', event.id))
+            if (unnotifiedEvent) {
+              setEventNotification(unnotifiedEvent)
+            }
+          }
+        }
 
-        if (pendingEvents && pendingEvents.length > 0) {
-          const latestEvent = pendingEvents[0]
-          if (!dismissed.includes(latestEvent.id)) {
-            setEventNotification(latestEvent)
+        // お願いもの（announcement）で、まだ通知していないものをチェック
+        // 既に表示中のリクエストがある場合はチェックしない
+        if (!requestNotification) {
+          const { data: pendingRequests } = await supabase
+            .from('announcements')
+            .select(`
+              *,
+              author:users!announcements_author_id_fkey (
+                id,
+                name,
+                email
+              )
+            `)
+            .eq('category', 'announcement')
+            .order('created_at', { ascending: false })
+            .limit(10)
+
+          if (pendingRequests && pendingRequests.length > 0) {
+            // 閉じていない最新のお願いものを探す
+            const unnotifiedRequest = pendingRequests.find(request => !isDismissed('request', request.id))
+            if (unnotifiedRequest) {
+              setRequestNotification(unnotifiedRequest)
+            }
           }
         }
 
         // 自分宛のフォローアップメッセージで、まだ通知していないものをチェック
-        const dismissedFollowUps = JSON.parse(localStorage.getItem('dismissed_followup_notifications') || '[]')
-
         // 既に表示中のメッセージがある場合はチェックしない
-        if (followUpNotification) return
-
-        const { data: followUpMessages } = await supabase
-          .from('event_follow_up_messages')
-          .select(`
-            *,
-            announcement:announcements!inner (
+        if (!followUpNotification) {
+          const { data: followUpMessages } = await supabase
+            .from('event_follow_up_messages')
+            .select(`
               *,
-              participants:announcement_participants!inner(user_id),
-              date_options:event_date_options(
-                id,
-                votes:event_date_votes(user_id)
+              announcement:announcements!inner (
+                *,
+                participants:announcement_participants!inner(user_id),
+                date_options:event_date_options(
+                  id,
+                  votes:event_date_votes(user_id)
+                )
               )
-            )
-          `)
-          .order('created_at', { ascending: false })
-          .limit(10)
+            `)
+            .order('created_at', { ascending: false })
+            .limit(10)
 
-        if (followUpMessages) {
-          for (const message of followUpMessages) {
-            if (dismissedFollowUps.includes(message.id)) continue
+          if (followUpMessages) {
+            for (const message of followUpMessages) {
+              if (isDismissed('followup', message.id)) continue
 
-            let isTarget = false
+              let isTarget = false
 
-            if (message.target_type === 'all_participants') {
-              isTarget = message.announcement.participants.some(p => p.user_id === user.id)
-            } else if (message.target_type === 'date_option_voters' && message.date_option_id) {
-              const dateOption = message.announcement.date_options?.find(opt => opt.id === message.date_option_id)
-              isTarget = dateOption?.votes?.some(v => v.user_id === user.id) || false
-            }
+              if (message.target_type === 'all_participants') {
+                isTarget = message.announcement.participants.some(p => p.user_id === user.id)
+              } else if (message.target_type === 'date_option_voters' && message.date_option_id) {
+                const dateOption = message.announcement.date_options?.find(opt => opt.id === message.date_option_id)
+                isTarget = dateOption?.votes?.some(v => v.user_id === user.id) || false
+              }
 
-            if (isTarget) {
-              setFollowUpNotification(message)
-              break // 最新の1件のみ表示
+              if (isTarget) {
+                setFollowUpNotification(message)
+                break // 最新の1件のみ表示
+              }
             }
           }
         }
@@ -1256,7 +1382,7 @@ function App() {
         <>
           {/* オーバーレイ */}
           <div
-            onClick={() => setTodayEventNotification(null)}
+            onClick={() => dismissNotification(todayEventNotification.id, 'today')}
             className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm animate-fade-in"
           />
 
@@ -1281,7 +1407,7 @@ function App() {
                   </div>
                 </div>
                 <button
-                  onClick={() => setTodayEventNotification(null)}
+                  onClick={() => dismissNotification(todayEventNotification.id, 'today')}
                   className={`p-2 rounded-full transition-colors ${
                     isDark
                       ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
@@ -1351,7 +1477,7 @@ function App() {
             {/* アクション */}
             <div className={`px-6 py-4 border-t flex gap-3 ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
               <button
-                onClick={() => setTodayEventNotification(null)}
+                onClick={() => dismissNotification(todayEventNotification.id, 'today')}
                 className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
                   isDark
                     ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
@@ -1362,8 +1488,8 @@ function App() {
               </button>
               <button
                 onClick={() => {
+                  dismissNotification(todayEventNotification.id, 'today')
                   setCurrentPage('announcements')
-                  setTodayEventNotification(null)
                 }}
                 className={`flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-200 ${
                   isDark
@@ -1378,12 +1504,105 @@ function App() {
         </>
       )}
 
+      {/* お願いもの通知ポップアップ */}
+      {requestNotification && (
+        <>
+          {/* オーバーレイ */}
+          <div
+            onClick={() => dismissNotification(requestNotification.id, 'request')}
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm animate-fade-in"
+          />
+
+          {/* ポップアップ */}
+          <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-11/12 max-w-md backdrop-blur-xl rounded-3xl shadow-2xl border overflow-hidden animate-scale-in ${
+            isDark
+              ? 'bg-gray-900/95 border-gray-800/50'
+              : 'bg-white/95 border-gray-200/50'
+          }`}>
+            {/* ヘッダー */}
+            <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="text-3xl">📢</div>
+                  <div>
+                    <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      新しいお願い
+                    </h3>
+                    <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                      確認をお願いします
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => dismissNotification(requestNotification.id, 'request')}
+                  className={`p-2 rounded-full transition-colors ${
+                    isDark
+                      ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
+                      : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* コンテンツ */}
+            <div className="p-6 space-y-4">
+              <div>
+                <h4 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  {requestNotification.title}
+                </h4>
+                <p className={`text-sm whitespace-pre-wrap ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                  {requestNotification.content}
+                </p>
+              </div>
+
+              {requestNotification.author && (
+                <div className={`flex items-center gap-2 text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  <span>投稿者:</span>
+                  <span>{requestNotification.author.name || requestNotification.author.email.split('@')[0]}</span>
+                </div>
+              )}
+            </div>
+
+            {/* アクション */}
+            <div className={`px-6 py-4 border-t flex gap-3 ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
+              <button
+                onClick={() => dismissNotification(requestNotification.id, 'request')}
+                className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
+                  isDark
+                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                後で
+              </button>
+              <button
+                onClick={() => {
+                  dismissNotification(requestNotification.id, 'request')
+                  setCurrentPage('announcements')
+                }}
+                className={`flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-200 ${
+                  isDark
+                    ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600'
+                    : 'bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700'
+                }`}
+              >
+                確認する
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* フォローアップメッセージ通知ポップアップ */}
       {followUpNotification && (
         <>
           {/* オーバーレイ */}
           <div
-            onClick={() => setFollowUpNotification(null)}
+            onClick={() => dismissNotification(followUpNotification.id, 'followup')}
             className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm animate-fade-in"
           />
 
@@ -1408,7 +1627,7 @@ function App() {
                   </div>
                 </div>
                 <button
-                  onClick={() => setFollowUpNotification(null)}
+                  onClick={() => dismissNotification(followUpNotification.id, 'followup')}
                   className={`p-2 rounded-full transition-colors ${
                     isDark
                       ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
@@ -1444,7 +1663,7 @@ function App() {
             {/* アクション */}
             <div className={`px-6 py-4 border-t flex gap-3 ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
               <button
-                onClick={() => setFollowUpNotification(null)}
+                onClick={() => dismissNotification(followUpNotification.id, 'followup')}
                 className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
                   isDark
                     ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
@@ -1455,8 +1674,8 @@ function App() {
               </button>
               <button
                 onClick={() => {
+                  dismissNotification(followUpNotification.id, 'followup')
                   setCurrentPage('announcements')
-                  setFollowUpNotification(null)
                 }}
                 className={`flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-200 ${
                   isDark
