@@ -73,11 +73,15 @@ export async function reClockIn(userId) {
   // 既存の勤怠データを取得
   const existingAttendance = await getTodayAttendance(userId);
 
+  // 前回の退勤時刻をlast_clock_outに保存
+  const lastClockOut = existingAttendance?.clock_out || null;
+
   const { data, error } = await supabase
     .from('attendances')
     .update({
       // clock_inは変更しない（最初の出勤時刻を保持）
       clock_out: null,
+      last_clock_out: lastClockOut, // 前回の退勤時刻を保存
       status: 'working',
       // 前回の勤務記録は保持
       break_minutes_used: existingAttendance?.break_minutes_used || 0,
@@ -113,18 +117,32 @@ export async function clockOut(userId, breakMinutes = 0) {
   }
 
   // 総勤務時間を計算（分）
-  const clockIn = new Date(attendance.clock_in);
-  const clockOut = new Date(now);
-  const totalMinutes = Math.floor((clockOut - clockIn) / 60000);
-  const workMinutes = totalMinutes - breakMinutes;
+  // 再出勤の場合は、last_clock_outから現在時刻までの時間を計算
+  let startTime;
+  if (attendance.last_clock_out) {
+    // 再出勤後の場合は、前回の退勤時刻から現在時刻まで
+    startTime = new Date(attendance.last_clock_out);
+  } else {
+    // 通常の場合は、最初の出勤時刻から現在時刻まで
+    startTime = new Date(attendance.clock_in);
+  }
+  
+  const clockOutTime = new Date(now);
+  const currentSessionMinutes = Math.floor((clockOutTime - startTime) / 60000);
+  const currentWorkMinutes = currentSessionMinutes - breakMinutes;
+  
+  // 前回の勤務時間に今回のセッションの時間を加算
+  const previousWorkMinutes = attendance.total_work_minutes || 0;
+  const totalWorkMinutes = previousWorkMinutes + currentWorkMinutes;
 
   const { data, error } = await supabase
     .from('attendances')
     .update({
       clock_out: now,
-      break_minutes_used: breakMinutes,
-      total_work_minutes: workMinutes,
-      status: 'completed'
+      break_minutes_used: (attendance.break_minutes_used || 0) + breakMinutes,
+      total_work_minutes: totalWorkMinutes,
+      status: 'completed',
+      last_clock_out: null // 退勤時はlast_clock_outをクリア
     })
     .eq('user_id', userId)
     .eq('date', today)

@@ -408,29 +408,44 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
   const getWorkDuration = () => {
     if (!attendance?.clock_in) return '0:00'
 
-    // 日本時間（JST）で今日の日付を取得
-    const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-    const today = jstNow.toISOString().split('T')[0]
-    
-    const clockInTime = attendance.clock_in.includes('T') 
-      ? attendance.clock_in.split('T')[1] 
-      : attendance.clock_in
-    const start = new Date(`${today}T${clockInTime}`)
-    
-    let end
+    // 退勤済みの場合は、total_work_minutesを使用
     if (attendance.clock_out) {
-      const clockOutTime = attendance.clock_out.includes('T')
-        ? attendance.clock_out.split('T')[1]
-        : attendance.clock_out
-      end = new Date(`${today}T${clockOutTime}`)
+      const totalMinutes = attendance.total_work_minutes || 0
+      const hours = Math.floor(totalMinutes / 60)
+      const minutes = totalMinutes % 60
+      return `${hours}:${minutes.toString().padStart(2, '0')}`
+    }
+
+    // 勤務中の場合は、現在時刻までの時間を計算
+    // 再出勤の場合は、last_clock_outから現在時刻まで
+    let startTime
+    if (attendance.last_clock_out) {
+      // 再出勤後の場合は、前回の退勤時刻から現在時刻まで
+      const lastClockOutTime = attendance.last_clock_out.includes('T')
+        ? attendance.last_clock_out.split('T')[1]
+        : attendance.last_clock_out
+      const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+      const today = jstNow.toISOString().split('T')[0]
+      startTime = new Date(`${today}T${lastClockOutTime}`)
     } else {
-      end = jstNow
+      // 通常の場合は、最初の出勤時刻から現在時刻まで
+      const clockInTime = attendance.clock_in.includes('T') 
+        ? attendance.clock_in.split('T')[1] 
+        : attendance.clock_in
+      const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+      const today = jstNow.toISOString().split('T')[0]
+      startTime = new Date(`${today}T${clockInTime}`)
     }
     
-    const diff = Math.floor((end - start) / 1000 / 60) // 分
+    const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+    const currentSessionMinutes = Math.floor((jstNow - startTime) / 1000 / 60) // 分
+    
+    // 前回の勤務時間に今回のセッションの時間を加算
+    const previousWorkMinutes = attendance.total_work_minutes || 0
+    const totalMinutes = previousWorkMinutes + currentSessionMinutes
 
-    const hours = Math.floor(diff / 60)
-    const minutes = diff % 60
+    const hours = Math.floor(totalMinutes / 60)
+    const minutes = totalMinutes % 60
 
     return `${hours}:${minutes.toString().padStart(2, '0')}`
   }
