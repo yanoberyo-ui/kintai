@@ -69,19 +69,17 @@ export async function reClockIn(userId) {
   const currentTime = new Date()
   const jstDate = new Date(currentTime.getTime() + (9 * 60 * 60 * 1000)) // UTC + 9時間
   const today = jstDate.toISOString().split('T')[0];
+  const now = currentTime.toISOString(); // 再出勤時刻をUTCで保存
 
   // 既存の勤怠データを取得
   const existingAttendance = await getTodayAttendance(userId);
-
-  // 前回の退勤時刻をlast_clock_outに保存
-  const lastClockOut = existingAttendance?.clock_out || null;
 
   const { data, error } = await supabase
     .from('attendances')
     .update({
       // clock_inは変更しない（最初の出勤時刻を保持）
       clock_out: null,
-      last_clock_out: lastClockOut, // 前回の退勤時刻を保存
+      last_clock_out: now, // 再出勤時刻を保存（退勤時にここから計算する）
       status: 'working',
       // 前回の勤務記録は保持
       break_minutes_used: existingAttendance?.break_minutes_used || 0,
@@ -117,10 +115,10 @@ export async function clockOut(userId, breakMinutes = 0) {
   }
 
   // 総勤務時間を計算（分）
-  // 再出勤の場合は、last_clock_outから現在時刻までの時間を計算
+  // 再出勤の場合は、last_clock_out（再出勤時刻）から現在時刻までの時間を計算
   let startTime;
   if (attendance.last_clock_out) {
-    // 再出勤後の場合は、前回の退勤時刻から現在時刻まで
+    // 再出勤後の場合は、再出勤時刻から現在時刻まで
     startTime = new Date(attendance.last_clock_out);
   } else {
     // 通常の場合は、最初の出勤時刻から現在時刻まで

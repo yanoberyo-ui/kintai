@@ -216,11 +216,22 @@ export default function AdminPage({ isDark }) {
             totalMinutes: 0,
             totalRevenue: 0,
             todoTotal: 0,
-            todoCompleted: 0
+            todoCompleted: 0,
+            remoteDays: 0,
+            officeDays: 0,
+            totalDays: 0
           }
         }
 
         unitSummary[dept].memberCount.add(record.user.id)
+        unitSummary[dept].totalDays++
+        
+        // work_typeでリモートと出社を分類
+        if (record.work_type === 'remote') {
+          unitSummary[dept].remoteDays++
+        } else if (record.work_type === 'office') {
+          unitSummary[dept].officeDays++
+        }
         
         // total_work_minutesを計算
         let workMinutes = 0
@@ -322,7 +333,11 @@ export default function AdminPage({ isDark }) {
         totalMinutes: unit.totalMinutes % 60,
         totalRevenue: unit.totalRevenue,
         profitPerHour: unit.totalMinutes > 0 ? unit.totalRevenue / (unit.totalMinutes / 60) : 0,
-        todoRate: unit.todoTotal > 0 ? Math.round((unit.todoCompleted / unit.todoTotal) * 100) : 0
+        todoRate: unit.todoTotal > 0 ? Math.round((unit.todoCompleted / unit.todoTotal) * 100) : 0,
+        remoteDays: unit.remoteDays,
+        officeDays: unit.officeDays,
+        totalDays: unit.totalDays,
+        remoteRate: unit.totalDays > 0 ? Math.round((unit.remoteDays / unit.totalDays) * 100) : 0
       }))
 
       setDashboardData(dashboardArray)
@@ -388,6 +403,8 @@ export default function AdminPage({ isDark }) {
             name: record.user.name,
             department: record.user.department,
             attendanceDays: 0,
+            remoteDays: 0,
+            officeDays: 0,
             totalWorkMinutes: 0,
             todoTotal: 0,
             todoCompleted: 0
@@ -401,6 +418,13 @@ export default function AdminPage({ isDark }) {
 
         // 出勤日数としてカウント（clock_outがなくても出勤として扱う）
         userStats[userId].attendanceDays++
+        
+        // work_typeでリモートと出社を分類
+        if (record.work_type === 'remote') {
+          userStats[userId].remoteDays++
+        } else if (record.work_type === 'office') {
+          userStats[userId].officeDays++
+        }
         
         // total_work_minutesを計算
         let workMinutes = 0
@@ -860,6 +884,16 @@ export default function AdminPage({ isDark }) {
                   <th className={`px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium uppercase tracking-wider ${
                     isDark ? 'text-gray-400' : 'text-gray-500'
                   }`}>
+                    🏠 リモート
+                  </th>
+                  <th className={`px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium uppercase tracking-wider ${
+                    isDark ? 'text-gray-400' : 'text-gray-500'
+                  }`}>
+                    🏢 出社
+                  </th>
+                  <th className={`px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium uppercase tracking-wider ${
+                    isDark ? 'text-gray-400' : 'text-gray-500'
+                  }`}>
                     合計
                   </th>
                   <th className={`px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium uppercase tracking-wider ${
@@ -886,7 +920,21 @@ export default function AdminPage({ isDark }) {
                       {user.department}
                     </td>
                     <td className={`px-3 md:px-6 py-3 md:py-4 whitespace-nowrap text-xs md:text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
-                      {user.attendanceDays}
+                      {user.attendanceDays}日
+                    </td>
+                    <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        isDark ? 'bg-blue-900/30 text-blue-300' : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {user.remoteDays || 0}日
+                      </span>
+                    </td>
+                    <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        isDark ? 'bg-green-900/30 text-green-300' : 'bg-green-100 text-green-700'
+                      }`}>
+                        {user.officeDays || 0}日
+                      </span>
                     </td>
                     <td className={`px-3 md:px-6 py-3 md:py-4 whitespace-nowrap text-xs md:text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
                       {Math.floor(user.totalWorkMinutes / 60)}:{String(user.totalWorkMinutes % 60).padStart(2, '0')}

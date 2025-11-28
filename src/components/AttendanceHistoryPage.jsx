@@ -8,6 +8,8 @@ export default function AttendanceHistoryPage({ user, isDark }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
   const [summary, setSummary] = useState({
     totalDays: 0,
+    remoteDays: 0,
+    officeDays: 0,
     totalHours: 0,
     totalMinutes: 0,
     averageHours: 0,
@@ -49,10 +51,18 @@ export default function AttendanceHistoryPage({ user, isDark }) {
   const calculateSummary = (data) => {
     const totalDays = data.length
     let totalMinutes = 0
+    let remoteDays = 0
+    let officeDays = 0
 
     data.forEach(record => {
       if (record.total_work_minutes) {
         totalMinutes += record.total_work_minutes
+      }
+      // work_typeでリモートと出社を分類
+      if (record.work_type === 'remote') {
+        remoteDays++
+      } else if (record.work_type === 'office') {
+        officeDays++
       }
     })
 
@@ -64,6 +74,8 @@ export default function AttendanceHistoryPage({ user, isDark }) {
 
     setSummary({
       totalDays,
+      remoteDays,
+      officeDays,
       totalHours,
       totalMinutes: remainingMinutes,
       averageHours,
@@ -168,7 +180,7 @@ export default function AttendanceHistoryPage({ user, isDark }) {
           </div>
 
           {/* サマリー */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <div className={`p-4 rounded-xl ${
               isDark ? 'bg-gray-800/50' : 'bg-gray-100/50'
             }`}>
@@ -179,6 +191,32 @@ export default function AttendanceHistoryPage({ user, isDark }) {
                 isDark ? 'text-white' : 'text-gray-900'
               }`}>
                 {summary.totalDays}日
+              </div>
+            </div>
+
+            <div className={`p-4 rounded-xl ${
+              isDark ? 'bg-blue-900/20 border border-blue-700/30' : 'bg-blue-50 border border-blue-200'
+            }`}>
+              <div className={`text-sm flex items-center gap-1 ${isDark ? 'text-blue-300' : 'text-blue-600'}`}>
+                🏠 リモート
+              </div>
+              <div className={`text-2xl font-bold mt-1 ${
+                isDark ? 'text-blue-300' : 'text-blue-700'
+              }`}>
+                {summary.remoteDays}日
+              </div>
+            </div>
+
+            <div className={`p-4 rounded-xl ${
+              isDark ? 'bg-green-900/20 border border-green-700/30' : 'bg-green-50 border border-green-200'
+            }`}>
+              <div className={`text-sm flex items-center gap-1 ${isDark ? 'text-green-300' : 'text-green-600'}`}>
+                🏢 出社
+              </div>
+              <div className={`text-2xl font-bold mt-1 ${
+                isDark ? 'text-green-300' : 'text-green-700'
+              }`}>
+                {summary.officeDays}日
               </div>
             </div>
 
@@ -212,12 +250,12 @@ export default function AttendanceHistoryPage({ user, isDark }) {
               isDark ? 'bg-gray-800/50' : 'bg-gray-100/50'
             }`}>
               <div className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                総勤務時間（分）
+                リモート率
               </div>
               <div className={`text-2xl font-bold mt-1 ${
                 isDark ? 'text-white' : 'text-gray-900'
               }`}>
-                {summary.totalHours * 60 + summary.totalMinutes}分
+                {summary.totalDays > 0 ? Math.round((summary.remoteDays / summary.totalDays) * 100) : 0}%
               </div>
             </div>
           </div>
@@ -252,10 +290,23 @@ export default function AttendanceHistoryPage({ user, isDark }) {
                 >
                   <div className="flex items-center justify-between flex-wrap gap-4">
                     <div className="flex-1 min-w-[200px]">
-                      <div className={`text-lg font-semibold ${
+                      <div className={`text-lg font-semibold flex items-center gap-2 ${
                         isDark ? 'text-white' : 'text-gray-900'
                       }`}>
                         {formatDate(attendance.date)}
+                        {attendance.work_type && (
+                          <span className={`text-sm px-2 py-0.5 rounded-full ${
+                            attendance.work_type === 'remote'
+                              ? isDark
+                                ? 'bg-blue-900/30 text-blue-300'
+                                : 'bg-blue-100 text-blue-700'
+                              : isDark
+                              ? 'bg-green-900/30 text-green-300'
+                              : 'bg-green-100 text-green-700'
+                          }`}>
+                            {attendance.work_type === 'remote' ? '🏠 リモート' : '🏢 出社'}
+                          </span>
+                        )}
                       </div>
                       <div className={`text-sm mt-1 ${
                         isDark ? 'text-gray-400' : 'text-gray-600'

@@ -417,10 +417,10 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
     }
 
     // 勤務中の場合は、現在時刻までの時間を計算
-    // 再出勤の場合は、last_clock_outから現在時刻まで
+    // 再出勤の場合は、last_clock_out（再出勤時刻）から現在時刻まで
     let startTime
     if (attendance.last_clock_out) {
-      // 再出勤後の場合は、前回の退勤時刻から現在時刻まで
+      // 再出勤後の場合は、再出勤時刻から現在時刻まで
       const lastClockOutTime = attendance.last_clock_out.includes('T')
         ? attendance.last_clock_out.split('T')[1]
         : attendance.last_clock_out
