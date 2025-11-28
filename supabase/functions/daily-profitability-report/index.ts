@@ -169,7 +169,10 @@ serve(async (req) => {
 
     // Slackメッセージを作成
     const monthStr = `${year}年${month}月`;
-    let messageText = `📊 *時間あたり採算レポート（${monthStr}累計）*\n\n`;
+    // 2024年11月中はテストモード
+    const isTestMode = year === 2024 && month === 11;
+    const testLabel = isTestMode ? '【テスト】' : '';
+    let messageText = `📊 ${testLabel}*時間あたり採算レポート（${monthStr}累計）*\n\n`;
 
     if (profitabilityData.length === 0) {
       messageText += 'データがありません';
@@ -185,7 +188,7 @@ serve(async (req) => {
     }
 
     const slackMessage = {
-      text: `時間あたり採算レポート（${monthStr}累計）`,
+      text: `${testLabel}時間あたり採算レポート（${monthStr}累計）`,
       blocks: [
         {
           type: 'section',
