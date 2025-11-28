@@ -3,7 +3,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const SLACK_WEBHOOK_URL = Deno.env.get('SLACK_WEBHOOK_URL') || '';
+// KPI用のSlack Webhook URL（#全体-kpi-management チャンネル用）
+const SLACK_KPI_WEBHOOK_URL = Deno.env.get('SLACK_KPI_WEBHOOK_URL') || '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
@@ -200,9 +201,9 @@ serve(async (req) => {
       ]
     };
 
-    // Slackへ送信
-    if (SLACK_WEBHOOK_URL) {
-      const response = await fetch(SLACK_WEBHOOK_URL, {
+    // Slackへ送信（#全体-kpi-management チャンネル）
+    if (SLACK_KPI_WEBHOOK_URL) {
+      const response = await fetch(SLACK_KPI_WEBHOOK_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -215,9 +216,9 @@ serve(async (req) => {
         throw new Error('Failed to send Slack message');
       }
 
-      console.log('✅ Slack message sent successfully');
+      console.log('✅ Slack message sent successfully to #全体-kpi-management');
     } else {
-      console.log('⚠️ SLACK_WEBHOOK_URL not configured');
+      console.log('⚠️ SLACK_KPI_WEBHOOK_URL not configured');
     }
 
     return new Response(
