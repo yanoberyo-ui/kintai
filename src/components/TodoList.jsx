@@ -214,6 +214,30 @@ export default function TodoList({ user, isDark }) {
     }
   }
 
+  // 一括追加用の関数
+  const handleBulkAdd = async (contents, indent) => {
+    if (!contents || contents.length === 0) return
+    
+    console.log('handleBulkAdd called with:', contents.length, 'items')
+    
+    try {
+      // 順番に追加
+      for (const content of contents) {
+        if (content.trim()) {
+          await addTodoItem(todoList.id, content.trim(), indent)
+        }
+      }
+      
+      // 追加完了後、リストを再読み込み
+      await loadTodoList()
+      setResetKey(prev => prev + 1)
+      console.log('Bulk add completed')
+    } catch (error) {
+      console.error('Error bulk adding tasks:', error)
+      await loadTodoList()
+    }
+  }
+
   const handleAddTask = async (content, indent) => {
     console.log('handleAddTask called with:', content, 'indent:', indent, 'insertAtIndex:', insertAtIndex)
     if (!content.trim()) {
@@ -585,6 +609,7 @@ export default function TodoList({ user, isDark }) {
                     key={`insert-${index}-${resetKey}`}
                     isDark={isDark} 
                     onAdd={handleAddTask}
+                    onBulkAdd={handleBulkAdd}
                     indentLevel={newItemIndent}
                     onIndentChange={() => {}}
                     onBackspaceEmpty={() => {
@@ -602,6 +627,7 @@ export default function TodoList({ user, isDark }) {
             key={resetKey}
             isDark={isDark} 
             onAdd={handleAddTask}
+            onBulkAdd={handleBulkAdd}
             indentLevel={newItemIndent}
             onIndentChange={setNewItemIndent}
             onBackspaceEmpty={() => {
@@ -715,7 +741,35 @@ function ConfettiAnimation() {
   )
 }
 
-function NewTaskItem({ isDark, onAdd, onBackspaceEmpty, indentLevel, onIndentChange, onCancel }) {
+// テキストを解析してTODOリストに変換する関数
+function parseTextToTodos(text) {
+  // 改行で分割
+  const lines = text.split(/\r?\n/)
+  
+  // 各行を処理
+  const todos = lines
+    .map(line => {
+      // 箇条書き記号を削除するパターン
+      // ・、-、−、‐、•、◦、▪、★、☆、○、●、◎、□、■、※、→、►、▸、▹、➤、➢、*
+      // 番号付き（1. 2. 3. や ① ② ③ や 1) 2) 3) など）
+      const bulletPattern = /^[\s]*[・\-−‐•◦▪★☆○●◎□■※→►▸▹➤➢\*]+[\s]*/
+      const numberedPattern = /^[\s]*(?:\d+[\.)\]\:、]|[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]+)[\s]*/
+      const checkboxPattern = /^[\s]*(?:\[[\s\-xX]?\]|\-[\s]*\[[\s\-xX]?\])[\s]*/
+      
+      let cleaned = line
+        .replace(bulletPattern, '')
+        .replace(numberedPattern, '')
+        .replace(checkboxPattern, '')
+        .trim()
+      
+      return cleaned
+    })
+    .filter(line => line.length > 0) // 空行を除外
+  
+  return todos
+}
+
+function NewTaskItem({ isDark, onAdd, onBulkAdd, onBackspaceEmpty, indentLevel, onIndentChange, onCancel }) {
   const [content, setContent] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [localIndent, setLocalIndent] = useState(indentLevel)
@@ -736,6 +790,30 @@ function NewTaskItem({ isDark, onAdd, onBackspaceEmpty, indentLevel, onIndentCha
     setContent('')
     setLocalIndent(indentLevel)
   }, [indentLevel])
+
+  // ペーストハンドラ - 複数行の場合は一括追加
+  const handlePaste = async (e) => {
+    const pastedText = e.clipboardData.getData('text')
+    const todos = parseTextToTodos(pastedText)
+    
+    // 複数行の場合は一括追加
+    if (todos.length > 1) {
+      e.preventDefault() // デフォルトのペーストを防止
+      
+      if (onBulkAdd && !isSubmitting) {
+        setIsSubmitting(true)
+        try {
+          await onBulkAdd(todos, localIndent)
+          setContent('')
+        } catch (error) {
+          console.error('Error in bulk add:', error)
+        } finally {
+          setIsSubmitting(false)
+        }
+      }
+    }
+    // 1行の場合はそのまま通常のペースト処理（記号は削除しない）
+  }
 
   const handleTouchStart = (e) => {
     // 入力中は無効
@@ -850,6 +928,7 @@ function NewTaskItem({ isDark, onAdd, onBackspaceEmpty, indentLevel, onIndentCha
         value={content}
         onChange={(e) => setContent(e.target.value)}
         onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
         onCompositionStart={() => setIsComposing(true)}
         onCompositionEnd={() => setIsComposing(false)}
         disabled={isSubmitting}
