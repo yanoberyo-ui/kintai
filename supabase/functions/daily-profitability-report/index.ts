@@ -155,6 +155,9 @@ serve(async (req) => {
       }
     });
 
+    // 対象のユニットのみフィルタ
+    const targetUnits = ['第1ユニット', '第2ユニット', '第3ユニット', '第5ユニット'];
+
     // 時間あたり採算を計算してソート
     const profitabilityData = Object.values(unitSummary)
       .map((unit: any) => ({
@@ -165,6 +168,7 @@ serve(async (req) => {
         totalRevenue: unit.totalRevenue,
         profitPerHour: unit.totalMinutes > 0 ? unit.totalRevenue / (unit.totalMinutes / 60) : 0
       }))
+      .filter(unit => targetUnits.includes(unit.department))
       .filter(unit => unit.totalHours > 0 || unit.totalRevenue > 0)
       .sort((a, b) => b.profitPerHour - a.profitPerHour);
 
