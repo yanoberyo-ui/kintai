@@ -6,24 +6,30 @@ import {
   deleteTodoItem,
   calculateProgress,
 } from '../utils/todo'
-import TodoList from './TodoList'
 
 export default function CalendarPage({ user, isDark }) {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [todoList, setTodoList] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [routineTodos, setRoutineTodos] = useState([])
+  const [routineCompletions, setRoutineCompletions] = useState(new Set())
 
   useEffect(() => {
     loadTodoListForDate(selectedDate)
+    loadRoutineTodos()
+    loadRoutineCompletionsForDate(selectedDate)
   }, [selectedDate, user])
+
+  const getDateStr = (date) => {
+    const jstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000))
+    return jstDate.toISOString().split('T')[0]
+  }
 
   const loadTodoListForDate = async (date) => {
     setLoading(true)
     try {
-      // 日本時間で日付を取得
-      const jstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000))
-      const dateStr = jstDate.toISOString().split('T')[0]
+      const dateStr = getDateStr(date)
 
       const { data, error } = await supabase
         .from('todo_lists')
@@ -33,9 +39,9 @@ export default function CalendarPage({ user, isDark }) {
         `)
         .eq('user_id', user.id)
         .eq('date', dateStr)
-        .single()
+        .maybeSingle()
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         throw error
       }
 
@@ -44,6 +50,37 @@ export default function CalendarPage({ user, isDark }) {
       console.error('Error loading todo list:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadRoutineTodos = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('routine_todos')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('order_index', { ascending: true })
+
+      if (error) throw error
+      setRoutineTodos(data || [])
+    } catch (error) {
+      console.error('Error loading routine todos:', error)
+    }
+  }
+
+  const loadRoutineCompletionsForDate = async (date) => {
+    try {
+      const dateStr = getDateStr(date)
+      const { data, error } = await supabase
+        .from('routine_todo_completions')
+        .select('routine_todo_id')
+        .eq('user_id', user.id)
+        .eq('completed_date', dateStr)
+
+      if (error) throw error
+      setRoutineCompletions(new Set(data?.map(c => c.routine_todo_id) || []))
+    } catch (error) {
+      console.error('Error loading routine completions:', error)
     }
   }
 
@@ -84,12 +121,60 @@ export default function CalendarPage({ user, isDark }) {
     }
   }
 
-  const handleToggle = async (itemId, isCompleted) => {
+  const handleToggle = async (itemId, isCompleted, isRoutine = false) => {
     try {
-      await toggleTodoItem(itemId, isCompleted)
-      await loadTodoListForDate(selectedDate)
+      if (isRoutine) {
+        const dateStr = getDateStr(selectedDate)
+        if (isCompleted) {
+          // 完了状態を解除
+          await supabase
+            .from('routine_todo_completions')
+            .delete()
+            .eq('routine_todo_id', itemId)
+            .eq('user_id', user.id)
+            .eq('completed_date', dateStr)
+          
+          setRoutineCompletions(prev => {
+            const newSet = new Set(prev)
+            newSet.delete(itemId)
+            return newSet
+          })
+        } else {
+          // 完了状態にする
+          await supabase
+            .from('routine_todo_completions')
+            .insert({
+              routine_todo_id: itemId,
+              user_id: user.id,
+              completed_date: dateStr
+            })
+          
+          setRoutineCompletions(prev => new Set([...prev, itemId]))
+        }
+      } else {
+        await toggleTodoItem(itemId, isCompleted)
+        await loadTodoListForDate(selectedDate)
+      }
     } catch (error) {
       console.error('Error toggling task:', error)
+    }
+  }
+
+  const handleDeleteRoutine = async (itemId) => {
+    try {
+      await supabase
+        .from('routine_todos')
+        .delete()
+        .eq('id', itemId)
+      
+      setRoutineTodos(routineTodos.filter(t => t.id !== itemId))
+      setRoutineCompletions(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(itemId)
+        return newSet
+      })
+    } catch (error) {
+      console.error('Error deleting routine task:', error)
     }
   }
 
@@ -149,8 +234,16 @@ export default function CalendarPage({ user, isDark }) {
   const weekDays = ['日', '月', '火', '水', '木', '金', '土']
 
   const days = getDaysInMonth(currentMonth)
-  const items = todoList?.todo_items || []
-  const progress = calculateProgress(items)
+  const regularItems = todoList?.todo_items || []
+  const routineItems = routineTodos.map(rt => ({
+    ...rt,
+    is_routine: true,
+    is_completed: routineCompletions.has(rt.id),
+    indent_level: rt.indent_level || 0
+  }))
+  const allItems = [...routineItems, ...regularItems]
+  const completedCount = allItems.filter(item => item.is_completed).length
+  const progress = allItems.length > 0 ? Math.round((completedCount / allItems.length) * 100) : 0
 
   return (
     <div className="max-w-7xl mx-auto p-8 space-y-6">
@@ -250,23 +343,21 @@ export default function CalendarPage({ user, isDark }) {
             }`}>
               {selectedDate.getMonth() + 1}月{selectedDate.getDate()}日のタスク
             </h2>
-            {items.length > 0 && (
-              <div className={`px-4 py-2 rounded-full font-bold text-lg ${
-                progress >= 70
-                  ? isDark
-                    ? 'bg-white text-gray-900'
-                    : 'bg-gray-900 text-white'
-                  : progress >= 40
-                  ? isDark
-                    ? 'bg-gray-300 text-gray-900'
-                    : 'bg-gray-700 text-white'
-                  : isDark
-                  ? 'bg-gray-700 text-gray-300'
-                  : 'bg-gray-300 text-gray-700'
-              }`}>
-                {progress}%
-              </div>
-            )}
+            <div className={`px-4 py-2 rounded-full font-bold text-lg ${
+              progress >= 70
+                ? isDark
+                  ? 'bg-white text-gray-900'
+                  : 'bg-gray-900 text-white'
+                : progress >= 40
+                ? isDark
+                  ? 'bg-gray-300 text-gray-900'
+                  : 'bg-gray-700 text-white'
+                : isDark
+                ? 'bg-gray-700 text-gray-300'
+                : 'bg-gray-300 text-gray-700'
+            }`}>
+              {progress}%
+            </div>
           </div>
 
           {loading ? (
@@ -275,7 +366,31 @@ export default function CalendarPage({ user, isDark }) {
             </div>
           ) : (
             <div className="space-y-1">
-              {items
+              {/* 定常TODO */}
+              {routineItems.length > 0 && (
+                <>
+                  <div className={`text-xs font-semibold mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                    定常タスク
+                  </div>
+                  {routineItems.map((item) => (
+                    <TaskItem
+                      key={`routine-${item.id}`}
+                      item={item}
+                      isDark={isDark}
+                      onToggle={handleToggle}
+                      onDelete={handleDeleteRoutine}
+                    />
+                  ))}
+                </>
+              )}
+              
+              {/* 通常TODO */}
+              {(regularItems.length > 0 || routineItems.length > 0) && regularItems.length > 0 && (
+                <div className={`text-xs font-semibold mt-4 mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                  本日のタスク
+                </div>
+              )}
+              {regularItems
                 .sort((a, b) => a.order_index - b.order_index)
                 .map((item) => (
                   <TaskItem
@@ -292,8 +407,6 @@ export default function CalendarPage({ user, isDark }) {
         </div>
       </div>
 
-      {/* TODOリスト */}
-      {user && <TodoList user={user} isDark={isDark} />}
     </div>
   )
 }
@@ -353,13 +466,13 @@ function NewTaskItem({ isDark, onAdd }) {
 }
 
 function TaskItem({ item, isDark, onToggle, onDelete }) {
-  const [indentLevel, setIndentLevel] = useState(0)
+  const [indentLevel, setIndentLevel] = useState(item.indent_level || 0)
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(item.content)
   const inputRef = useState(null)[0]
 
   const handleToggle = async () => {
-    await onToggle(item.id, !item.is_completed)
+    await onToggle(item.id, item.is_completed, item.is_routine || false)
   }
 
   const handleEdit = () => {
@@ -391,7 +504,7 @@ function TaskItem({ item, isDark, onToggle, onDelete }) {
       }
     } else if (e.key === 'Backspace' && !isEditing) {
       e.preventDefault()
-      onDelete(item.id)
+      onDelete(item.id, item.is_routine || false)
     }
   }
 
