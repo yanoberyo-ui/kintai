@@ -60,7 +60,7 @@ export default function Avatar({
           className="w-full h-full object-cover"
           loading="lazy"
           decoding="async"
-          fetchpriority="low"
+          fetchPriority="low"
           onError={handleImageError}
         />
       ) : (

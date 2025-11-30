@@ -200,7 +200,10 @@ export default function TodoList({ user, isDark }) {
 
   const loadTodayCompletions = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0]
+      // 日本時間で今日の日付を取得
+      const now = new Date()
+      const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000))
+      const today = jstDate.toISOString().split('T')[0]
       const { data, error } = await supabase
         .from('routine_todo_completions')
         .select('routine_todo_id')
@@ -292,7 +295,10 @@ export default function TodoList({ user, isDark }) {
     try {
       if (isRoutine) {
         // Handle routine todo completion
-        const today = new Date().toISOString().split('T')[0]
+        // 日本時間で今日の日付を取得
+        const now = new Date()
+        const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000))
+        const today = jstDate.toISOString().split('T')[0]
 
         if (currentIsCompleted) {
           // Currently completed, so uncomplete: remove from completions table

@@ -14,9 +14,9 @@ export async function getTodayAttendance(userId) {
     .select('*')
     .eq('user_id', userId)
     .eq('date', today)
-    .single();
+    .maybeSingle();
 
-  if (error && error.code !== 'PGRST116') {
+  if (error) {
     throw error;
   }
 

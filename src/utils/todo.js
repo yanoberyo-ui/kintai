@@ -4,7 +4,10 @@ import { supabase } from './supabase.js';
  * 今日のTODOリストを取得
  */
 export async function getTodayTodoList(userId) {
-  const today = new Date().toISOString().split('T')[0];
+  // 日本時間で今日の日付を取得
+  const now = new Date();
+  const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000)); // UTC + 9時間
+  const today = jstDate.toISOString().split('T')[0];
 
   const { data, error } = await supabase
     .from('todo_lists')
@@ -23,9 +26,9 @@ export async function getTodayTodoList(userId) {
     `)
     .eq('user_id', userId)
     .eq('date', today)
-    .single();
+    .maybeSingle();
 
-  if (error && error.code !== 'PGRST116') {
+  if (error) {
     throw error;
   }
 
@@ -44,9 +47,11 @@ export async function getTodayTodoList(userId) {
  * 前日のTODOリストを取得
  */
 export async function getYesterdayTodoList(userId) {
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
+  // 日本時間で昨日の日付を取得
+  const now = new Date();
+  const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000)); // UTC + 9時間
+  jstDate.setDate(jstDate.getDate() - 1); // 1日前
+  const yesterdayStr = jstDate.toISOString().split('T')[0];
 
   const { data, error } = await supabase
     .from('todo_lists')
@@ -56,9 +61,9 @@ export async function getYesterdayTodoList(userId) {
     `)
     .eq('user_id', userId)
     .eq('date', yesterdayStr)
-    .single();
+    .maybeSingle();
 
-  if (error && error.code !== 'PGRST116') {
+  if (error) {
     throw error;
   }
 
@@ -105,7 +110,10 @@ export async function carryOverUncompletedTodos(userId, newListId) {
  * 今日のTODOリストを作成
  */
 export async function createTodayTodoList(userId, title = '今日のtodo') {
-  const today = new Date().toISOString().split('T')[0];
+  // 日本時間で今日の日付を取得
+  const now = new Date();
+  const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000)); // UTC + 9時間
+  const today = jstDate.toISOString().split('T')[0];
 
   const { data, error } = await supabase
     .from('todo_lists')
