@@ -13,6 +13,12 @@ import {
   carryOverUncompletedTodos,
 } from '../utils/todo'
 import {
+  fetchRootsTodos,
+  fetchRootsObjectives,
+  convertRootsTodoToKintai,
+  testRootsConnection,
+} from '../utils/rootsApi'
+import {
   DndContext,
   closestCenter,
   PointerSensor,
@@ -44,6 +50,15 @@ export default function TodoList({ user, isDark, currentUser = null }) {
   // Routine TODO state
   const [routineTodos, setRoutineTodos] = useState([])
   const [routineCompletions, setRoutineCompletions] = useState(new Set())
+
+  // Roots連携 state
+  const [showRootsModal, setShowRootsModal] = useState(false)
+  const [rootsTodos, setRootsTodos] = useState([])
+  const [rootsObjectives, setRootsObjectives] = useState([])
+  const [rootsLoading, setRootsLoading] = useState(false)
+  const [rootsError, setRootsError] = useState('')
+  const [rootsConnected, setRootsConnected] = useState(false)
+  const [selectedRootsTodos, setSelectedRootsTodos] = useState(new Set())
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -96,6 +111,134 @@ export default function TodoList({ user, isDark, currentUser = null }) {
       setUsersMap(map)
     }
   }
+
+  // ===== Roots連携機能 =====
+
+  // Rootsからタスクを取得
+  const loadRootsTodos = async () => {
+    setRootsLoading(true)
+    setRootsError('')
+
+    try {
+      // Supabaseセッションからアクセストークンを取得
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session?.provider_token) {
+        // Google OAuthでログインしていない場合
+        setRootsError('Rootsと連携するにはGoogleアカウントでログインしてください')
+        setRootsConnected(false)
+        setRootsLoading(false)
+        return
+      }
+
+      // Roots接続テスト
+      const connectionTest = await testRootsConnection(session.provider_token)
+      
+      if (!connectionTest.connected) {
+        setRootsError('Rootsに接続できませんでした: ' + (connectionTest.error || '不明なエラー'))
+        setRootsConnected(false)
+        setRootsLoading(false)
+        return
+      }
+
+      setRootsConnected(true)
+
+      // ToDoとObjectivesを取得
+      const [todos, objectives] = await Promise.all([
+        fetchRootsTodos(session.provider_token),
+        fetchRootsObjectives(session.provider_token),
+      ])
+
+      setRootsTodos(todos.filter(t => !t.completedAt)) // 未完了のみ
+      setRootsObjectives(objectives)
+    } catch (error) {
+      console.error('Error loading roots todos:', error)
+      setRootsError('Rootsのタスク取得に失敗しました: ' + error.message)
+    } finally {
+      setRootsLoading(false)
+    }
+  }
+
+  // 選択したRootsタスクをインポート
+  const importSelectedRootsTodos = async () => {
+    if (selectedRootsTodos.size === 0) return
+
+    try {
+      // TODOリストがなければ作成
+      let listId = todoList?.id
+      if (!listId) {
+        const newList = await createTodayTodoList(user.id)
+        listId = newList.id
+      }
+
+      // 選択されたタスクをインポート
+      for (const todoId of selectedRootsTodos) {
+        const rootsTodo = rootsTodos.find(t => t.id === todoId)
+        if (rootsTodo) {
+          const kintaiTodo = convertRootsTodoToKintai(rootsTodo)
+          
+          // タスクを追加（Rootsのタスク名 + OKR名をプレフィックス）
+          const content = rootsTodo.objective?.title 
+            ? `[${rootsTodo.objective.title}] ${kintaiTodo.content}`
+            : kintaiTodo.content
+
+          await addTodoItem(listId, content, 0, loggedInUser?.id || user.id)
+
+          // 同期情報を保存（roots_todo_syncテーブルがある場合）
+          try {
+            await supabase.from('roots_todo_sync').insert({
+              kintai_user_id: user.id,
+              roots_todo_id: rootsTodo.id,
+              roots_objective_id: rootsTodo.objective?.id,
+              roots_objective_title: rootsTodo.objective?.title,
+              sync_direction: 'from_roots',
+            })
+          } catch (syncError) {
+            // 同期テーブルがなくてもインポート自体は成功とする
+            console.warn('Sync info save failed:', syncError)
+          }
+        }
+      }
+
+      // リロード
+      await loadTodoList()
+      setShowRootsModal(false)
+      setSelectedRootsTodos(new Set())
+    } catch (error) {
+      console.error('Error importing roots todos:', error)
+      setRootsError('インポートに失敗しました: ' + error.message)
+    }
+  }
+
+  // Rootsタスクの選択を切り替え
+  const toggleRootsTodoSelection = (todoId) => {
+    setSelectedRootsTodos(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(todoId)) {
+        newSet.delete(todoId)
+      } else {
+        newSet.add(todoId)
+      }
+      return newSet
+    })
+  }
+
+  // 全選択/全解除
+  const toggleAllRootsTodos = () => {
+    if (selectedRootsTodos.size === rootsTodos.length) {
+      setSelectedRootsTodos(new Set())
+    } else {
+      setSelectedRootsTodos(new Set(rootsTodos.map(t => t.id)))
+    }
+  }
+
+  // Rootsモーダルを開く
+  const openRootsModal = () => {
+    setShowRootsModal(true)
+    loadRootsTodos()
+  }
+
+  // ===== /Roots連携機能 =====
 
   // Calculate progress and items (moved before useEffects that use them)
   const regularItems = todoList?.todo_items || []

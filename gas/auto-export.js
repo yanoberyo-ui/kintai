@@ -1173,6 +1173,10 @@ function updateSheetHeaderIfNeeded(sheet, userName, employeeId) {
     .setBackground('#4285f4')
     .setFontColor('#ffffff');
   
+  // 古いヘッダー（I列、9列目）をクリア
+  sheet.getRange(1, 9, 2, 1).clearContent();
+  sheet.getRange(1, 9, 2, 1).clearFormat();
+  
   // 列幅の設定
   sheet.setColumnWidth(1, 60);  // 月
   sheet.setColumnWidth(2, 50);  // 日
@@ -1183,7 +1187,7 @@ function updateSheetHeaderIfNeeded(sheet, userName, employeeId) {
   sheet.setColumnWidth(7, 100); // 勤務タイプ
   sheet.setColumnWidth(8, 150); // 備考
   
-  // 固定セル（月合計）のヘッダーを更新
+  // 今月合計セクション（J列）
   sheet.getRange(1, 10).setValue('📊 今月合計');
   sheet.getRange(1, 10).setFontWeight('bold').setBackground('#e8f0fe');
   sheet.getRange(1, 11).setValue('0:00');
@@ -1201,10 +1205,34 @@ function updateSheetHeaderIfNeeded(sheet, userName, employeeId) {
   sheet.getRange(2, 12).setFontWeight('bold').setBackground('#e8f5e9');
   sheet.getRange(2, 13).setValue('0日');
   
-  sheet.setColumnWidth(10, 100);
-  sheet.setColumnWidth(11, 80);
-  sheet.setColumnWidth(12, 100);
-  sheet.setColumnWidth(13, 60);
+  // 先月合計セクション（O列）
+  sheet.getRange(1, 15).setValue('📅 先月合計');
+  sheet.getRange(1, 15).setFontWeight('bold').setBackground('#fff3e0');
+  sheet.getRange(1, 16).setValue('0:00');
+  sheet.getRange(1, 16).setFontWeight('bold').setFontSize(12);
+  
+  sheet.getRange(2, 15).setValue('出勤日数');
+  sheet.getRange(2, 15).setFontWeight('bold').setBackground('#fff3e0');
+  sheet.getRange(2, 16).setValue('0日');
+
+  sheet.getRange(1, 17).setValue('🏠 リモート');
+  sheet.getRange(1, 17).setFontWeight('bold').setBackground('#e3f2fd');
+  sheet.getRange(1, 18).setValue('0日');
+  
+  sheet.getRange(2, 17).setValue('🏢 出社');
+  sheet.getRange(2, 17).setFontWeight('bold').setBackground('#e8f5e9');
+  sheet.getRange(2, 18).setValue('0日');
+  
+  // 列幅の設定
+  sheet.setColumnWidth(10, 100); // 今月合計ラベル
+  sheet.setColumnWidth(11, 80);  // 今月合計値
+  sheet.setColumnWidth(12, 100); // 今月リモート/出社ラベル
+  sheet.setColumnWidth(13, 60);  // 今月リモート/出社値
+  sheet.setColumnWidth(14, 20);  // 区切り
+  sheet.setColumnWidth(15, 100); // 先月合計ラベル
+  sheet.setColumnWidth(16, 80);  // 先月合計値
+  sheet.setColumnWidth(17, 100); // 先月リモート/出社ラベル
+  sheet.setColumnWidth(18, 60);  // 先月リモート/出社値
 }
 
 /**
