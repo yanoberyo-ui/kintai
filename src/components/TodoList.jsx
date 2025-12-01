@@ -1213,8 +1213,8 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
         <button
           {...(dragHandleProps || {})}
           onClick={handleToggle}
-          className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm hover:scale-110 cursor-grab active:cursor-grabbing overflow-hidden ${
-            item.is_completed
+          className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm hover:scale-110 cursor-grab active:cursor-grabbing overflow-hidden relative ${
+            item.is_completed && !(isAddedByOther && addedByUser)
               ? isDark
                 ? 'bg-gray-700 text-white'
                 : 'bg-gray-300 text-gray-700'
@@ -1225,27 +1225,37 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
               : 'bg-gray-900 text-white hover:bg-gray-800'
           }`}
         >
-          {item.is_completed ? (
+          {isAddedByOther && addedByUser ? (
+            // 他の人が追加したタスク：追加者のアバターを表示
+            <>
+              {addedByUser.avatar_url ? (
+                <img 
+                  src={addedByUser.avatar_url} 
+                  alt={addedByUser.name || addedByUser.email} 
+                  className={`w-full h-full object-cover ${item.is_completed ? 'opacity-40' : ''}`}
+                />
+              ) : (
+                <div className={`w-full h-full flex items-center justify-center text-xs font-bold ${
+                  isDark 
+                    ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white' 
+                    : 'bg-gradient-to-br from-blue-500 to-purple-500 text-white'
+                } ${item.is_completed ? 'opacity-40' : ''}`}>
+                  {(addedByUser.name || addedByUser.email || '?').charAt(0).toUpperCase()}
+                </div>
+              )}
+              {/* 完了時は白いオーバーレイとチェックマーク */}
+              {item.is_completed && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white/60 rounded-full">
+                  <svg className="w-4 h-4 text-gray-700" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              )}
+            </>
+          ) : item.is_completed ? (
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
             </svg>
-          ) : isAddedByOther && addedByUser ? (
-            // 他の人が追加したタスク：追加者のアバターを表示
-            addedByUser.avatar_url ? (
-              <img 
-                src={addedByUser.avatar_url} 
-                alt={addedByUser.name || addedByUser.email} 
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className={`w-full h-full flex items-center justify-center text-xs font-bold ${
-                isDark 
-                  ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white' 
-                  : 'bg-gradient-to-br from-blue-500 to-purple-500 text-white'
-              }`}>
-                {(addedByUser.name || addedByUser.email || '?').charAt(0).toUpperCase()}
-              </div>
-            )
           ) : (
             <span className="text-sm font-bold transform -rotate-90">
               ▼
