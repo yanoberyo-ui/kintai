@@ -458,15 +458,38 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
 
     try {
       await navigator.clipboard.writeText(text)
-      // 成功フィードバック（簡易的にalertの代わり）
-      const btn = document.activeElement
-      if (btn) {
-        const originalText = btn.textContent
-        btn.textContent = '✓ コピーしました！'
-        setTimeout(() => {
-          btn.textContent = originalText
-        }, 1500)
-      }
+      // トースト風の通知（シンプルなalert代替）
+      const toast = document.createElement('div')
+      toast.textContent = '✓ コピーしました！'
+      toast.style.cssText = `
+        position: fixed;
+        bottom: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #22c55e;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 12px;
+        font-weight: 600;
+        z-index: 9999;
+        animation: fadeInOut 1.5s ease-in-out;
+      `
+      // アニメーション用のスタイルを追加
+      const style = document.createElement('style')
+      style.textContent = `
+        @keyframes fadeInOut {
+          0% { opacity: 0; transform: translateX(-50%) translateY(20px); }
+          15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+          85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+          100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+        }
+      `
+      document.head.appendChild(style)
+      document.body.appendChild(toast)
+      setTimeout(() => {
+        toast.remove()
+        style.remove()
+      }, 1500)
     } catch (err) {
       console.error('コピーに失敗:', err)
       alert('コピーに失敗しました')
@@ -1054,6 +1077,7 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                           {/* Slackにコピー（全員） */}
                           <button
                             onClick={(e) => {
+                              e.preventDefault()
                               e.stopPropagation()
                               handleCopyToSlack(announcement)
                               setOpenMenuId(null)
