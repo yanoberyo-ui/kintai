@@ -1049,12 +1049,14 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
   const addedByUser = item.added_by && usersMap ? usersMap[item.added_by] : null
   // 他の人が追加したタスクかどうか（added_byが存在し、かつtodoOwnerと異なる場合）
   const isAddedByOther = item.added_by && todoOwner && item.added_by !== todoOwner.id
-  // 削除可能かどうか（自分が追加した、またはadded_byがない、または自分のTODOリスト）
-  const canDelete = !item.added_by || (loggedInUser && item.added_by === loggedInUser.id)
   
-  // 編集可能かどうか（自分のTODOリスト、または自分が追加したタスク、またはadded_byがない）
+  // 編集可能かどうか
+  // - 自分のTODOリスト → 全て編集可能
+  // - 他の人のTODOリスト → 自分が追加したタスク（added_byが自分）のみ編集可能
   const isOwnTodoList = todoOwner && loggedInUser && todoOwner.id === loggedInUser.id
-  const canEdit = isOwnTodoList || !item.added_by || (loggedInUser && item.added_by === loggedInUser.id)
+  const canEdit = isOwnTodoList || (loggedInUser && item.added_by && item.added_by === loggedInUser.id)
+  // 削除可能かどうか（canEditと同じ条件）
+  const canDelete = canEdit
 
   // indent_levelが変更されたらデータベースを更新
   useEffect(() => {
