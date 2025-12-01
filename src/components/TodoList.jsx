@@ -1232,6 +1232,7 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
           {...(canEdit && dragHandleProps ? dragHandleProps : {})}
           onClick={handleToggle}
           disabled={!canEdit}
+          title={isAddedByOther && addedByUser ? `${addedByUser.name || addedByUser.email}さんが追加` : undefined}
           className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm overflow-hidden relative ${
             canEdit ? 'cursor-grab active:cursor-grabbing hover:scale-110' : 'cursor-not-allowed opacity-80'
           } ${
@@ -1283,14 +1284,6 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
             </span>
           )}
         </button>
-        {/* 他の人が追加したタスクの場合、ツールチップ表示用 */}
-        {isAddedByOther && addedByUser && (
-          <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border ${
-            isDark 
-              ? 'bg-blue-500 border-gray-900' 
-              : 'bg-blue-500 border-white'
-          }`} title={`${addedByUser.name || addedByUser.email}さんが追加`} />
-        )}
       </div>
 
 {isEditing ? (
