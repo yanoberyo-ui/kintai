@@ -20,6 +20,9 @@ export default function MembersPage({ user, isDark }) {
   const [departments, setDepartments] = useState([])
   const [selectedDepartments, setSelectedDepartments] = useState([])
   const [showAllDepartments, setShowAllDepartments] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [placeholderIndex, setPlaceholderIndex] = useState(0)
+  const placeholders = ['メンバーを検索', '部署で絞り込み']
 
   useEffect(() => {
     loadCurrentUser()
@@ -27,6 +30,14 @@ export default function MembersPage({ user, isDark }) {
     loadAttendanceStatus()
     loadAllTaskProgress()
     loadDailyRankings()
+  }, [])
+
+  // プレースホルダーのアニメーション
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPlaceholderIndex(prev => (prev + 1) % placeholders.length)
+    }, 3000) // 3秒ごとに切り替え
+    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
@@ -361,16 +372,48 @@ export default function MembersPage({ user, isDark }) {
           </p>
         </div>
 
-        {/* 部署フィルタ */}
-        {departments.length > 0 && (
-          <div className={`backdrop-blur-xl rounded-2xl shadow-lg border p-4 ${
-            isDark
-              ? 'bg-gray-900/80 border-gray-800/50'
-              : 'bg-white/80 border-gray-200/50'
-          }`}>
-            <div className={`text-sm font-medium mb-3 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-              部署で絞り込み
+        {/* 検索・部署フィルタ */}
+        <div className={`backdrop-blur-xl rounded-2xl shadow-lg border p-4 ${
+          isDark
+            ? 'bg-gray-900/80 border-gray-800/50'
+            : 'bg-white/80 border-gray-200/50'
+        }`}>
+          {/* 検索入力欄 */}
+          <div className="relative mb-3">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className={`w-4 h-4 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
             </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={`w-full pl-10 pr-4 py-2 rounded-xl text-sm transition-all duration-200 ${
+                isDark
+                  ? 'bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:bg-gray-800 focus:border-gray-600'
+                  : 'bg-gray-100/50 border-gray-200 text-gray-900 placeholder:text-gray-400 focus:bg-white focus:border-gray-300'
+              } border focus:outline-none focus:ring-2 focus:ring-offset-0 ${
+                isDark ? 'focus:ring-gray-600' : 'focus:ring-gray-300'
+              }`}
+              placeholder={placeholders[placeholderIndex]}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className={`absolute inset-y-0 right-0 pr-3 flex items-center ${
+                  isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+          
+          {/* 部署フィルタ */}
+          {departments.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {/* 最初の3つを表示 */}
               {departments.slice(0, 3).map((dept) => (
@@ -454,8 +497,8 @@ export default function MembersPage({ user, isDark }) {
                 </button>
               )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* 明日の誕生日通知 */}
@@ -494,10 +537,18 @@ export default function MembersPage({ user, isDark }) {
         {(() => {
           // フィルタリングとソート
           const sortedMembers = members
-            .filter(member => 
-              selectedDepartments.length === 0 || 
-              selectedDepartments.includes(member.department)
-            )
+            .filter(member => {
+              // 検索クエリでフィルタ
+              const matchesSearch = !searchQuery || 
+                (member.name && member.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                (member.email && member.email.toLowerCase().includes(searchQuery.toLowerCase()))
+              
+              // 部署でフィルタ
+              const matchesDepartment = selectedDepartments.length === 0 || 
+                selectedDepartments.includes(member.department)
+              
+              return matchesSearch && matchesDepartment
+            })
             .sort((a, b) => {
             // 1. 出勤状態の優先順位: 出勤中 > 休憩中 > 退勤済 > 未出勤
             const statusA = attendanceStatus[a.id]
