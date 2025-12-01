@@ -1081,6 +1081,8 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
   // 外部からfocusを呼べるようにする
   React.useImperativeHandle(ref, () => ({
     focus: () => {
+      // 編集不可の場合はフォーカスしない
+      if (!canEdit) return
       setIsEditing(true)
       setTimeout(() => {
         inputRef.current?.focus()
@@ -1091,6 +1093,8 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
   }))
 
   const handleToggle = async () => {
+    // 編集不可の場合はチェックも不可
+    if (!canEdit) return
     await onToggle(item.id, item.is_completed, item.is_routine || false)
   }
 
@@ -1214,19 +1218,20 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
         isDeleting ? 'opacity-0 -translate-x-4' : 'opacity-100 translate-x-0'
       } ${isDragging ? 'scale-105' : ''}`}
       style={{ paddingLeft: `${indentLevel * 24}px` }}
-      tabIndex={0}
-      onKeyDown={handleKeyDown}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
+      tabIndex={canEdit ? 0 : -1}
+      onKeyDown={canEdit ? handleKeyDown : undefined}
+      onTouchStart={canEdit ? handleTouchStart : undefined}
+      onTouchMove={canEdit ? handleTouchMove : undefined}
+      onTouchEnd={canEdit ? handleTouchEnd : undefined}
     >
       {/* チェックボタン（ドラッグハンドル兼用） */}
       <div className="relative">
         <button
           {...(canEdit && dragHandleProps ? dragHandleProps : {})}
           onClick={handleToggle}
-          className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm hover:scale-110 overflow-hidden relative ${
-            canEdit ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+          disabled={!canEdit}
+          className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm overflow-hidden relative ${
+            canEdit ? 'cursor-grab active:cursor-grabbing hover:scale-110' : 'cursor-not-allowed opacity-80'
           } ${
             item.is_completed && !(isAddedByOther && addedByUser)
               ? isDark
