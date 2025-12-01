@@ -37,6 +37,103 @@ const fromJSTDatetimeLocal = (datetimeLocalString) => {
   return date.toISOString()
 }
 
+// 画像カルーセルコンポーネント
+const ImageCarousel = ({ images, alt, isDark }) => {
+  const [currentIndex, setCurrentIndex] = useState(0)
+
+  if (!images || images.length === 0) return null
+
+  // 1枚の場合はシンプル表示
+  if (images.length === 1) {
+    return (
+      <div className="mb-3 rounded-2xl overflow-hidden border">
+        <img
+          src={images[0]}
+          alt={alt}
+          className="w-full max-h-96 object-cover"
+        />
+      </div>
+    )
+  }
+
+  const goToPrev = (e) => {
+    e.stopPropagation()
+    setCurrentIndex(prev => (prev === 0 ? images.length - 1 : prev - 1))
+  }
+
+  const goToNext = (e) => {
+    e.stopPropagation()
+    setCurrentIndex(prev => (prev === images.length - 1 ? 0 : prev + 1))
+  }
+
+  return (
+    <div className="mb-3 relative group">
+      {/* 画像コンテナ */}
+      <div className="rounded-2xl overflow-hidden border relative">
+        <div 
+          className="flex transition-transform duration-300 ease-out"
+          style={{ transform: `translateX(-${currentIndex * 100}%)` }}
+        >
+          {images.map((url, idx) => (
+            <img
+              key={idx}
+              src={url}
+              alt={`${alt} ${idx + 1}`}
+              className="w-full max-h-96 object-cover flex-shrink-0"
+              style={{ minWidth: '100%' }}
+            />
+          ))}
+        </div>
+
+        {/* 左矢印 */}
+        <button
+          onClick={goToPrev}
+          className={`absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg ${
+            isDark ? 'bg-gray-800/80 text-white hover:bg-gray-700' : 'bg-white/80 text-gray-800 hover:bg-white'
+          }`}
+        >
+          ‹
+        </button>
+
+        {/* 右矢印 */}
+        <button
+          onClick={goToNext}
+          className={`absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg ${
+            isDark ? 'bg-gray-800/80 text-white hover:bg-gray-700' : 'bg-white/80 text-gray-800 hover:bg-white'
+          }`}
+        >
+          ›
+        </button>
+
+        {/* 枚数インジケーター（右上） */}
+        <div className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-medium ${
+          isDark ? 'bg-black/60 text-white' : 'bg-black/50 text-white'
+        }`}>
+          {currentIndex + 1} / {images.length}
+        </div>
+      </div>
+
+      {/* ドットインジケーター */}
+      <div className="flex justify-center gap-1.5 mt-2">
+        {images.map((_, idx) => (
+          <button
+            key={idx}
+            onClick={(e) => {
+              e.stopPropagation()
+              setCurrentIndex(idx)
+            }}
+            className={`w-1.5 h-1.5 rounded-full transition-all ${
+              idx === currentIndex
+                ? isDark ? 'bg-white w-4' : 'bg-gray-800 w-4'
+                : isDark ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-300 hover:bg-gray-400'
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
   const [announcements, setAnnouncements] = useState([])
   const [loading, setLoading] = useState(true)
@@ -71,7 +168,7 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
     event_date: '',
     event_location: '',
     max_participants: '',
-    image: null,
+    images: [], // 複数画像対応
     use_date_poll: false, // 日程投票を使うかどうか
     date_options: [], // 日程候補リスト
     link_url: '', // リンクURL
@@ -80,7 +177,8 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
     event_type: 'none', // none, participation, schedule
     participants_only_message: '' // 参加者限定メッセージ
   })
-  const [imagePreview, setImagePreview] = useState(null)
+  const [imagePreviews, setImagePreviews] = useState([]) // 複数画像プレビュー
+  const [isDragging, setIsDragging] = useState(false) // ドラッグ状態
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -588,16 +686,60 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
     setFormData({ ...formData, date_options: newOptions })
   }
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      setFormData({ ...formData, image: file })
+  // 画像ファイルを処理する共通関数
+  const processImageFiles = (files) => {
+    const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'))
+    if (imageFiles.length === 0) return
+
+    // 既存の画像に追加
+    const newImages = [...formData.images, ...imageFiles]
+    setFormData({ ...formData, images: newImages })
+
+    // プレビューを生成
+    imageFiles.forEach(file => {
       const reader = new FileReader()
       reader.onloadend = () => {
-        setImagePreview(reader.result)
+        setImagePreviews(prev => [...prev, reader.result])
       }
       reader.readAsDataURL(file)
-    }
+    })
+  }
+
+  // ファイル選択時のハンドラ
+  const handleImageChange = (e) => {
+    processImageFiles(e.target.files)
+    // inputをリセットして同じファイルを再選択可能に
+    e.target.value = ''
+  }
+
+  // ドラッグ＆ドロップハンドラ
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    
+    const files = e.dataTransfer.files
+    processImageFiles(files)
+  }
+
+  // 画像を削除
+  const removeImage = (index) => {
+    const newImages = formData.images.filter((_, i) => i !== index)
+    const newPreviews = imagePreviews.filter((_, i) => i !== index)
+    setFormData({ ...formData, images: newImages })
+    setImagePreviews(newPreviews)
   }
 
   const handleSubmit = async (e) => {
@@ -606,24 +748,26 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
 
     setSubmitting(true)
     try {
-      let imageUrl = null
+      let imageUrls = []
 
-      // 画像アップロード
-      if (formData.image) {
-        const fileExt = formData.image.name.split('.').pop()
-        const fileName = `${Date.now()}.${fileExt}`
-        const { error: uploadError } = await supabase.storage
-          .from('announcements')
-          .upload(fileName, formData.image)
+      // 複数画像アップロード
+      if (formData.images.length > 0) {
+        for (const image of formData.images) {
+          const fileExt = image.name.split('.').pop()
+          const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`
+          const { error: uploadError } = await supabase.storage
+            .from('announcements')
+            .upload(fileName, image)
 
-        if (uploadError) throw uploadError
+          if (uploadError) throw uploadError
 
-        // 公開URLを取得
-        const { data: { publicUrl } } = supabase.storage
-          .from('announcements')
-          .getPublicUrl(fileName)
+          // 公開URLを取得
+          const { data: { publicUrl } } = supabase.storage
+            .from('announcements')
+            .getPublicUrl(fileName)
 
-        imageUrl = publicUrl
+          imageUrls.push(publicUrl)
+        }
       }
 
       // お知らせ作成
@@ -636,7 +780,8 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
           event_date: formData.use_date_poll ? null : (formData.event_date ? fromJSTDatetimeLocal(formData.event_date) : null),
           event_location: formData.event_location || null,
           max_participants: formData.max_participants ? parseInt(formData.max_participants) : null,
-          image_url: imageUrl,
+          image_url: imageUrls.length > 0 ? imageUrls[0] : null, // 後方互換性のため最初の画像
+          image_urls: imageUrls.length > 0 ? imageUrls : null, // 複数画像
           link_url: formData.link_url || null,
           link_title: formData.link_title || null,
           voting_deadline: formData.voting_deadline ? fromJSTDatetimeLocal(formData.voting_deadline) : null,
@@ -671,7 +816,7 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
         event_date: '',
         event_location: '',
         max_participants: '',
-        image: null,
+        images: [],
         use_date_poll: false,
         date_options: [],
         link_url: '',
@@ -680,7 +825,7 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
         event_type: 'none',
         participants_only_message: ''
       })
-      setImagePreview(null)
+      setImagePreviews([])
       setShowCreateModal(false)
       loadAnnouncements()
     } catch (error) {
@@ -939,16 +1084,18 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                     {announcement.content}
                   </p>
 
-                  {/* 画像 */}
-                  {announcement.image_url && (
-                    <div className="mb-3 rounded-2xl overflow-hidden border">
-                      <img
-                        src={announcement.image_url}
-                        alt={announcement.title}
-                        className="w-full max-h-96 object-cover"
-                      />
-                    </div>
-                  )}
+                  {/* 画像カルーセル（複数対応） */}
+                  <ImageCarousel 
+                    images={
+                      announcement.image_urls?.length > 0 
+                        ? announcement.image_urls 
+                        : announcement.image_url 
+                          ? [announcement.image_url] 
+                          : []
+                    }
+                    alt={announcement.title}
+                    isDark={isDark}
+                  />
 
                   {/* リンクカード */}
                   {announcement.link_url && (
@@ -1361,31 +1508,70 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                 {/* 画像アップロード */}
                 <div>
                   <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                    画像（任意）
+                    画像（任意・複数可）
                   </label>
-                  <div className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
-                    isDark
-                      ? 'border-gray-700 hover:border-gray-600 bg-gray-800/30'
-                      : 'border-gray-300 hover:border-gray-400 bg-gray-50'
-                  }`}>
+                  
+                  {/* 画像プレビューグリッド */}
+                  {imagePreviews.length > 0 && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
+                      {imagePreviews.map((preview, index) => (
+                        <div key={index} className="relative group">
+                          <img 
+                            src={preview} 
+                            alt={`Preview ${index + 1}`} 
+                            className="w-full h-32 object-cover rounded-xl"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeImage(index)}
+                            className="absolute top-2 right-2 w-7 h-7 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ドラッグ＆ドロップエリア */}
+                  <div 
+                    className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+                      isDragging
+                        ? isDark
+                          ? 'border-blue-500 bg-blue-500/10 scale-[1.02]'
+                          : 'border-blue-500 bg-blue-50 scale-[1.02]'
+                        : isDark
+                          ? 'border-gray-700 hover:border-gray-600 bg-gray-800/30'
+                          : 'border-gray-300 hover:border-gray-400 bg-gray-50'
+                    }`}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                  >
                     <input
                       type="file"
                       accept="image/*"
+                      multiple
                       onChange={handleImageChange}
                       className="hidden"
                       id="image-upload"
                     />
-                    <label htmlFor="image-upload" className="cursor-pointer">
-                      {imagePreview ? (
-                        <img src={imagePreview} alt="Preview" className="max-h-64 mx-auto rounded-xl" />
-                      ) : (
-                        <>
-                          <div className="text-4xl mb-2">📷</div>
-                          <div className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                            クリックして画像を選択
-                          </div>
-                        </>
-                      )}
+                    <label htmlFor="image-upload" className="cursor-pointer block">
+                      <div className="text-4xl mb-2">📷</div>
+                      <div className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                        {isDragging ? (
+                          <span className="text-blue-500 font-medium">ドロップして追加</span>
+                        ) : (
+                          <>
+                            クリックまたはドラッグ＆ドロップで画像を追加
+                            {imagePreviews.length > 0 && (
+                              <span className="block mt-1 text-xs">
+                                （現在 {imagePreviews.length} 枚選択中）
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </label>
                   </div>
                 </div>
