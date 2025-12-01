@@ -37,22 +37,143 @@ const fromJSTDatetimeLocal = (datetimeLocalString) => {
   return date.toISOString()
 }
 
+// 画像ライトボックス（クイックビュー）コンポーネント
+const ImageLightbox = ({ images, initialIndex, onClose }) => {
+  const [currentIndex, setCurrentIndex] = useState(initialIndex)
+
+  // キーボード操作
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose()
+      if (e.key === 'ArrowLeft') setCurrentIndex(prev => (prev === 0 ? images.length - 1 : prev - 1))
+      if (e.key === 'ArrowRight') setCurrentIndex(prev => (prev === images.length - 1 ? 0 : prev + 1))
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    // スクロール無効化
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = ''
+    }
+  }, [images.length, onClose])
+
+  return (
+    <div 
+      className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center"
+      onClick={onClose}
+    >
+      {/* 閉じるボタン */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+      >
+        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+
+      {/* 枚数表示 */}
+      {images.length > 1 && (
+        <div className="absolute top-4 left-4 z-10 px-3 py-1.5 rounded-full bg-white/10 text-white text-sm font-medium">
+          {currentIndex + 1} / {images.length}
+        </div>
+      )}
+
+      {/* メイン画像 */}
+      <img
+        src={images[currentIndex]}
+        alt={`Image ${currentIndex + 1}`}
+        className="max-w-[90vw] max-h-[90vh] object-contain"
+        onClick={(e) => e.stopPropagation()}
+      />
+
+      {/* 左矢印 */}
+      {images.length > 1 && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            setCurrentIndex(prev => (prev === 0 ? images.length - 1 : prev - 1))
+          }}
+          className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+        >
+          <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+      )}
+
+      {/* 右矢印 */}
+      {images.length > 1 && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            setCurrentIndex(prev => (prev === images.length - 1 ? 0 : prev + 1))
+          }}
+          className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+        >
+          <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      )}
+
+      {/* サムネイル（複数画像の場合） */}
+      {images.length > 1 && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+          {images.map((url, idx) => (
+            <button
+              key={idx}
+              onClick={(e) => {
+                e.stopPropagation()
+                setCurrentIndex(idx)
+              }}
+              className={`w-12 h-12 rounded-lg overflow-hidden border-2 transition-all ${
+                idx === currentIndex ? 'border-white scale-110' : 'border-transparent opacity-50 hover:opacity-80'
+              }`}
+            >
+              <img src={url} alt="" className="w-full h-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // 画像カルーセルコンポーネント
 const ImageCarousel = ({ images, alt, isDark }) => {
   const [currentIndex, setCurrentIndex] = useState(0)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
 
   if (!images || images.length === 0) return null
+
+  // 画像クリックでライトボックスを開く
+  const openLightbox = (index) => {
+    setLightboxOpen(true)
+  }
 
   // 1枚の場合はシンプル表示
   if (images.length === 1) {
     return (
-      <div className="mb-3 rounded-2xl overflow-hidden border">
-        <img
-          src={images[0]}
-          alt={alt}
-          className="w-full max-h-96 object-cover"
-        />
-      </div>
+      <>
+        <div 
+          className="mb-3 rounded-2xl overflow-hidden border cursor-pointer"
+          onClick={() => openLightbox(0)}
+        >
+          <img
+            src={images[0]}
+            alt={alt}
+            className="w-full max-h-96 object-cover hover:scale-105 transition-transform duration-300"
+          />
+        </div>
+        {lightboxOpen && (
+          <ImageLightbox 
+            images={images} 
+            initialIndex={0} 
+            onClose={() => setLightboxOpen(false)} 
+          />
+        )}
+      </>
     )
   }
 
@@ -67,70 +188,84 @@ const ImageCarousel = ({ images, alt, isDark }) => {
   }
 
   return (
-    <div className="mb-3 relative group">
-      {/* 画像コンテナ */}
-      <div className="rounded-2xl overflow-hidden border relative">
+    <>
+      <div className="mb-3 relative group">
+        {/* 画像コンテナ */}
         <div 
-          className="flex transition-transform duration-300 ease-out"
-          style={{ transform: `translateX(-${currentIndex * 100}%)` }}
+          className="rounded-2xl overflow-hidden border relative cursor-pointer"
+          onClick={() => openLightbox(currentIndex)}
         >
-          {images.map((url, idx) => (
-            <img
+          <div 
+            className="flex transition-transform duration-300 ease-out"
+            style={{ transform: `translateX(-${currentIndex * 100}%)` }}
+          >
+            {images.map((url, idx) => (
+              <img
+                key={idx}
+                src={url}
+                alt={`${alt} ${idx + 1}`}
+                className="w-full max-h-96 object-cover flex-shrink-0 hover:scale-105 transition-transform duration-300"
+                style={{ minWidth: '100%' }}
+              />
+            ))}
+          </div>
+
+          {/* 左矢印 */}
+          <button
+            onClick={goToPrev}
+            className={`absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg ${
+              isDark ? 'bg-gray-800/80 text-white hover:bg-gray-700' : 'bg-white/80 text-gray-800 hover:bg-white'
+            }`}
+          >
+            ‹
+          </button>
+
+          {/* 右矢印 */}
+          <button
+            onClick={goToNext}
+            className={`absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg ${
+              isDark ? 'bg-gray-800/80 text-white hover:bg-gray-700' : 'bg-white/80 text-gray-800 hover:bg-white'
+            }`}
+          >
+            ›
+          </button>
+
+          {/* 枚数インジケーター（右上） */}
+          <div className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-medium ${
+            isDark ? 'bg-black/60 text-white' : 'bg-black/50 text-white'
+          }`}>
+            {currentIndex + 1} / {images.length}
+          </div>
+        </div>
+
+        {/* ドットインジケーター */}
+        <div className="flex justify-center gap-1.5 mt-2">
+          {images.map((_, idx) => (
+            <button
               key={idx}
-              src={url}
-              alt={`${alt} ${idx + 1}`}
-              className="w-full max-h-96 object-cover flex-shrink-0"
-              style={{ minWidth: '100%' }}
+              onClick={(e) => {
+                e.stopPropagation()
+                setCurrentIndex(idx)
+              }}
+              className={`w-1.5 h-1.5 rounded-full transition-all ${
+                idx === currentIndex
+                  ? isDark ? 'bg-white w-4' : 'bg-gray-800 w-4'
+                  : isDark ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-300 hover:bg-gray-400'
+              }`}
             />
           ))}
         </div>
-
-        {/* 左矢印 */}
-        <button
-          onClick={goToPrev}
-          className={`absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg ${
-            isDark ? 'bg-gray-800/80 text-white hover:bg-gray-700' : 'bg-white/80 text-gray-800 hover:bg-white'
-          }`}
-        >
-          ‹
-        </button>
-
-        {/* 右矢印 */}
-        <button
-          onClick={goToNext}
-          className={`absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg ${
-            isDark ? 'bg-gray-800/80 text-white hover:bg-gray-700' : 'bg-white/80 text-gray-800 hover:bg-white'
-          }`}
-        >
-          ›
-        </button>
-
-        {/* 枚数インジケーター（右上） */}
-        <div className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-medium ${
-          isDark ? 'bg-black/60 text-white' : 'bg-black/50 text-white'
-        }`}>
-          {currentIndex + 1} / {images.length}
-        </div>
       </div>
 
-      {/* ドットインジケーター */}
-      <div className="flex justify-center gap-1.5 mt-2">
-        {images.map((_, idx) => (
-          <button
-            key={idx}
-            onClick={(e) => {
-              e.stopPropagation()
-              setCurrentIndex(idx)
-            }}
-            className={`w-1.5 h-1.5 rounded-full transition-all ${
-              idx === currentIndex
-                ? isDark ? 'bg-white w-4' : 'bg-gray-800 w-4'
-                : isDark ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-300 hover:bg-gray-400'
-            }`}
-          />
-        ))}
-      </div>
-    </div>
+      {/* ライトボックス */}
+      {lightboxOpen && (
+        <ImageLightbox 
+          images={images} 
+          initialIndex={currentIndex} 
+          onClose={() => setLightboxOpen(false)} 
+        />
+      )}
+    </>
   )
 }
 
