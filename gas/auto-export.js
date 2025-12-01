@@ -419,12 +419,30 @@ function updateMonthlySummaryFixed(sheet) {
   const minutes = currentSummary.totalMinutes % 60;
   const totalTimeFormatted = `${hours}:${minutes.toString().padStart(2, '0')}`;
 
-  // 固定セルの値を更新
+  // 固定セルの値を更新（今月）
   sheet.getRange(1, 11).setValue(totalTimeFormatted);
   sheet.getRange(1, 11).setFontWeight('bold').setFontSize(12);
   sheet.getRange(2, 11).setValue(currentSummary.days + '日');
   sheet.getRange(1, 13).setValue(currentSummary.remoteDays + '日');
   sheet.getRange(2, 13).setValue(currentSummary.officeDays + '日');
+
+  // 先月のキーを計算
+  const lastMonthDate = new Date(currentYear, currentMonthNum - 2, 1); // 先月の1日
+  const lastMonthYear = lastMonthDate.getFullYear();
+  const lastMonthNum = lastMonthDate.getMonth() + 1;
+  const lastMonthKey = `${lastMonthYear}/${String(lastMonthNum).padStart(2, '0')}`;
+
+  // 固定セルの値を更新（先月）
+  const lastSummary = monthlySummary[lastMonthKey] || { days: 0, totalMinutes: 0, remoteDays: 0, officeDays: 0 };
+  const lastHours = Math.floor(lastSummary.totalMinutes / 60);
+  const lastMinutes = lastSummary.totalMinutes % 60;
+  const lastTotalTimeFormatted = `${lastHours}:${lastMinutes.toString().padStart(2, '0')}`;
+
+  sheet.getRange(1, 16).setValue(lastTotalTimeFormatted);
+  sheet.getRange(1, 16).setFontWeight('bold').setFontSize(12);
+  sheet.getRange(2, 16).setValue(lastSummary.days + '日');
+  sheet.getRange(1, 18).setValue(lastSummary.remoteDays + '日');
+  sheet.getRange(2, 18).setValue(lastSummary.officeDays + '日');
 
   // シートの最下部に月別集計を追加（1行空けて）
   let summaryRow = findLastDataRow(sheet) + 2;
