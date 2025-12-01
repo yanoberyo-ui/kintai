@@ -1051,6 +1051,10 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
   const isAddedByOther = item.added_by && todoOwner && item.added_by !== todoOwner.id
   // 削除可能かどうか（自分が追加した、またはadded_byがない、または自分のTODOリスト）
   const canDelete = !item.added_by || (loggedInUser && item.added_by === loggedInUser.id)
+  
+  // 編集可能かどうか（自分のTODOリスト、または自分が追加したタスク、またはadded_byがない）
+  const isOwnTodoList = todoOwner && loggedInUser && todoOwner.id === loggedInUser.id
+  const canEdit = isOwnTodoList || !item.added_by || (loggedInUser && item.added_by === loggedInUser.id)
 
   // indent_levelが変更されたらデータベースを更新
   useEffect(() => {
@@ -1091,6 +1095,8 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
   }
 
   const handleEdit = () => {
+    // 編集不可の場合は何もしない
+    if (!canEdit) return
     setIsEditing(true)
     setEditContent(item.content)
   }
@@ -1118,14 +1124,14 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
   }
 
   const handleTouchStart = (e) => {
-    if (isEditing) return
+    if (isEditing || !canEdit) return
     touchStartX.current = e.touches[0].clientX
     touchStartY.current = e.touches[0].clientY
     setIsDragging(false)
   }
 
   const handleTouchMove = (e) => {
-    if (isEditing) return
+    if (isEditing || !canEdit) return
     const deltaX = e.touches[0].clientX - touchStartX.current
     const deltaY = Math.abs(e.touches[0].clientY - touchStartY.current)
     
@@ -1137,7 +1143,7 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
   }
 
   const handleTouchEnd = (e) => {
-    if (isEditing || !isDragging) return
+    if (isEditing || !isDragging || !canEdit) return
     
     const deltaX = e.changedTouches[0].clientX - touchStartX.current
     
@@ -1154,6 +1160,11 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
   }
 
   const handleKeyDown = (e) => {
+    // 編集不可の場合はキーボード操作を制限
+    if (!canEdit && !isEditing) {
+      return
+    }
+    
     // IME入力中は特殊キー操作を無視
     if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
       e.preventDefault()
@@ -1164,6 +1175,7 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
       setEditContent(item.content)
       setIsEditing(false)
     } else if (e.key === 'Tab') {
+      if (!canEdit) return
       e.preventDefault()
       if (e.shiftKey) {
         setIndentLevel((prev) => (prev > 0 ? prev - 1 : prev))
@@ -1211,9 +1223,11 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
       {/* チェックボタン（ドラッグハンドル兼用） */}
       <div className="relative">
         <button
-          {...(dragHandleProps || {})}
+          {...(canEdit && dragHandleProps ? dragHandleProps : {})}
           onClick={handleToggle}
-          className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm hover:scale-110 cursor-grab active:cursor-grabbing overflow-hidden relative ${
+          className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm hover:scale-110 overflow-hidden relative ${
+            canEdit ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+          } ${
             item.is_completed && !(isAddedByOther && addedByUser)
               ? isDark
                 ? 'bg-gray-700 text-white'
@@ -1302,7 +1316,9 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
       ) : (
         <span
           onClick={handleEdit}
-          className={`flex-1 text-sm transition-all duration-200 cursor-text ${
+          className={`flex-1 text-sm transition-all duration-200 ${
+            canEdit ? 'cursor-text' : 'cursor-default'
+          } ${
             item.is_completed
               ? isDark ? 'text-gray-600 line-through' : 'text-gray-400 line-through'
               : isDark ? 'text-gray-100' : 'text-gray-900'
