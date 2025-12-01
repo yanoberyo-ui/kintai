@@ -389,12 +389,10 @@ export default function MembersPage({ user, isDark }) {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full pl-10 pr-4 py-2 rounded-xl text-sm transition-all duration-200 ${
+              className={`w-full pl-10 pr-4 py-2 rounded-xl text-sm transition-all duration-200 bg-transparent border-none focus:outline-none ${
                 isDark
-                  ? 'bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:bg-gray-800 focus:border-gray-600'
-                  : 'bg-gray-100/50 border-gray-200 text-gray-900 placeholder:text-gray-400 focus:bg-white focus:border-gray-300'
-              } border focus:outline-none focus:ring-2 focus:ring-offset-0 ${
-                isDark ? 'focus:ring-gray-600' : 'focus:ring-gray-300'
+                  ? 'text-white placeholder:text-gray-500'
+                  : 'text-gray-900 placeholder:text-gray-400'
               }`}
               placeholder={placeholders[placeholderIndex]}
             />
