@@ -471,6 +471,11 @@ function updateDashboard() {
     createDashboardHeader(sheet);
   }
 
+  // 最終更新日時を更新
+  const now = new Date();
+  const dateStr = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
+  sheet.getRange(2, 1).setValue('最終更新: ' + dateStr);
+
   // 既存データをクリア（ヘッダーは残す）
   const lastRow = sheet.getLastRow();
   if (lastRow > 3) {
@@ -481,7 +486,6 @@ function updateDashboard() {
   const allAttendances = fetchMonthlyAttendanceData();
   
   // 今月のTODOデータを取得
-  const now = new Date();
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
   const firstDayStr = Utilities.formatDate(firstDay, 'Asia/Tokyo', 'yyyy-MM-dd');
   const todayStr = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy-MM-dd');
@@ -630,8 +634,11 @@ function fetchMonthlyAttendanceData() {
   const now = new Date();
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
   const firstDayStr = Utilities.formatDate(firstDay, 'Asia/Tokyo', 'yyyy-MM-dd');
+  
+  Logger.log('ダッシュボード: 今月の開始日 = ' + firstDayStr);
 
-  const url = `${SUPABASE_URL}/rest/v1/attendances?date=gte.${firstDayStr}&status=eq.completed&select=*,users(name,department)`;
+  // 今月のデータのみ取得（status関係なく）
+  const url = `${SUPABASE_URL}/rest/v1/attendances?date=gte.${firstDayStr}&select=*,users(name,department)`;
 
   const options = {
     method: 'get',
@@ -645,9 +652,26 @@ function fetchMonthlyAttendanceData() {
 
   const response = UrlFetchApp.fetch(url, options);
   const data = JSON.parse(response.getContentText());
+  
+  Logger.log('ダッシュボード: 取得件数 = ' + data.length);
 
   return data.map(record => {
     const user = record.users;
+    
+    // 勤務時間を計算
+    let workMinutes = record.total_work_minutes || 0;
+    
+    // 勤務中（まだ退勤していない）場合は、出勤時刻から現在までの時間を計算
+    if (record.clock_in && !record.clock_out && record.status === 'working') {
+      const clockIn = new Date(record.clock_in);
+      const now = new Date();
+      const diffMinutes = Math.floor((now - clockIn) / 60000);
+      const breakMinutes = record.break_minutes_used || 0;
+      workMinutes = Math.max(0, diffMinutes - breakMinutes);
+    }
+    
+    Logger.log('  - ' + user.name + ' (' + record.date + '): ' + workMinutes + '分, status=' + record.status);
+    
     return {
       user_id: record.user_id,
       user_name: user.name,
@@ -655,41 +679,160 @@ function fetchMonthlyAttendanceData() {
       date: record.date,
       clock_in: record.clock_in,
       clock_out: record.clock_out,
-      work_minutes: record.total_work_minutes || 0,
+      work_minutes: workMinutes,
       work_type: record.work_type || ''
     };
   });
 }
 
 /**
- * TODO達成率シートを更新
+ * TODO達成率シートを更新（ユーザー×月でまとめた形式）
  */
 function updateTodoAchievementSheet(date) {
+  // 日次追加は行わず、rebuildTodoAchievementSheetで一括更新する
+  // 日次実行時は何もしない（rebuildAllSheetsで更新される）
+}
+
+/**
+ * TODO達成率シートを完全に再構築
+ */
+function rebuildTodoAchievementSheet() {
   const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = spreadsheet.getSheetByName('TODO達成率');
 
   if (!sheet) {
     sheet = spreadsheet.insertSheet('TODO達成率', 1);
-    createTodoAchievementHeader(sheet);
   }
+  
+  // シートをクリア
+  sheet.clear();
+  
+  // ヘッダーを作成
+  createTodoAchievementHeader(sheet);
 
-  // 指定日のTODOデータを取得
-  const todoData = fetchTodoData(date);
+  // 今月のTODOデータを取得
+  const now = new Date();
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+  const firstDayStr = Utilities.formatDate(firstDay, 'Asia/Tokyo', 'yyyy-MM-dd');
+  const todayStr = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy-MM-dd');
+  
+  // 今月の全TODOデータを取得
+  const url = `${SUPABASE_URL}/rest/v1/todo_lists?date=gte.${firstDayStr}&date=lte.${todayStr}&select=*,users(id,name,department),todo_items(is_completed)&order=date.desc`;
+  
+  const options = {
+    method: 'get',
+    headers: {
+      'apikey': SUPABASE_SERVICE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_SERVICE_KEY,
+      'Content-Type': 'application/json'
+    },
+    muteHttpExceptions: true
+  };
 
-  if (!todoData || todoData.length === 0) {
+  const response = UrlFetchApp.fetch(url, options);
+  const data = JSON.parse(response.getContentText());
+
+  if (!data || data.length === 0) {
     Logger.log('TODOデータがありません');
     return;
   }
 
-  // データを書き込み
-  const lastRow = sheet.getLastRow();
-  const newRow = lastRow + 1;
+  // ユーザーごとに集計
+  const userSummary = {};
+  const dailyData = [];
 
-  todoData.forEach((data, index) => {
-    const row = newRow + index;
+  data.forEach(list => {
+    const items = list.todo_items || [];
+    const totalTasks = items.length;
+    const completedTasks = items.filter(item => item.is_completed).length;
+    const achievementRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    const userId = list.users.id;
+    const userName = list.users.name;
+    const department = list.users.department || '未設定';
 
-    sheet.getRange(row, 1, 1, 6).setValues([[
-      data.date,
+    // 日別データ
+    dailyData.push({
+      date: list.date,
+      user_name: userName,
+      department: department,
+      total_tasks: totalTasks,
+      completed_tasks: completedTasks,
+      achievement_rate: achievementRate
+    });
+
+    // ユーザーサマリー
+    if (!userSummary[userId]) {
+      userSummary[userId] = {
+        name: userName,
+        department: department,
+        totalTasks: 0,
+        completedTasks: 0,
+        days: 0
+      };
+    }
+    userSummary[userId].totalTasks += totalTasks;
+    userSummary[userId].completedTasks += completedTasks;
+    userSummary[userId].days++;
+  });
+
+  // ユーザーサマリーを書き込み（上部に）
+  let row = 4;
+  
+  // サマリーセクション
+  sheet.getRange(row, 1).setValue('📊 今月のサマリー');
+  sheet.getRange(row, 1, 1, 6).setFontWeight('bold').setBackground('#e8f5e9');
+  row++;
+
+  Object.values(userSummary)
+    .sort((a, b) => {
+      const rateA = a.totalTasks > 0 ? a.completedTasks / a.totalTasks : 0;
+      const rateB = b.totalTasks > 0 ? b.completedTasks / b.totalTasks : 0;
+      return rateB - rateA; // 達成率降順
+    })
+    .forEach(summary => {
+      const rate = summary.totalTasks > 0 ? Math.round((summary.completedTasks / summary.totalTasks) * 100) : 0;
+      
+      sheet.getRange(row, 1, 1, 6).setValues([[
+        summary.name,
+        summary.department,
+        summary.totalTasks,
+        summary.completedTasks,
+        rate + '%',
+        rate >= 80 ? '🎉' : rate >= 50 ? '👍' : '📝'
+      ]]);
+
+      // 達成率に応じて背景色
+      if (rate === 100) {
+        sheet.getRange(row, 5).setBackground('#d4edda');
+      } else if (rate >= 80) {
+        sheet.getRange(row, 5).setBackground('#fff3cd');
+      } else if (rate < 50) {
+        sheet.getRange(row, 5).setBackground('#f8d7da');
+      }
+      row++;
+    });
+
+  // 区切り線
+  row++;
+  sheet.getRange(row, 1).setValue('📅 日別詳細');
+  sheet.getRange(row, 1, 1, 6).setFontWeight('bold').setBackground('#e3f2fd');
+  row++;
+
+  // 日別データを書き込み（新しい日付が上）
+  let lastDate = '';
+  dailyData.forEach(data => {
+    // 日付が変わったら区切り
+    if (data.date !== lastDate) {
+      const dateObj = new Date(data.date);
+      const dateFormatted = Utilities.formatDate(dateObj, 'Asia/Tokyo', 'M/d (E)');
+      sheet.getRange(row, 1).setValue(dateFormatted);
+      sheet.getRange(row, 1).setFontWeight('bold').setBackground('#f5f5f5');
+      lastDate = data.date;
+    } else {
+      sheet.getRange(row, 1).setValue('');
+    }
+
+    sheet.getRange(row, 2, 1, 5).setValues([[
       data.user_name,
       data.total_tasks,
       data.completed_tasks,
@@ -697,15 +840,15 @@ function updateTodoAchievementSheet(date) {
       data.achievement_rate >= 80 ? '🎉' : data.achievement_rate >= 50 ? '👍' : '📝'
     ]]);
 
-    // 達成率に応じて背景色を変更
-    const achievementCell = sheet.getRange(row, 5);
+    // 達成率に応じて背景色
     if (data.achievement_rate === 100) {
-      achievementCell.setBackground('#d4edda'); // 緑
+      sheet.getRange(row, 5).setBackground('#d4edda');
     } else if (data.achievement_rate >= 80) {
-      achievementCell.setBackground('#fff3cd'); // 黄色
+      sheet.getRange(row, 5).setBackground('#fff3cd');
     } else if (data.achievement_rate < 50) {
-      achievementCell.setBackground('#f8d7da'); // 赤
+      sheet.getRange(row, 5).setBackground('#f8d7da');
     }
+    row++;
   });
 }
 
@@ -717,8 +860,13 @@ function createTodoAchievementHeader(sheet) {
   sheet.getRange(1, 1).setValue('✅ TODO達成率');
   sheet.getRange(1, 1).setFontSize(16).setFontWeight('bold');
 
+  // 最終更新日
+  const now = new Date();
+  const dateStr = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
+  sheet.getRange(2, 1).setValue('最終更新: ' + dateStr);
+
   // ヘッダー行
-  const headers = ['日付', '名前', 'タスク総数', '完了数', '達成率', 'ステータス'];
+  const headers = ['日付/名前', '名前/部署', 'タスク総数', '完了数', '達成率', 'ステータス'];
   sheet.getRange(3, 1, 1, headers.length).setValues([headers]);
   sheet.getRange(3, 1, 1, headers.length)
     .setFontWeight('bold')
@@ -727,12 +875,12 @@ function createTodoAchievementHeader(sheet) {
     .setHorizontalAlignment('center');
 
   // 列幅の設定
-  sheet.setColumnWidth(1, 100); // 日付
-  sheet.setColumnWidth(2, 120); // 名前
-  sheet.setColumnWidth(3, 100); // タスク総数
-  sheet.setColumnWidth(4, 100); // 完了数
-  sheet.setColumnWidth(5, 100); // 達成率
-  sheet.setColumnWidth(6, 100); // ステータス
+  sheet.setColumnWidth(1, 100); // 日付/名前
+  sheet.setColumnWidth(2, 120); // 名前/部署
+  sheet.setColumnWidth(3, 80);  // タスク総数
+  sheet.setColumnWidth(4, 80);  // 完了数
+  sheet.setColumnWidth(5, 80);  // 達成率
+  sheet.setColumnWidth(6, 80);  // ステータス
 
   sheet.setFrozenRows(3);
 }
@@ -918,6 +1066,10 @@ function rebuildAllSheets() {
     
     updateDashboard();
     
+    // TODO達成率シートを更新
+    Logger.log('TODO達成率シートを更新中...');
+    rebuildTodoAchievementSheet();
+    
     Logger.log('=== 全シート一括更新が完了しました ===');
     
   } catch (error) {
@@ -1015,16 +1167,19 @@ function updateSheetHeaderIfNeeded(sheet, userName, employeeId) {
 }
 
 /**
- * 月ごとにグループ化を適用（折りたたみ可能に）
+ * 月ごとにグループ化を適用（今月以外は折りたたみ）
  */
 function applyMonthGrouping(sheet, monthStartRows, lastDataRow) {
   if (monthStartRows.length <= 1) return; // 1ヶ月分しかない場合はスキップ
+  
+  // 現在の月を取得
+  const now = new Date();
+  const currentMonth = (now.getMonth() + 1) + '月';
   
   // 既存のグループをクリア
   try {
     const maxRow = sheet.getMaxRows();
     if (maxRow > 4) {
-      // グループ深度を取得してクリア
       for (let i = 4; i <= Math.min(maxRow, lastDataRow); i++) {
         try {
           sheet.getRange(i, 1).shiftRowGroupDepth(-1);
@@ -1037,9 +1192,12 @@ function applyMonthGrouping(sheet, monthStartRows, lastDataRow) {
     // エラーは無視
   }
   
-  // 各月のデータ行をグループ化（最新月以外を折りたたみ可能に）
+  // 各月のデータ行をグループ化
+  const groupsToCollapse = [];
+  
   for (let i = 0; i < monthStartRows.length; i++) {
-    const startRow = monthStartRows[i].startRow;
+    const monthInfo = monthStartRows[i];
+    const startRow = monthInfo.startRow;
     const endRow = (i < monthStartRows.length - 1) ? monthStartRows[i + 1].startRow - 1 : lastDataRow;
     
     if (endRow > startRow) {
@@ -1047,11 +1205,42 @@ function applyMonthGrouping(sheet, monthStartRows, lastDataRow) {
         // 月の開始行以外をグループ化（開始行は見出しとして残す）
         const groupRange = sheet.getRange(startRow + 1, 1, endRow - startRow, 1);
         groupRange.shiftRowGroupDepth(1);
+        
+        // 今月以外は折りたたむリストに追加
+        if (monthInfo.month !== currentMonth) {
+          groupsToCollapse.push(startRow + 1);
+        }
       } catch (e) {
         Logger.log('グループ化エラー: ' + e.message);
       }
     }
   }
+  
+  // 今月以外のグループを折りたたむ
+  groupsToCollapse.forEach(rowIndex => {
+    try {
+      const group = sheet.getRowGroup(rowIndex, 1);
+      if (group) {
+        group.collapse();
+      }
+    } catch (e) {
+      Logger.log('折りたたみエラー: ' + e.message);
+    }
+  });
+  
+  // 今月のグループは展開（念のため）
+  monthStartRows.forEach(monthInfo => {
+    if (monthInfo.month === currentMonth) {
+      try {
+        const group = sheet.getRowGroup(monthInfo.startRow + 1, 1);
+        if (group) {
+          group.expand();
+        }
+      } catch (e) {
+        // 展開できない場合は無視
+      }
+    }
+  });
 }
 
 /**

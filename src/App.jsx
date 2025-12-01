@@ -1111,7 +1111,7 @@ function App() {
             <AttendanceCard user={user} isDark={isDark} onStreakUpdate={setStreaks} />
 
             {/* TODOリスト */}
-            <TodoList user={user} isDark={isDark} />
+            <TodoList user={user} isDark={isDark} currentUser={user} />
           </div>
         ) : currentPage === 'calendar' ? (
           <CalendarPage user={user} isDark={isDark} />

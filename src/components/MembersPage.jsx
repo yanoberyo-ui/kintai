@@ -888,7 +888,7 @@ export default function MembersPage({ user, isDark }) {
               </div>
 
               {/* TODOリスト */}
-              <TodoList user={selectedMember} isDark={isDark} />
+              <TodoList user={selectedMember} isDark={isDark} currentUser={currentUser} />
             </div>
           </div>
         </div>

@@ -20,6 +20,7 @@ export async function getTodayTodoList(userId) {
         is_completed,
         order_index,
         indent_level,
+        added_by,
         created_at,
         updated_at
       )
@@ -149,7 +150,7 @@ export async function updateTodoListTitle(listId, title) {
 /**
  * TODOアイテムを追加
  */
-export async function addTodoItemAtPosition(listId, content, indentLevel = 0, afterOrderIndex = null) {
+export async function addTodoItemAtPosition(listId, content, indentLevel = 0, afterOrderIndex = null, addedBy = null) {
   // 指定位置以降のアイテムのorder_indexを1つずつ増やす
   if (afterOrderIndex !== null) {
     const { data: itemsToUpdate } = await supabase
@@ -185,7 +186,8 @@ export async function addTodoItemAtPosition(listId, content, indentLevel = 0, af
       todo_list_id: listId,
       content: content,
       order_index: newOrderIndex,
-      indent_level: indentLevel
+      indent_level: indentLevel,
+      added_by: addedBy
     })
     .select()
     .single();
@@ -195,7 +197,7 @@ export async function addTodoItemAtPosition(listId, content, indentLevel = 0, af
   return data;
 }
 
-export async function addTodoItem(listId, content, indentLevel = 0) {
+export async function addTodoItem(listId, content, indentLevel = 0, addedBy = null) {
   // 現在の最大order_indexを取得
   const { data: items } = await supabase
     .from('todo_items')
@@ -212,7 +214,8 @@ export async function addTodoItem(listId, content, indentLevel = 0) {
       todo_list_id: listId,
       content: content,
       order_index: maxOrder + 1,
-      indent_level: indentLevel
+      indent_level: indentLevel,
+      added_by: addedBy
     })
     .select()
     .single();

@@ -28,7 +28,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { supabase } from '../utils/supabase'
 
-export default function TodoList({ user, isDark }) {
+export default function TodoList({ user, isDark, currentUser = null }) {
   const [todoList, setTodoList] = useState(null)
   const [loading, setLoading] = useState(true)
   const [resetKey, setResetKey] = useState(0)
@@ -38,6 +38,8 @@ export default function TodoList({ user, isDark }) {
   const [showConfetti, setShowConfetti] = useState(false)
   const prevProgressRef = useRef(0)
   const itemRefs = useRef({})
+  const [loggedInUser, setLoggedInUser] = useState(null) // ログイン中のユーザー情報
+  const [usersMap, setUsersMap] = useState({}) // ユーザーID -> ユーザー情報のマップ
   
   // Routine TODO state
   const [routineTodos, setRoutineTodos] = useState([])
@@ -56,8 +58,44 @@ export default function TodoList({ user, isDark }) {
       loadTodoList()
       loadRoutineTodos()
       loadTodayCompletions()
+      loadLoggedInUser()
+      loadUsersMap()
     }
   }, [user])
+
+  // ログイン中のユーザー情報を取得
+  const loadLoggedInUser = async () => {
+    // currentUserがpropsで渡されている場合はそれを使用
+    if (currentUser) {
+      setLoggedInUser(currentUser)
+      return
+    }
+    
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (authUser) {
+      const { data } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authUser.id)
+        .single()
+      setLoggedInUser(data)
+    }
+  }
+
+  // ユーザー情報マップを取得（アバター表示用）
+  const loadUsersMap = async () => {
+    const { data } = await supabase
+      .from('users')
+      .select('id, name, email, avatar_url')
+    
+    if (data) {
+      const map = {}
+      data.forEach(u => {
+        map[u.id] = u
+      })
+      setUsersMap(map)
+    }
+  }
 
   // Calculate progress and items (moved before useEffects that use them)
   const regularItems = todoList?.todo_items || []
@@ -223,11 +261,14 @@ export default function TodoList({ user, isDark }) {
     
     console.log('handleBulkAdd called with:', contents.length, 'items')
     
+    // 他人のTODOに追加する場合は、追加者のIDを記録
+    const addedBy = (loggedInUser && user.id !== loggedInUser.id) ? loggedInUser.id : null
+    
     try {
       // 順番に追加
       for (const content of contents) {
         if (content.trim()) {
-          await addTodoItem(todoList.id, content.trim(), indent)
+          await addTodoItem(todoList.id, content.trim(), indent, addedBy)
         }
       }
       
@@ -252,6 +293,9 @@ export default function TodoList({ user, isDark }) {
     const savedInsertAtIndex = insertAtIndex
     const savedIndent = indent
     const sortedItems = [...regularItems].sort((a, b) => a.order_index - b.order_index)
+    
+    // 他人のTODOに追加する場合は、追加者のIDを記録
+    const addedBy = (loggedInUser && user.id !== loggedInUser.id) ? loggedInUser.id : null
 
     try {
       console.log('Adding todo item...')
@@ -259,9 +303,9 @@ export default function TodoList({ user, isDark }) {
       // バックグラウンドでデータベースに保存
       if (savedInsertAtIndex !== null) {
         const afterOrderIndex = sortedItems[savedInsertAtIndex]?.order_index ?? null
-        await addTodoItemAtPosition(todoList.id, content.trim(), savedIndent, afterOrderIndex)
+        await addTodoItemAtPosition(todoList.id, content.trim(), savedIndent, afterOrderIndex, addedBy)
       } else {
-        await addTodoItem(todoList.id, content.trim(), savedIndent)
+        await addTodoItem(todoList.id, content.trim(), savedIndent, addedBy)
       }
 
       console.log('Todo item added, reloading list...')
@@ -593,6 +637,9 @@ export default function TodoList({ user, isDark }) {
                   onToggle={handleToggle}
                   onDelete={handleDelete}
                   ref={(el) => (itemRefs.current[item.id] = el)}
+                  usersMap={usersMap}
+                  loggedInUser={loggedInUser}
+                  todoOwner={user}
                   onBackspaceEmpty={() => {
                     // 一つ前の項目にフォーカス
                     const sortedItems = regularItems.sort((a, b) => a.order_index - b.order_index)
@@ -618,6 +665,8 @@ export default function TodoList({ user, isDark }) {
                     onBulkAdd={handleBulkAdd}
                     indentLevel={newItemIndent}
                     onIndentChange={() => {}}
+                    loggedInUser={loggedInUser}
+                    todoOwner={user}
                     onBackspaceEmpty={() => {
                       setInsertAtIndex(null)
                       setShowNewTaskInput(false)
@@ -636,6 +685,8 @@ export default function TodoList({ user, isDark }) {
             onBulkAdd={handleBulkAdd}
             indentLevel={newItemIndent}
             onIndentChange={setNewItemIndent}
+            loggedInUser={loggedInUser}
+            todoOwner={user}
             onBackspaceEmpty={() => {
               // 一番最後のアイテムにフォーカス
               const sortedItems = regularItems.sort((a, b) => a.order_index - b.order_index)
@@ -686,9 +737,18 @@ function SortableTaskItem(props) {
     opacity: isDragging ? 0.5 : 1,
   }
 
+  // 必要なpropsを抽出して渡す
+  const { usersMap, loggedInUser, todoOwner, ...restProps } = props
+
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
-      <TaskItem {...props} dragHandleProps={listeners} />
+      <TaskItem 
+        {...restProps} 
+        dragHandleProps={listeners}
+        usersMap={usersMap}
+        loggedInUser={loggedInUser}
+        todoOwner={todoOwner}
+      />
     </div>
   )
 }
@@ -775,7 +835,7 @@ function parseTextToTodos(text) {
   return todos
 }
 
-function NewTaskItem({ isDark, onAdd, onBulkAdd, onBackspaceEmpty, indentLevel, onIndentChange, onCancel }) {
+function NewTaskItem({ isDark, onAdd, onBulkAdd, onBackspaceEmpty, indentLevel, onIndentChange, onCancel, loggedInUser, todoOwner }) {
   const [content, setContent] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [localIndent, setLocalIndent] = useState(indentLevel)
@@ -785,6 +845,9 @@ function NewTaskItem({ isDark, onAdd, onBulkAdd, onBackspaceEmpty, indentLevel, 
   const [isDragging, setIsDragging] = useState(false)
   const lastSubmittedContent = useRef('')
   const [isComposing, setIsComposing] = useState(false)
+  
+  // 他の人のTODOに追加しようとしているか
+  const isAddingToOther = loggedInUser && todoOwner && loggedInUser.id !== todoOwner.id
 
   // コンポーネントがマウントされた時に自動的にフォーカス
   useEffect(() => {
@@ -918,14 +981,35 @@ function NewTaskItem({ isDark, onAdd, onBulkAdd, onBackspaceEmpty, indentLevel, 
       onTouchEnd={handleTouchEnd}
     >
       {/* 新規タスク用のボタン */}
-      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-sm ${
-        isDark
+      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-sm overflow-hidden ${
+        isAddingToOther 
+          ? '' // 他の人のTODOに追加する場合は自分のアバターを表示
+          : isDark
           ? 'bg-white text-gray-900'
           : 'bg-gray-900 text-white'
       }`}>
-        <span className="text-sm font-bold transform -rotate-90">
-          ▼
-        </span>
+        {isAddingToOther && loggedInUser ? (
+          // 他の人のTODOに追加する場合：自分のアバターを表示
+          loggedInUser.avatar_url ? (
+            <img 
+              src={loggedInUser.avatar_url} 
+              alt={loggedInUser.name || loggedInUser.email} 
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className={`w-full h-full flex items-center justify-center text-xs font-bold ${
+              isDark 
+                ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white' 
+                : 'bg-gradient-to-br from-blue-500 to-purple-500 text-white'
+            }`}>
+              {(loggedInUser.name || loggedInUser.email || '?').charAt(0).toUpperCase()}
+            </div>
+          )
+        ) : (
+          <span className="text-sm font-bold transform -rotate-90">
+            ▼
+          </span>
+        )}
       </div>
 
       <input
@@ -958,8 +1042,15 @@ function NewTaskItem({ isDark, onAdd, onBulkAdd, onBackspaceEmpty, indentLevel, 
   )
 }
 
-const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspaceEmpty, onEnterPress, dragHandleProps }, ref) => {
+const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspaceEmpty, onEnterPress, dragHandleProps, usersMap, loggedInUser, todoOwner }, ref) => {
   const [indentLevel, setIndentLevel] = useState(item.indent_level || 0)
+  
+  // 追加者情報
+  const addedByUser = item.added_by && usersMap ? usersMap[item.added_by] : null
+  // 他の人が追加したタスクかどうか（added_byが存在し、かつtodoOwnerと異なる場合）
+  const isAddedByOther = item.added_by && todoOwner && item.added_by !== todoOwner.id
+  // 削除可能かどうか（自分が追加した、またはadded_byがない、または自分のTODOリスト）
+  const canDelete = !item.added_by || (loggedInUser && item.added_by === loggedInUser.id)
 
   // indent_levelが変更されたらデータベースを更新
   useEffect(() => {
@@ -1081,6 +1172,10 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
       }
     } else if (e.key === 'Backspace' && isEditing && editContent === '' && !isComposing) {
       // 編集中で内容が空の時にBackspaceを押したら削除して上の欄にフォーカス
+      // ただし、他の人が追加したタスクは削除できない
+      if (!canDelete) {
+        return
+      }
       e.preventDefault()
       setIsDeleting(true)
       setTimeout(() => {
@@ -1088,6 +1183,10 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
         onBackspaceEmpty?.()
       }, 200) // 200msのアニメーション後に削除
     } else if (e.key === 'Backspace' && !isEditing && !isComposing) {
+      // 他の人が追加したタスクは削除できない
+      if (!canDelete) {
+        return
+      }
       e.preventDefault()
       setIsDeleting(true)
       setTimeout(() => {
@@ -1110,29 +1209,58 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
       onTouchEnd={handleTouchEnd}
     >
       {/* チェックボタン（ドラッグハンドル兼用） */}
-      <button
-        {...(dragHandleProps || {})}
-        onClick={handleToggle}
-        className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm hover:scale-110 cursor-grab active:cursor-grabbing ${
-          item.is_completed
-            ? isDark
-              ? 'bg-gray-700 text-white'
-              : 'bg-gray-300 text-gray-700'
-            : isDark
-            ? 'bg-white text-gray-900 hover:bg-gray-100'
-            : 'bg-gray-900 text-white hover:bg-gray-800'
-        }`}
-      >
-        {item.is_completed ? (
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-          </svg>
-        ) : (
-          <span className="text-sm font-bold transform -rotate-90">
-            ▼
-          </span>
+      <div className="relative">
+        <button
+          {...(dragHandleProps || {})}
+          onClick={handleToggle}
+          className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm hover:scale-110 cursor-grab active:cursor-grabbing overflow-hidden ${
+            item.is_completed
+              ? isDark
+                ? 'bg-gray-700 text-white'
+                : 'bg-gray-300 text-gray-700'
+              : isAddedByOther && addedByUser
+              ? '' // 他の人が追加した場合はアバターを表示
+              : isDark
+              ? 'bg-white text-gray-900 hover:bg-gray-100'
+              : 'bg-gray-900 text-white hover:bg-gray-800'
+          }`}
+        >
+          {item.is_completed ? (
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+          ) : isAddedByOther && addedByUser ? (
+            // 他の人が追加したタスク：追加者のアバターを表示
+            addedByUser.avatar_url ? (
+              <img 
+                src={addedByUser.avatar_url} 
+                alt={addedByUser.name || addedByUser.email} 
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className={`w-full h-full flex items-center justify-center text-xs font-bold ${
+                isDark 
+                  ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white' 
+                  : 'bg-gradient-to-br from-blue-500 to-purple-500 text-white'
+              }`}>
+                {(addedByUser.name || addedByUser.email || '?').charAt(0).toUpperCase()}
+              </div>
+            )
+          ) : (
+            <span className="text-sm font-bold transform -rotate-90">
+              ▼
+            </span>
+          )}
+        </button>
+        {/* 他の人が追加したタスクの場合、ツールチップ表示用 */}
+        {isAddedByOther && addedByUser && (
+          <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border ${
+            isDark 
+              ? 'bg-blue-500 border-gray-900' 
+              : 'bg-blue-500 border-white'
+          }`} title={`${addedByUser.name || addedByUser.email}さんが追加`} />
         )}
-      </button>
+      </div>
 
 {isEditing ? (
         <>

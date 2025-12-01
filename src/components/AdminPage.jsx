@@ -284,17 +284,26 @@ export default function AdminPage({ isDark }) {
         } else {
           // clock_outが存在しない場合（まだ退勤していない、または退勤打刻を忘れた）
           // データベースのtotal_work_minutesが存在する場合はそれを使用
-          // そうでない場合は、その日の19:00を退勤時刻として計算
           if (record.total_work_minutes && record.total_work_minutes > 0) {
             workMinutes = record.total_work_minutes
           } else {
-            // その日の19:00 JSTを退勤時刻として設定（UTCでは10:00）
-            // JST 19:00 = UTC 10:00 (UTC+9時間)
-            const clockOutUTC = new Date(record.date + 'T10:00:00Z')
+            // 今日の日付かどうかを確認
+            const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+            const today = jstNow.toISOString().split('T')[0]
+            const recordDate = record.date
             
-            const totalMinutes = Math.floor((clockOutUTC - clockIn) / 60000)
-            const breakMinutes = record.break_minutes_used || 0
-            workMinutes = Math.max(0, totalMinutes - breakMinutes)
+            if (recordDate === today) {
+              // 今日のデータで勤務中の場合は、現在時刻までの勤務時間を計算
+              const totalMinutes = Math.floor((jstNow - clockIn) / 60000)
+              const breakMinutes = record.break_minutes_used || 0
+              workMinutes = Math.max(0, totalMinutes - breakMinutes)
+            } else {
+              // 過去のデータで退勤打刻がない場合は、その日の19:00 JSTを退勤時刻として計算
+              const clockOutUTC = new Date(record.date + 'T10:00:00Z')
+              const totalMinutes = Math.floor((clockOutUTC - clockIn) / 60000)
+              const breakMinutes = record.break_minutes_used || 0
+              workMinutes = Math.max(0, totalMinutes - breakMinutes)
+            }
           }
         }
         
@@ -471,17 +480,26 @@ export default function AdminPage({ isDark }) {
         } else {
           // clock_outが存在しない場合（まだ退勤していない、または退勤打刻を忘れた）
           // データベースのtotal_work_minutesが存在する場合はそれを使用
-          // そうでない場合は、その日の19:00を退勤時刻として計算
           if (record.total_work_minutes && record.total_work_minutes > 0) {
             workMinutes = record.total_work_minutes
           } else {
-            // その日の19:00 JSTを退勤時刻として設定（UTCでは10:00）
-            // JST 19:00 = UTC 10:00 (UTC+9時間)
-            const clockOutUTC = new Date(record.date + 'T10:00:00Z')
+            // 今日の日付かどうかを確認
+            const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+            const today = jstNow.toISOString().split('T')[0]
+            const recordDate = record.date
             
-            const totalMinutes = Math.floor((clockOutUTC - clockIn) / 60000)
-            const breakMinutes = record.break_minutes_used || 0
-            workMinutes = Math.max(0, totalMinutes - breakMinutes)
+            if (recordDate === today) {
+              // 今日のデータで勤務中の場合は、現在時刻までの勤務時間を計算
+              const totalMinutes = Math.floor((jstNow - clockIn) / 60000)
+              const breakMinutes = record.break_minutes_used || 0
+              workMinutes = Math.max(0, totalMinutes - breakMinutes)
+            } else {
+              // 過去のデータで退勤打刻がない場合は、その日の19:00 JSTを退勤時刻として計算
+              const clockOutUTC = new Date(record.date + 'T10:00:00Z')
+              const totalMinutes = Math.floor((clockOutUTC - clockIn) / 60000)
+              const breakMinutes = record.break_minutes_used || 0
+              workMinutes = Math.max(0, totalMinutes - breakMinutes)
+            }
           }
         }
         
