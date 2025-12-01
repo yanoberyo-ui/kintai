@@ -1076,6 +1076,7 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                         }`}>
                           {/* Slackにコピー（全員） */}
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.preventDefault()
                               e.stopPropagation()
