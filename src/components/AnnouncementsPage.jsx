@@ -407,6 +407,72 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
     }
   }
 
+  // Slackにコピー機能
+  const handleCopyToSlack = async (announcement) => {
+    // 画像URLを取得
+    const images = announcement.image_urls?.length > 0 
+      ? announcement.image_urls 
+      : announcement.image_url 
+        ? [announcement.image_url] 
+        : []
+
+    // 日付フォーマット
+    const date = new Date(announcement.created_at)
+    const dateStr = `${date.getMonth() + 1}月${date.getDate()}日 ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`
+    
+    // カテゴリアイコン
+    const categoryIcon = announcement.category === 'event' ? '📅' : '📢'
+    
+    // テキスト組み立て
+    let text = `${categoryIcon} *${announcement.title}*\n\n`
+    text += `${announcement.content}\n`
+    
+    // 画像があれば追加
+    if (images.length > 0) {
+      text += `\n📷 画像:\n`
+      images.forEach(url => {
+        text += `${url}\n`
+      })
+    }
+    
+    // リンクがあれば追加
+    if (announcement.link_url) {
+      text += `\n🔗 ${announcement.link_title || 'リンク'}: ${announcement.link_url}\n`
+    }
+    
+    // イベント情報
+    if (announcement.category === 'event') {
+      if (announcement.event_date) {
+        const eventDate = new Date(announcement.event_date)
+        text += `\n📅 ${eventDate.getMonth() + 1}月${eventDate.getDate()}日 ${eventDate.getHours()}:${String(eventDate.getMinutes()).padStart(2, '0')}`
+      }
+      if (announcement.event_location) {
+        text += ` @ ${announcement.event_location}`
+      }
+      text += '\n'
+    }
+    
+    // 投稿者情報
+    const authorName = announcement.author?.name || announcement.author?.email?.split('@')[0] || '不明'
+    text += `\n👤 ${authorName} | ${dateStr}`
+
+    try {
+      await navigator.clipboard.writeText(text)
+      // 成功フィードバック（簡易的にalertの代わり）
+      const btn = document.activeElement
+      if (btn) {
+        const originalText = btn.textContent
+        btn.textContent = '✓ コピーしました！'
+        setTimeout(() => {
+          btn.textContent = originalText
+        }, 1500)
+      }
+    } catch (err) {
+      console.error('コピーに失敗:', err)
+      alert('コピーに失敗しました')
+    }
+  }
+
   const handleDelete = async (announcementId, e) => {
     e.stopPropagation()
 
@@ -951,42 +1017,61 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  {/* 3点メニュー（投稿者本人または管理者のみ） - 右上に配置 */}
-                  {currentUser && (currentUser.id === announcement.author_id || currentUser.role === 'admin') && (
-                    <div className="float-right relative">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setOpenMenuId(openMenuId === announcement.id ? null : announcement.id)
-                        }}
-                        className={`p-2 rounded-full transition-colors ${
+                  {/* 3点メニュー - 右上に配置（全員に表示） */}
+                  <div className="float-right relative">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setOpenMenuId(openMenuId === announcement.id ? null : announcement.id)
+                      }}
+                      className={`p-2 rounded-full transition-colors ${
+                        isDark
+                          ? 'text-gray-400 hover:text-white hover:bg-gray-800'
+                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                      }`}
+                      title="メニュー"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                      </svg>
+                    </button>
+
+                    {/* ドロップダウンメニュー */}
+                    {openMenuId === announcement.id && (
+                      <>
+                        {/* オーバーレイ */}
+                        <div
+                          className="fixed inset-0 z-10"
+                          onClick={() => setOpenMenuId(null)}
+                        />
+
+                        {/* メニュー */}
+                        <div className={`absolute right-0 top-10 z-20 w-56 rounded-xl shadow-lg border overflow-hidden ${
                           isDark
-                            ? 'text-gray-400 hover:text-white hover:bg-gray-800'
-                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                        }`}
-                        title="メニュー"
-                      >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                        </svg>
-                      </button>
+                            ? 'bg-gray-900 border-gray-800'
+                            : 'bg-white border-gray-200'
+                        }`}>
+                          {/* Slackにコピー（全員） */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleCopyToSlack(announcement)
+                              setOpenMenuId(null)
+                            }}
+                            className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${
+                              isDark
+                                ? 'hover:bg-gray-800 text-gray-300'
+                                : 'hover:bg-gray-50 text-gray-700'
+                            }`}
+                          >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                            </svg>
+                            <span>Slackにコピー</span>
+                          </button>
 
-                      {/* ドロップダウンメニュー */}
-                      {openMenuId === announcement.id && (
-                        <>
-                          {/* オーバーレイ */}
-                          <div
-                            className="fixed inset-0 z-10"
-                            onClick={() => setOpenMenuId(null)}
-                          />
-
-                          {/* メニュー */}
-                          <div className={`absolute right-0 top-10 z-20 w-56 rounded-xl shadow-lg border overflow-hidden ${
-                            isDark
-                              ? 'bg-gray-900 border-gray-800'
-                              : 'bg-white border-gray-200'
-                          }`}>
-                            {/* 編集 */}
+                          {/* 編集（投稿者本人または管理者のみ） */}
+                          {currentUser && (currentUser.id === announcement.author_id || currentUser.role === 'admin') && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
@@ -1009,28 +1094,30 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                               </svg>
                               <span>投稿を編集</span>
                             </button>
+                          )}
 
-                            {/* フォローアップメッセージ（イベント投稿者のみ） */}
-                            {announcement.category === 'event' && currentUser?.id === announcement.author_id && (
-                              <button
-                                onClick={(e) => {
-                                  handleFollowUpClick(announcement, e)
-                                  setOpenMenuId(null)
-                                }}
-                                className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${
-                                  isDark
-                                    ? 'hover:bg-gray-800 text-gray-300'
-                                    : 'hover:bg-gray-50 text-gray-700'
-                                }`}
-                              >
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                                </svg>
-                                <span>フォローアップメッセージ</span>
-                              </button>
-                            )}
+                          {/* フォローアップメッセージ（イベント投稿者のみ） */}
+                          {announcement.category === 'event' && currentUser?.id === announcement.author_id && (
+                            <button
+                              onClick={(e) => {
+                                handleFollowUpClick(announcement, e)
+                                setOpenMenuId(null)
+                              }}
+                              className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${
+                                isDark
+                                  ? 'hover:bg-gray-800 text-gray-300'
+                                  : 'hover:bg-gray-50 text-gray-700'
+                              }`}
+                            >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                              </svg>
+                              <span>フォローアップメッセージ</span>
+                            </button>
+                          )}
 
-                            {/* 削除 */}
+                          {/* 削除（投稿者本人または管理者のみ） */}
+                          {currentUser && (currentUser.id === announcement.author_id || currentUser.role === 'admin') && (
                             <button
                               onClick={(e) => {
                                 handleDelete(announcement.id, e)
@@ -1047,11 +1134,11 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                               </svg>
                               <span>投稿を削除</span>
                             </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
                   {/* 名前と日時 */}
                   <div className="flex items-center gap-2 mb-1">
                     <span className={`font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
