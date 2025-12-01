@@ -25,6 +25,7 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
   const [overtimeAlertShown, setOvertimeAlertShown] = useState(false)
   const [showAIFeedbackPopup, setShowAIFeedbackPopup] = useState(false)
   const [showWorkTypeModal, setShowWorkTypeModal] = useState(false)
+  const [showReClockInWorkTypeModal, setShowReClockInWorkTypeModal] = useState(false)
 
   useEffect(() => {
     loadAttendance()
@@ -152,12 +153,11 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
       // 通常のTODOと定常TODOを結合
       const allTodoItems = [...normalTodos, ...routineTodoItems]
 
-      // Slack通知を送信
+      // Slack通知を送信（出勤・退勤のみ）
       await sendSlackNotification(
         'clock_in',
         { id: user.id, name: userData?.name || user.email },
-        result,
-        allTodoItems
+        result
       )
 
       // 誕生日チェック
@@ -284,12 +284,11 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
       // 通常のTODOと定常TODOを結合
       const allTodoItems = [...normalTodos, ...routineTodoItems]
 
-      // Slack通知を送信（TODOリスト付き）
+      // Slack通知を送信（出勤・退勤のみ）
       await sendSlackNotification(
         'clock_out',
         { id: user.id, name: userData?.name || user.email },
-        result,
-        allTodoItems
+        result
       )
 
       setBreakMinutes('')
@@ -337,10 +336,16 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
     setBreakMinutes('')
   }
 
-  const handleReClockIn = async () => {
+  const handleReClockIn = () => {
+    // 再出勤タイプ選択モーダルを表示
+    setShowReClockInWorkTypeModal(true)
+  }
+
+  const confirmReClockIn = async (workType) => {
     try {
       setLoading(true)
-      const result = await reClockIn(user.id)
+      setShowReClockInWorkTypeModal(false)
+      const result = await reClockIn(user.id, workType)
       await loadAttendance()
 
       // ユーザー情報を取得
@@ -385,12 +390,11 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
       // 通常のTODOと定常TODOを結合
       const allTodoItems = [...normalTodos, ...routineTodoItems]
 
-      // Slack通知を送信
+      // Slack通知を送信（出勤・退勤のみ）
       await sendSlackNotification(
         'clock_in',
         { id: user.id, name: userData?.name || user.email },
-        result,
-        allTodoItems
+        result
       )
     } catch (error) {
       console.error('Error re-clocking in:', error)
@@ -829,6 +833,62 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
 
             <button
               onClick={() => setShowWorkTypeModal(false)}
+              disabled={loading}
+              className={`w-full py-2 text-sm font-medium rounded-lg transition-colors ${
+                isDark
+                  ? 'text-gray-400 hover:text-gray-300'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 再出勤タイプ選択モーダル */}
+      {showReClockInWorkTypeModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 animate-fade-in">
+          <div className={`rounded-2xl shadow-2xl p-8 max-w-md w-full animate-scale-in ${
+            isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white'
+          }`}>
+            <h3 className={`text-2xl font-semibold mb-4 ${
+              isDark ? 'text-white' : 'text-gray-900'
+            }`}>
+              再出勤タイプを選択
+            </h3>
+
+            <p className={`mb-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              再出勤の勤務タイプを選択してください
+            </p>
+
+            <div className="space-y-3 mb-6">
+              <button
+                onClick={() => confirmReClockIn('remote')}
+                disabled={loading}
+                className={`w-full font-medium py-4 rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg ${
+                  isDark
+                    ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-600/20'
+                    : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20'
+                }`}
+              >
+                🏠 リモート
+              </button>
+              <button
+                onClick={() => confirmReClockIn('office')}
+                disabled={loading}
+                className={`w-full font-medium py-4 rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg ${
+                  isDark
+                    ? 'bg-green-600 text-white hover:bg-green-700 shadow-green-600/20'
+                    : 'bg-green-500 text-white hover:bg-green-600 shadow-green-500/20'
+                }`}
+              >
+                🏢 出社
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowReClockInWorkTypeModal(false)}
               disabled={loading}
               className={`w-full py-2 text-sm font-medium rounded-lg transition-colors ${
                 isDark

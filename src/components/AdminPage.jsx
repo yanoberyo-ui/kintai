@@ -15,6 +15,11 @@ export default function AdminPage({ isDark }) {
   const [departments, setDepartments] = useState([])
   const [selectedDepartment, setSelectedDepartment] = useState('all') // ユニットフィルター
   const [importingFromSheets, setImportingFromSheets] = useState(false)
+  const [attendanceViewMode, setAttendanceViewMode] = useState('summary') // 'summary' or 'daily'
+  const [dailyAttendances, setDailyAttendances] = useState([])
+  const [editingAttendance, setEditingAttendance] = useState(null)
+  const [selectedUser, setSelectedUser] = useState('all') // ユーザーフィルター
+  const [selectedDate, setSelectedDate] = useState('all') // 日付フィルター
 
   useEffect(() => {
     loadCurrentUser()
@@ -33,14 +38,18 @@ export default function AdminPage({ isDark }) {
       if (activeTab === 'dashboard') {
         loadDashboard()
       } else if (activeTab === 'attendance') {
+        if (attendanceViewMode === 'summary') {
         loadAttendances()
+        } else {
+          loadDailyAttendances()
+        }
       } else if (activeTab === 'salary') {
         loadSalaries()
       } else if (activeTab === 'todo_achievement') {
         loadTodoAchievement()
       }
     }
-  }, [currentUser, activeTab, selectedYear, selectedMonth])
+  }, [currentUser, activeTab, selectedYear, selectedMonth, attendanceViewMode])
 
   const loadCurrentUser = async () => {
     try {
@@ -576,6 +585,153 @@ export default function AdminPage({ isDark }) {
     }
   }
 
+  const loadDailyAttendances = async () => {
+    try {
+      const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
+      const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0]
+
+      const { data, error } = await supabase
+        .from('attendances')
+        .select(`
+          *,
+          user:users (
+            id,
+            name,
+            department
+          )
+        `)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: false })
+        .order('user_id', { ascending: true })
+
+      if (error) throw error
+
+      // 時刻をフォーマット
+      const formattedData = data?.map(record => {
+        let workMinutes = 0
+        
+        if (record.clock_in && record.clock_out) {
+          const clockIn = new Date(record.clock_in)
+          const clockOut = new Date(record.clock_out)
+          if (!isNaN(clockIn.getTime()) && !isNaN(clockOut.getTime())) {
+            workMinutes = Math.floor((clockOut - clockIn) / 60000) - (record.break_minutes_used || 0)
+          }
+        }
+        
+        // データベースの total_work_minutes があればそれを使用
+        if (record.total_work_minutes && record.total_work_minutes > 0) {
+          workMinutes = record.total_work_minutes
+        }
+
+        return {
+          ...record,
+          calculatedWorkMinutes: Math.max(0, workMinutes)
+        }
+      }) || []
+
+      setDailyAttendances(formattedData)
+    } catch (error) {
+      console.error('Error loading daily attendances:', error)
+      setDailyAttendances([])
+    }
+  }
+
+  const handleUpdateAttendance = async (attendanceId, updates) => {
+    try {
+      // 時刻データの変換
+      const updateData = {}
+      
+      if (updates.clock_in !== undefined) {
+        // HH:mm 形式の時刻を UTC の ISO 文字列に変換
+        const record = dailyAttendances.find(a => a.id === attendanceId)
+        if (record && updates.clock_in) {
+          const [hours, minutes] = updates.clock_in.split(':').map(Number)
+          // JST で日付と時刻を組み合わせて UTC に変換
+          const jstDate = new Date(`${record.date}T${updates.clock_in}:00+09:00`)
+          updateData.clock_in = jstDate.toISOString()
+        } else if (updates.clock_in === '') {
+          updateData.clock_in = null
+        }
+      }
+      
+      if (updates.clock_out !== undefined) {
+        const record = dailyAttendances.find(a => a.id === attendanceId)
+        if (record && updates.clock_out) {
+          const jstDate = new Date(`${record.date}T${updates.clock_out}:00+09:00`)
+          updateData.clock_out = jstDate.toISOString()
+        } else if (updates.clock_out === '') {
+          updateData.clock_out = null
+        }
+      }
+      
+      if (updates.break_minutes_used !== undefined) {
+        updateData.break_minutes_used = parseInt(updates.break_minutes_used) || 0
+      }
+      
+      if (updates.work_type !== undefined) {
+        updateData.work_type = updates.work_type
+      }
+
+      // total_work_minutes を再計算
+      const record = dailyAttendances.find(a => a.id === attendanceId)
+      if (record) {
+        const clockIn = updateData.clock_in ? new Date(updateData.clock_in) : (record.clock_in ? new Date(record.clock_in) : null)
+        const clockOut = updateData.clock_out ? new Date(updateData.clock_out) : (record.clock_out ? new Date(record.clock_out) : null)
+        const breakMinutes = updateData.break_minutes_used !== undefined ? updateData.break_minutes_used : (record.break_minutes_used || 0)
+        
+        if (clockIn && clockOut && !isNaN(clockIn.getTime()) && !isNaN(clockOut.getTime())) {
+          const totalMinutes = Math.floor((clockOut - clockIn) / 60000)
+          updateData.total_work_minutes = Math.max(0, totalMinutes - breakMinutes)
+        }
+      }
+
+      const { error } = await supabase
+        .from('attendances')
+        .update(updateData)
+        .eq('id', attendanceId)
+
+      if (error) throw error
+
+      // データを再読み込み
+      await loadDailyAttendances()
+      setEditingAttendance(null)
+      alert('勤怠データを更新しました')
+    } catch (error) {
+      console.error('Error updating attendance:', error)
+      alert(`エラー: ${error.message}`)
+    }
+  }
+
+  const handleDeleteAttendance = async (attendanceId) => {
+    if (!window.confirm('この勤怠データを削除しますか？')) return
+
+    try {
+      const { error } = await supabase
+        .from('attendances')
+        .delete()
+        .eq('id', attendanceId)
+
+      if (error) throw error
+
+      await loadDailyAttendances()
+      alert('勤怠データを削除しました')
+    } catch (error) {
+      console.error('Error deleting attendance:', error)
+      alert(`エラー: ${error.message}`)
+    }
+  }
+
+  const formatTimeForInput = (isoString) => {
+    if (!isoString) return ''
+    const date = new Date(isoString)
+    // UTC を JST に変換（+9時間）
+    const jstDate = new Date(date.getTime() + 9 * 60 * 60 * 1000)
+    const hours = jstDate.getUTCHours().toString().padStart(2, '0')
+    const minutes = jstDate.getUTCMinutes().toString().padStart(2, '0')
+    return `${hours}:${minutes}`
+  }
+
   const handleUpdateUserRole = async (userId, newRole) => {
     try {
       const { error } = await supabase
@@ -859,6 +1015,78 @@ export default function AdminPage({ isDark }) {
 
       {/* コンテンツ */}
       {activeTab === 'attendance' && (
+        <div className="space-y-4">
+          {/* ビュー切り替えとユーザーフィルター */}
+          <div className="flex flex-wrap gap-3 items-center">
+            <div className={`inline-flex rounded-xl p-1 ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
+              <button
+                onClick={() => setAttendanceViewMode('summary')}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  attendanceViewMode === 'summary'
+                    ? isDark
+                      ? 'bg-white text-gray-900'
+                      : 'bg-gray-900 text-white'
+                    : isDark
+                    ? 'text-gray-400 hover:text-gray-200'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                📊 月次サマリー
+              </button>
+              <button
+                onClick={() => setAttendanceViewMode('daily')}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  attendanceViewMode === 'daily'
+                    ? isDark
+                      ? 'bg-white text-gray-900'
+                      : 'bg-gray-900 text-white'
+                    : isDark
+                    ? 'text-gray-400 hover:text-gray-200'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                📅 日別詳細
+              </button>
+            </div>
+
+            {attendanceViewMode === 'daily' && (
+              <>
+                <select
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className={`px-3 py-2 text-sm rounded-xl transition-colors ${
+                    isDark
+                      ? 'bg-gray-800 text-white border border-gray-700'
+                      : 'bg-white text-gray-900 border border-gray-300'
+                  } focus:outline-none`}
+                >
+                  <option value="all">📅 全日程</option>
+                  {[...new Set(dailyAttendances.map(a => a.date))].sort((a, b) => b.localeCompare(a)).map(date => (
+                    <option key={date} value={date}>
+                      {new Date(date).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', weekday: 'short' })}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={selectedUser}
+                  onChange={(e) => setSelectedUser(e.target.value)}
+                  className={`px-3 py-2 text-sm rounded-xl transition-colors ${
+                    isDark
+                      ? 'bg-gray-800 text-white border border-gray-700'
+                      : 'bg-white text-gray-900 border border-gray-300'
+                  } focus:outline-none`}
+                >
+                  <option value="all">👤 全員</option>
+                  {users.map(user => (
+                    <option key={user.id} value={user.id}>{user.name}</option>
+                  ))}
+                </select>
+              </>
+            )}
+          </div>
+
+          {/* 月次サマリービュー */}
+          {attendanceViewMode === 'summary' && (
         <div className={`rounded-2xl border overflow-hidden ${
           isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'
         }`}>
@@ -955,6 +1183,282 @@ export default function AdminPage({ isDark }) {
               </div>
             )}
           </div>
+            </div>
+          )}
+
+          {/* 日別詳細ビュー */}
+          {attendanceViewMode === 'daily' && (
+            <div className="space-y-4">
+              {/* 日付でグループ化して表示 */}
+              {(() => {
+                // フィルタリング
+                const filteredData = dailyAttendances
+                  .filter(record => selectedDate === 'all' || record.date === selectedDate)
+                  .filter(record => selectedUser === 'all' || record.user_id === selectedUser)
+                  .filter(record => selectedDepartment === 'all' || record.user?.department === selectedDepartment)
+
+                // 日付でグループ化
+                const groupedByDate = filteredData.reduce((acc, record) => {
+                  if (!acc[record.date]) {
+                    acc[record.date] = []
+                  }
+                  acc[record.date].push(record)
+                  return acc
+                }, {})
+
+                // 日付でソート（降順）
+                const sortedDates = Object.keys(groupedByDate).sort((a, b) => b.localeCompare(a))
+
+                if (sortedDates.length === 0) {
+                  return (
+                    <div className={`rounded-2xl border p-12 text-center ${
+                      isDark ? 'border-gray-800 bg-gray-900/50 text-gray-500' : 'border-gray-200 bg-white text-gray-400'
+                    }`}>
+                      <p>出勤データがありません</p>
+                    </div>
+                  )
+                }
+
+                return sortedDates.map(date => (
+                  <div key={date} className={`rounded-2xl border overflow-hidden ${
+                    isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'
+                  }`}>
+                    {/* 日付ヘッダー */}
+                    <div className={`px-4 py-3 flex items-center justify-between ${
+                      isDark ? 'bg-gray-800/70' : 'bg-gray-100'
+                    }`}>
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">📅</span>
+                        <div>
+                          <div className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                            {new Date(date).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
+                          </div>
+                          <div className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                            出勤者: {groupedByDate[date].length}名
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setSelectedDate(selectedDate === date ? 'all' : date)}
+                        className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
+                          selectedDate === date
+                            ? isDark
+                              ? 'bg-white text-gray-900'
+                              : 'bg-gray-900 text-white'
+                            : isDark
+                            ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        {selectedDate === date ? '✓ 選択中' : '選択'}
+                      </button>
+                    </div>
+
+                    {/* テーブル */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className={isDark ? 'bg-gray-800/30' : 'bg-gray-50'}>
+                          <tr>
+                            <th className={`px-3 py-2 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                              名前
+                            </th>
+                            <th className={`px-3 py-2 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                              出勤
+                            </th>
+                            <th className={`px-3 py-2 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                              退勤
+                            </th>
+                            <th className={`px-3 py-2 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                              休憩
+                            </th>
+                            <th className={`px-3 py-2 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                              稼働時間
+                            </th>
+                            <th className={`px-3 py-2 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                              タイプ
+                            </th>
+                            <th className={`px-3 py-2 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                              操作
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className={`divide-y ${isDark ? 'divide-gray-800' : 'divide-gray-200'}`}>
+                          {groupedByDate[date].map((record) => (
+                            <tr key={record.id} className={isDark ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'}>
+                              <td className={`px-3 py-3 whitespace-nowrap text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                {record.user?.name || '不明'}
+                              </td>
+                              
+                              {/* 編集モード */}
+                              {editingAttendance === record.id ? (
+                                <>
+                                  <td className="px-3 py-3 whitespace-nowrap">
+                                    <input
+                                      type="time"
+                                      defaultValue={formatTimeForInput(record.clock_in)}
+                                      id={`clock_in_${record.id}`}
+                                      className={`w-24 px-2 py-1 text-sm rounded ${
+                                        isDark
+                                          ? 'bg-gray-800 text-white border border-gray-600'
+                                          : 'bg-white text-gray-900 border border-gray-300'
+                                      }`}
+                                    />
+                                  </td>
+                                  <td className="px-3 py-3 whitespace-nowrap">
+                                    <input
+                                      type="time"
+                                      defaultValue={formatTimeForInput(record.clock_out)}
+                                      id={`clock_out_${record.id}`}
+                                      className={`w-24 px-2 py-1 text-sm rounded ${
+                                        isDark
+                                          ? 'bg-gray-800 text-white border border-gray-600'
+                                          : 'bg-white text-gray-900 border border-gray-300'
+                                      }`}
+                                    />
+                                  </td>
+                                  <td className="px-3 py-3 whitespace-nowrap">
+                                    <input
+                                      type="number"
+                                      defaultValue={record.break_minutes_used || 0}
+                                      id={`break_${record.id}`}
+                                      min="0"
+                                      className={`w-16 px-2 py-1 text-sm rounded ${
+                                        isDark
+                                          ? 'bg-gray-800 text-white border border-gray-600'
+                                          : 'bg-white text-gray-900 border border-gray-300'
+                                      }`}
+                                    />
+                                    <span className={`ml-1 text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>分</span>
+                                  </td>
+                                  <td className={`px-3 py-3 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
+                                    --
+                                  </td>
+                                  <td className="px-3 py-3 whitespace-nowrap">
+                                    <select
+                                      defaultValue={record.work_type || ''}
+                                      id={`work_type_${record.id}`}
+                                      className={`px-2 py-1 text-sm rounded ${
+                                        isDark
+                                          ? 'bg-gray-800 text-white border border-gray-600'
+                                          : 'bg-white text-gray-900 border border-gray-300'
+                                      }`}
+                                    >
+                                      <option value="">未設定</option>
+                                      <option value="remote">🏠 リモート</option>
+                                      <option value="office">🏢 出社</option>
+                                    </select>
+                                  </td>
+                                  <td className="px-3 py-3 whitespace-nowrap">
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => {
+                                          const clockIn = document.getElementById(`clock_in_${record.id}`).value
+                                          const clockOut = document.getElementById(`clock_out_${record.id}`).value
+                                          const breakMinutes = document.getElementById(`break_${record.id}`).value
+                                          const workType = document.getElementById(`work_type_${record.id}`).value
+                                          handleUpdateAttendance(record.id, {
+                                            clock_in: clockIn,
+                                            clock_out: clockOut,
+                                            break_minutes_used: breakMinutes,
+                                            work_type: workType || null
+                                          })
+                                        }}
+                                        className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
+                                          isDark
+                                            ? 'bg-green-600 text-white hover:bg-green-700'
+                                            : 'bg-green-500 text-white hover:bg-green-600'
+                                        }`}
+                                      >
+                                        保存
+                                      </button>
+                                      <button
+                                        onClick={() => setEditingAttendance(null)}
+                                        className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
+                                          isDark
+                                            ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                        }`}
+                                      >
+                                        キャンセル
+                                      </button>
+                                    </div>
+                                  </td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className={`px-3 py-3 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
+                                    {formatTimeForInput(record.clock_in) || '-'}
+                                  </td>
+                                  <td className={`px-3 py-3 whitespace-nowrap text-sm ${
+                                    !record.clock_out
+                                      ? 'text-orange-500 font-medium'
+                                      : isDark ? 'text-gray-300' : 'text-gray-900'
+                                  }`}>
+                                    {formatTimeForInput(record.clock_out) || '未退勤'}
+                                  </td>
+                                  <td className={`px-3 py-3 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
+                                    {record.break_minutes_used || 0}分
+                                  </td>
+                                  <td className={`px-3 py-3 whitespace-nowrap text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                    {Math.floor(record.calculatedWorkMinutes / 60)}:{String(record.calculatedWorkMinutes % 60).padStart(2, '0')}
+                                  </td>
+                                  <td className="px-3 py-3 whitespace-nowrap">
+                                    {record.work_type === 'remote' ? (
+                                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                        isDark ? 'bg-blue-900/30 text-blue-300' : 'bg-blue-100 text-blue-700'
+                                      }`}>
+                                        🏠 リモート
+                                      </span>
+                                    ) : record.work_type === 'office' ? (
+                                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                        isDark ? 'bg-green-900/30 text-green-300' : 'bg-green-100 text-green-700'
+                                      }`}>
+                                        🏢 出社
+                                      </span>
+                                    ) : (
+                                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                        isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
+                                      }`}>
+                                        未設定
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-3 whitespace-nowrap">
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => setEditingAttendance(record.id)}
+                                        className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
+                                          isDark
+                                            ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                            : 'bg-blue-500 text-white hover:bg-blue-600'
+                                        }`}
+                                      >
+                                        ✏️ 編集
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteAttendance(record.id)}
+                                        className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
+                                          isDark
+                                            ? 'bg-red-600 text-white hover:bg-red-700'
+                                            : 'bg-red-500 text-white hover:bg-red-600'
+                                        }`}
+                                      >
+                                        🗑️
+                                      </button>
+                                    </div>
+                                  </td>
+                                </>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))
+              })()}
+            </div>
+          )}
         </div>
       )}
 

@@ -1,9 +1,9 @@
 import { supabase } from './supabase.js';
 
 /**
- * Slack通知を送信
+ * Slack通知を送信（出勤・退勤のみ）
  */
-export async function sendSlackNotification(type, userData, attendanceData, todoItems = []) {
+export async function sendSlackNotification(type, userData, attendanceData) {
   try {
     const { data, error} = await supabase.functions.invoke('notify-slack', {
       body: {
@@ -13,8 +13,7 @@ export async function sendSlackNotification(type, userData, attendanceData, todo
         timestamp: new Date().toISOString(),
         work_duration: attendanceData.total_work_minutes || 0,
         break_duration: attendanceData.break_minutes_used || 0,
-        actual_work_duration: attendanceData.total_work_minutes || 0,
-        todo_items: todoItems // TODOリストを追加
+        actual_work_duration: attendanceData.total_work_minutes || 0
       }
     });
 

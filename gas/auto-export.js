@@ -117,6 +117,7 @@ function fetchAttendanceData(date) {
       clock_out: record.clock_out,
       break_minutes: record.break_minutes_used || 0,
       work_minutes: record.total_work_minutes || 0,
+      work_type: record.work_type || '',
       notes: record.notes || ''
     };
   });
@@ -137,8 +138,11 @@ function writeToUserSheet(attendance) {
     createSheetHeader(sheet, attendance.user_name, attendance.employee_id);
   }
 
-  // データ行を追加
-  const lastRow = sheet.getLastRow();
+  // 既存の集計行を削除（「合計」を含む行を探して削除）
+  clearSummaryRows(sheet);
+
+  // データ行を追加（集計行を除いた最終行の次）
+  const lastRow = findLastDataRow(sheet);
   const newRow = lastRow + 1;
 
   // 日付のフォーマット
@@ -158,18 +162,53 @@ function writeToUserSheet(attendance) {
   const workMins = attendance.work_minutes % 60;
   const workFormatted = `${workHours}:${workMins.toString().padStart(2, '0')}`;
 
-  // データを書き込み
-  sheet.getRange(newRow, 1, 1, 6).setValues([[
-    dateFormatted,
+  // 勤務タイプのフォーマット
+  let workTypeFormatted = '';
+  if (attendance.work_type === 'remote') {
+    workTypeFormatted = '🏠 リモート';
+  } else if (attendance.work_type === 'office') {
+    workTypeFormatted = '🏢 出社';
+  }
+
+  // 月と日を分離
+  const monthFormatted = (date.getMonth() + 1) + '月';
+  const dayFormatted = date.getDate() + '日';
+
+  // 前の行と同じ月かチェック（同じ月なら月列は空白）
+  let displayMonth = monthFormatted;
+  if (newRow > 4) {
+    const prevMonth = sheet.getRange(newRow - 1, 1).getValue();
+    if (prevMonth === monthFormatted) {
+      displayMonth = '';
+    }
+  }
+
+  // データを書き込み（月と日を分離）
+  sheet.getRange(newRow, 1, 1, 8).setValues([[
+    displayMonth,
+    dayFormatted,
     clockInTime,
     clockOutTime,
     breakFormatted,
     workFormatted,
+    workTypeFormatted,
     attendance.notes
   ]]);
 
-  // 月次集計を更新
-  updateMonthlySummary(sheet);
+  // 勤務タイプに応じて背景色を設定
+  if (attendance.work_type === 'remote') {
+    sheet.getRange(newRow, 7).setBackground('#e3f2fd'); // 薄い青
+  } else if (attendance.work_type === 'office') {
+    sheet.getRange(newRow, 7).setBackground('#e8f5e9'); // 薄い緑
+  }
+
+  // 月が変わった行は背景色を設定
+  if (displayMonth !== '') {
+    sheet.getRange(newRow, 1).setFontWeight('bold').setBackground('#fff3e0');
+  }
+
+  // 月次集計を更新（固定セルに）
+  updateMonthlySummaryFixed(sheet);
 }
 
 /**
@@ -181,8 +220,26 @@ function createSheetHeader(sheet, userName, employeeId) {
   sheet.getRange(1, 1).setValue(title);
   sheet.getRange(1, 1).setFontSize(14).setFontWeight('bold');
 
-  // ヘッダー行
-  const headers = ['日付', '出勤時刻', '退勤時刻', '休憩時間', '実働時間', '備考'];
+  // 月合計セクション（固定位置: J列）
+  sheet.getRange(1, 10).setValue('📊 今月合計');
+  sheet.getRange(1, 10).setFontWeight('bold').setBackground('#e8f0fe');
+  sheet.getRange(1, 11).setValue('0:00');
+  sheet.getRange(1, 11).setFontWeight('bold').setFontSize(12);
+  
+  sheet.getRange(2, 10).setValue('出勤日数');
+  sheet.getRange(2, 10).setFontWeight('bold').setBackground('#e8f0fe');
+  sheet.getRange(2, 11).setValue('0日');
+
+  sheet.getRange(1, 12).setValue('🏠 リモート');
+  sheet.getRange(1, 12).setFontWeight('bold').setBackground('#e3f2fd');
+  sheet.getRange(1, 13).setValue('0日');
+  
+  sheet.getRange(2, 12).setValue('🏢 出社');
+  sheet.getRange(2, 12).setFontWeight('bold').setBackground('#e8f5e9');
+  sheet.getRange(2, 13).setValue('0日');
+
+  // ヘッダー行（月と日を分離）
+  const headers = ['月', '日', '出勤', '退勤', '休憩', '実働', '勤務タイプ', '備考'];
   sheet.getRange(3, 1, 1, headers.length).setValues([headers]);
   sheet.getRange(3, 1, 1, headers.length)
     .setFontWeight('bold')
@@ -190,77 +247,179 @@ function createSheetHeader(sheet, userName, employeeId) {
     .setFontColor('#ffffff');
 
   // 列幅の設定
-  sheet.setColumnWidth(1, 100); // 日付
-  sheet.setColumnWidth(2, 80);  // 出勤時刻
-  sheet.setColumnWidth(3, 80);  // 退勤時刻
-  sheet.setColumnWidth(4, 80);  // 休憩時間
-  sheet.setColumnWidth(5, 80);  // 実働時間
-  sheet.setColumnWidth(6, 200); // 備考
+  sheet.setColumnWidth(1, 60);  // 月
+  sheet.setColumnWidth(2, 50);  // 日
+  sheet.setColumnWidth(3, 60);  // 出勤
+  sheet.setColumnWidth(4, 60);  // 退勤
+  sheet.setColumnWidth(5, 50);  // 休憩
+  sheet.setColumnWidth(6, 60);  // 実働
+  sheet.setColumnWidth(7, 100); // 勤務タイプ
+  sheet.setColumnWidth(8, 150); // 備考
+  sheet.setColumnWidth(10, 100); // 月合計ラベル
+  sheet.setColumnWidth(11, 80); // 月合計値
+  sheet.setColumnWidth(12, 100); // リモート/出社ラベル
+  sheet.setColumnWidth(13, 60); // リモート/出社値
 
   // 固定行
   sheet.setFrozenRows(3);
 }
 
 /**
- * 月次集計を更新
+ * 集計行を削除（「合計」を含む行を探して削除）
+ */
+function clearSummaryRows(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 3) return;
+
+  // 下から上に向かって集計行を探して削除
+  for (let row = lastRow; row >= 4; row--) {
+    const cellValueA = sheet.getRange(row, 1).getValue();
+    const cellValueB = sheet.getRange(row, 2).getValue();
+    if ((cellValueA && String(cellValueA).includes('合計')) || 
+        (cellValueB && String(cellValueB).includes('合計'))) {
+      sheet.deleteRow(row);
+    }
+  }
+}
+
+/**
+ * データ行の最終行を見つける（集計行を除く）
+ */
+function findLastDataRow(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 3) return 3;
+
+  // 下から上に向かってデータ行を探す
+  for (let row = lastRow; row >= 4; row--) {
+    const cellValueA = sheet.getRange(row, 1).getValue();
+    const cellValueB = sheet.getRange(row, 2).getValue();
+    // 「合計」を含まない行で、「月」か「日」のデータがある行を探す
+    const isDataRow = (cellValueA && String(cellValueA).includes('月') && !String(cellValueA).includes('合計')) ||
+                      (cellValueB && String(cellValueB).includes('日'));
+    if (isDataRow) {
+      return row;
+    }
+  }
+  return 3;
+}
+
+/**
+ * 月次集計を更新（従来版 - 互換性のため残す）
  */
 function updateMonthlySummary(sheet) {
-  const lastRow = sheet.getLastRow();
-  if (lastRow <= 3) return; // データがない場合
+  updateMonthlySummaryFixed(sheet);
+}
 
-  // データ範囲（4行目から最終行まで）
-  const dataRange = sheet.getRange(4, 1, lastRow - 3, 6);
+/**
+ * 月次集計を固定セルに更新 + シート最下部に月別集計を追加
+ */
+function updateMonthlySummaryFixed(sheet) {
+  // まず既存の集計行を削除
+  clearSummaryRows(sheet);
+  
+  const lastDataRow = findLastDataRow(sheet);
+  if (lastDataRow <= 3) return; // データがない場合
+
+  // データ範囲（4行目からデータ最終行まで、8列：新形式）
+  const dataRange = sheet.getRange(4, 1, lastDataRow - 3, 8);
   const values = dataRange.getValues();
 
-  // 月ごとの集計
+  // 月ごとに集計
   const monthlySummary = {};
+  const now = new Date();
+  const currentMonthNum = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+  const currentMonthKey = `${currentYear}/${String(currentMonthNum).padStart(2, '0')}`;
+  
+  let lastSeenMonth = '';
 
   values.forEach(row => {
-    if (!row[0]) return; // 空行はスキップ
+    // 月列の値を取得
+    let monthValue = row[0];
+    if (monthValue && String(monthValue).includes('月')) {
+      // 「11月」のような形式から月を取得
+      lastSeenMonth = String(monthValue).replace('月', '');
+    }
+    
+    // 「合計」を含む行はスキップ
+    if (String(row[0]).includes('合計') || String(row[1]).includes('合計')) return;
+    
+    // 日列から日を取得
+    const dayValue = row[1];
+    if (!dayValue) return;
+    
+    // 月と日から実際の月を特定
+    const monthNum = lastSeenMonth ? parseInt(lastSeenMonth) : currentMonthNum;
+    // 年は現在の年を使用（TODO: 年またぎの場合は調整が必要）
+    const year = monthNum > currentMonthNum ? currentYear - 1 : currentYear;
+    const monthKey = `${year}/${String(monthNum).padStart(2, '0')}`;
 
-    const date = new Date(row[0]);
-    const month = Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy/MM');
-
-    if (!monthlySummary[month]) {
-      monthlySummary[month] = {
+    if (!monthlySummary[monthKey]) {
+      monthlySummary[monthKey] = {
+        monthLabel: monthNum + '月',
         days: 0,
-        totalMinutes: 0
+        totalMinutes: 0,
+        remoteDays: 0,
+        officeDays: 0
       };
     }
 
-    monthlySummary[month].days++;
+    monthlySummary[monthKey].days++;
 
-    // 実働時間を分に変換
-    const workTime = row[4]; // "8:30" 形式 または Dateオブジェクト
+    // 実働時間を分に変換（6列目：実働）
+    const workTime = row[5];
     if (workTime) {
       let minutes = 0;
       if (typeof workTime === 'string') {
-        // 文字列の場合
         const parts = workTime.split(':');
-        minutes = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+        minutes = parseInt(parts[0] || 0) * 60 + parseInt(parts[1] || 0);
       } else if (workTime instanceof Date) {
-        // Dateオブジェクトの場合
         const hours = workTime.getHours();
         const mins = workTime.getMinutes();
         minutes = hours * 60 + mins;
       }
-      monthlySummary[month].totalMinutes += minutes;
+      monthlySummary[monthKey].totalMinutes += minutes;
+    }
+
+    // 勤務タイプを集計（7列目：勤務タイプ）
+    const workType = row[6];
+    if (workType && String(workType).includes('リモート')) {
+      monthlySummary[monthKey].remoteDays++;
+    } else if (workType && String(workType).includes('出社')) {
+      monthlySummary[monthKey].officeDays++;
     }
   });
 
-  // 集計行を追加
-  let summaryRow = lastRow + 2;
+  // 固定セルに今月の合計を書き込み（J列、K列）
+  const currentSummary = monthlySummary[currentMonthKey] || { days: 0, totalMinutes: 0, remoteDays: 0, officeDays: 0 };
+  const hours = Math.floor(currentSummary.totalMinutes / 60);
+  const minutes = currentSummary.totalMinutes % 60;
+  const totalTimeFormatted = `${hours}:${minutes.toString().padStart(2, '0')}`;
 
-  Object.keys(monthlySummary).sort().forEach(month => {
-    const summary = monthlySummary[month];
-    const hours = Math.floor(summary.totalMinutes / 60);
-    const minutes = summary.totalMinutes % 60;
+  // 固定セルの値を更新
+  sheet.getRange(1, 11).setValue(totalTimeFormatted);
+  sheet.getRange(1, 11).setFontWeight('bold').setFontSize(12);
+  sheet.getRange(2, 11).setValue(currentSummary.days + '日');
+  sheet.getRange(1, 13).setValue(currentSummary.remoteDays + '日');
+  sheet.getRange(2, 13).setValue(currentSummary.officeDays + '日');
 
-    sheet.getRange(summaryRow, 1).setValue(month + ' 合計');
+  // シートの最下部に月別集計を追加（1行空けて）
+  let summaryRow = findLastDataRow(sheet) + 2;
+
+  // 月でソート（降順：新しい月が上）
+  const sortedMonths = Object.keys(monthlySummary).sort((a, b) => b.localeCompare(a));
+
+  sortedMonths.forEach(monthKey => {
+    const summary = monthlySummary[monthKey];
+    const h = Math.floor(summary.totalMinutes / 60);
+    const m = summary.totalMinutes % 60;
+
+    sheet.getRange(summaryRow, 1).setValue(summary.monthLabel + ' 合計');
     sheet.getRange(summaryRow, 2).setValue(summary.days + '日');
-    sheet.getRange(summaryRow, 3).setValue(`${hours}時間${minutes}分`);
+    sheet.getRange(summaryRow, 6).setValue(`${h}時間${m}分`);
+    sheet.getRange(summaryRow, 7).setValue(`🏠${summary.remoteDays} / 🏢${summary.officeDays}`);
 
-    sheet.getRange(summaryRow, 1, 1, 3)
+    sheet.getRange(summaryRow, 1, 1, 8)
       .setFontWeight('bold')
       .setBackground('#f3f3f3');
 
@@ -315,7 +474,7 @@ function updateDashboard() {
   // 既存データをクリア（ヘッダーは残す）
   const lastRow = sheet.getLastRow();
   if (lastRow > 3) {
-    sheet.getRange(4, 1, lastRow - 3, 7).clearContent();
+    sheet.getRange(4, 1, lastRow - 3, 10).clearContent();
   }
 
   // 全ユーザーの今月のデータを取得
@@ -341,6 +500,8 @@ function updateDashboard() {
         days: 0,
         totalMinutes: 0,
         lateCount: 0,
+        remoteDays: 0,
+        officeDays: 0,
         todoTotal: 0,
         todoCompleted: 0
       };
@@ -348,6 +509,13 @@ function updateDashboard() {
 
     userSummary[userId].days++;
     userSummary[userId].totalMinutes += record.work_minutes || 0;
+
+    // リモート/出社を集計
+    if (record.work_type === 'remote') {
+      userSummary[userId].remoteDays++;
+    } else if (record.work_type === 'office') {
+      userSummary[userId].officeDays++;
+    }
 
     // 9:00以降の出勤を遅刻としてカウント
     if (record.clock_in) {
@@ -387,23 +555,29 @@ function updateDashboard() {
     }
     var todoRateFormatted = summary.todoTotal > 0 ? todoRate + '%' : '-';
 
-    sheet.getRange(row, 1, 1, 8).setValues([[
+    sheet.getRange(row, 1, 1, 10).setValues([[
       summary.name,
       summary.department,
       summary.days,
       workTimeFormatted,
       avgFormatted,
+      summary.remoteDays,
+      summary.officeDays,
       summary.lateCount,
       todoRateFormatted,
       summary.lateCount > 0 ? '⚠️' : '✅'
     ]]);
+
+    // リモート/出社セルに背景色を設定
+    sheet.getRange(row, 6).setBackground('#e3f2fd'); // リモート：薄い青
+    sheet.getRange(row, 7).setBackground('#e8f5e9'); // 出社：薄い緑
 
     row++;
   });
 
   // 条件付き書式（遅刻が多い人を強調）
   if (row > 4) {
-    const dataRange = sheet.getRange(4, 1, row - 4, 8);
+    const dataRange = sheet.getRange(4, 1, row - 4, 10);
     dataRange.setHorizontalAlignment('center');
   }
 }
@@ -421,8 +595,8 @@ function createDashboardHeader(sheet) {
   const dateStr = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
   sheet.getRange(2, 1).setValue('最終更新: ' + dateStr);
 
-  // ヘッダー行
-  const headers = ['名前', '部署', '出勤日数', '合計勤務時間', '平均勤務時間', '遅刻回数', 'TODO達成率', 'ステータス'];
+  // ヘッダー行（リモート/出社を追加）
+  const headers = ['名前', '部署', '出勤日数', '合計稼働時間', '平均稼働時間', '🏠リモート', '🏢出社', '遅刻回数', 'TODO達成率', 'ステータス'];
   sheet.getRange(3, 1, 1, headers.length).setValues([headers]);
   sheet.getRange(3, 1, 1, headers.length)
     .setFontWeight('bold')
@@ -430,15 +604,21 @@ function createDashboardHeader(sheet) {
     .setFontColor('#ffffff')
     .setHorizontalAlignment('center');
 
+  // リモート/出社の列ヘッダーに背景色を設定
+  sheet.getRange(3, 6).setBackground('#1976d2'); // リモート：青
+  sheet.getRange(3, 7).setBackground('#388e3c'); // 出社：緑
+
   // 列幅の設定
   sheet.setColumnWidth(1, 120); // 名前
   sheet.setColumnWidth(2, 100); // 部署
   sheet.setColumnWidth(3, 80);  // 出勤日数
-  sheet.setColumnWidth(4, 120); // 合計勤務時間
-  sheet.setColumnWidth(5, 120); // 平均勤務時間
-  sheet.setColumnWidth(6, 80);  // 遅刻回数
-  sheet.setColumnWidth(7, 100); // TODO達成率
-  sheet.setColumnWidth(8, 100); // ステータス
+  sheet.setColumnWidth(4, 120); // 合計稼働時間
+  sheet.setColumnWidth(5, 120); // 平均稼働時間
+  sheet.setColumnWidth(6, 80);  // リモート
+  sheet.setColumnWidth(7, 80);  // 出社
+  sheet.setColumnWidth(8, 80);  // 遅刻回数
+  sheet.setColumnWidth(9, 100); // TODO達成率
+  sheet.setColumnWidth(10, 100); // ステータス
 
   sheet.setFrozenRows(3);
 }
@@ -475,7 +655,8 @@ function fetchMonthlyAttendanceData() {
       date: record.date,
       clock_in: record.clock_in,
       clock_out: record.clock_out,
-      work_minutes: record.total_work_minutes || 0
+      work_minutes: record.total_work_minutes || 0,
+      work_type: record.work_type || ''
     };
   });
 }
@@ -629,6 +810,308 @@ function fetchTodoData(date) {
  */
 function testExport() {
   exportDailyAttendance();
+}
+
+/**
+ * 全シートを一括更新（既存データをすべてクリーンアップして再構築）
+ * ※ 手動実行用 - 全ユーザーの全期間のデータを再取得して書き直します
+ */
+function rebuildAllSheets() {
+  try {
+    Logger.log('=== 全シート一括更新を開始 ===');
+    
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    
+    // 全勤怠データを取得（期間指定なし、completedのみ）
+    const allAttendances = fetchAllAttendanceData();
+    
+    if (!allAttendances || allAttendances.length === 0) {
+      Logger.log('勤怠データがありません');
+      return;
+    }
+    
+    Logger.log('取得したデータ件数: ' + allAttendances.length);
+    
+    // ユーザーごとにグループ化
+    const userAttendances = {};
+    allAttendances.forEach(record => {
+      if (!userAttendances[record.user_name]) {
+        userAttendances[record.user_name] = {
+          employee_id: record.employee_id,
+          records: []
+        };
+      }
+      userAttendances[record.user_name].records.push(record);
+    });
+    
+    Logger.log('ユーザー数: ' + Object.keys(userAttendances).length);
+    
+    // 各ユーザーのシートを再構築
+    Object.keys(userAttendances).forEach(userName => {
+      try {
+        Logger.log('処理中: ' + userName);
+        
+        const userData = userAttendances[userName];
+        let sheet = spreadsheet.getSheetByName(userName);
+        
+        // シートが存在する場合はデータをクリア
+        if (sheet) {
+          const lastRow = sheet.getLastRow();
+          if (lastRow > 3) {
+            sheet.getRange(4, 1, lastRow - 3, 12).clearContent();
+            sheet.getRange(4, 1, lastRow - 3, 12).clearFormat();
+          }
+        } else {
+          // シートが存在しない場合は新規作成
+          sheet = spreadsheet.insertSheet(userName);
+          createSheetHeader(sheet, userName, userData.employee_id);
+        }
+        
+        // ヘッダーが古い形式の場合は更新
+        updateSheetHeaderIfNeeded(sheet, userName, userData.employee_id);
+        
+        // レコードを日付順にソート（古い順）
+        userData.records.sort((a, b) => a.date.localeCompare(b.date));
+        
+        // データを書き込み（月ごとにグループ化）
+        let row = 4;
+        let prevMonth = '';
+        let monthStartRows = []; // 各月の開始行を記録
+        
+        userData.records.forEach(record => {
+          const date = new Date(record.date);
+          const currentMonth = (date.getMonth() + 1) + '月';
+          
+          // 月が変わった場合、開始行を記録
+          if (currentMonth !== prevMonth) {
+            monthStartRows.push({ month: currentMonth, startRow: row });
+          }
+          
+          prevMonth = writeAttendanceRow(sheet, row, record, prevMonth);
+          row++;
+        });
+        
+        // 月ごとにグループ化（折りたたみ可能に）
+        applyMonthGrouping(sheet, monthStartRows, row - 1);
+        
+        // 集計を更新
+        updateMonthlySummaryFixed(sheet);
+        
+        Logger.log(userName + ': ' + userData.records.length + '件 完了');
+        
+      } catch (error) {
+        Logger.log('エラー (' + userName + '): ' + error.message);
+      }
+    });
+    
+    // ダッシュボードを更新
+    Logger.log('ダッシュボードを更新中...');
+    
+    // ダッシュボードシートをリセット
+    let dashboardSheet = spreadsheet.getSheetByName('ダッシュボード');
+    if (dashboardSheet) {
+      const lastRow = dashboardSheet.getLastRow();
+      if (lastRow > 3) {
+        dashboardSheet.getRange(4, 1, lastRow - 3, 10).clearContent();
+      }
+    }
+    
+    updateDashboard();
+    
+    Logger.log('=== 全シート一括更新が完了しました ===');
+    
+  } catch (error) {
+    Logger.log('エラーが発生しました: ' + error.message);
+    throw error;
+  }
+}
+
+/**
+ * 全期間の勤怠データを取得
+ */
+function fetchAllAttendanceData() {
+  const url = `${SUPABASE_URL}/rest/v1/attendances?status=eq.completed&select=*,users(*)&order=date.asc`;
+  
+  const options = {
+    method: 'get',
+    headers: {
+      'apikey': SUPABASE_SERVICE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_SERVICE_KEY,
+      'Content-Type': 'application/json'
+    },
+    muteHttpExceptions: true
+  };
+  
+  const response = UrlFetchApp.fetch(url, options);
+  const statusCode = response.getResponseCode();
+  
+  if (statusCode !== 200) {
+    throw new Error('Supabaseからのデータ取得に失敗: ' + statusCode);
+  }
+  
+  const data = JSON.parse(response.getContentText());
+  
+  return data.map(record => {
+    const user = record.users;
+    return {
+      user_id: record.user_id,
+      user_name: user.name,
+      employee_id: user.employee_id,
+      date: record.date,
+      clock_in: record.clock_in,
+      clock_out: record.clock_out,
+      break_minutes: record.break_minutes_used || 0,
+      work_minutes: record.total_work_minutes || 0,
+      work_type: record.work_type || '',
+      notes: record.notes || ''
+    };
+  });
+}
+
+/**
+ * シートのヘッダーを必要に応じて更新（新形式: 月と日を分離）
+ */
+function updateSheetHeaderIfNeeded(sheet, userName, employeeId) {
+  // 新形式のヘッダーに更新
+  const headers = ['月', '日', '出勤', '退勤', '休憩', '実働', '勤務タイプ', '備考'];
+  sheet.getRange(3, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(3, 1, 1, headers.length)
+    .setFontWeight('bold')
+    .setBackground('#4285f4')
+    .setFontColor('#ffffff');
+  
+  // 列幅の設定
+  sheet.setColumnWidth(1, 60);  // 月
+  sheet.setColumnWidth(2, 50);  // 日
+  sheet.setColumnWidth(3, 60);  // 出勤
+  sheet.setColumnWidth(4, 60);  // 退勤
+  sheet.setColumnWidth(5, 50);  // 休憩
+  sheet.setColumnWidth(6, 60);  // 実働
+  sheet.setColumnWidth(7, 100); // 勤務タイプ
+  sheet.setColumnWidth(8, 150); // 備考
+  
+  // 固定セル（月合計）のヘッダーを更新
+  sheet.getRange(1, 10).setValue('📊 今月合計');
+  sheet.getRange(1, 10).setFontWeight('bold').setBackground('#e8f0fe');
+  sheet.getRange(1, 11).setValue('0:00');
+  sheet.getRange(1, 11).setFontWeight('bold').setFontSize(12);
+  
+  sheet.getRange(2, 10).setValue('出勤日数');
+  sheet.getRange(2, 10).setFontWeight('bold').setBackground('#e8f0fe');
+  sheet.getRange(2, 11).setValue('0日');
+
+  sheet.getRange(1, 12).setValue('🏠 リモート');
+  sheet.getRange(1, 12).setFontWeight('bold').setBackground('#e3f2fd');
+  sheet.getRange(1, 13).setValue('0日');
+  
+  sheet.getRange(2, 12).setValue('🏢 出社');
+  sheet.getRange(2, 12).setFontWeight('bold').setBackground('#e8f5e9');
+  sheet.getRange(2, 13).setValue('0日');
+  
+  sheet.setColumnWidth(10, 100);
+  sheet.setColumnWidth(11, 80);
+  sheet.setColumnWidth(12, 100);
+  sheet.setColumnWidth(13, 60);
+}
+
+/**
+ * 月ごとにグループ化を適用（折りたたみ可能に）
+ */
+function applyMonthGrouping(sheet, monthStartRows, lastDataRow) {
+  if (monthStartRows.length <= 1) return; // 1ヶ月分しかない場合はスキップ
+  
+  // 既存のグループをクリア
+  try {
+    const maxRow = sheet.getMaxRows();
+    if (maxRow > 4) {
+      // グループ深度を取得してクリア
+      for (let i = 4; i <= Math.min(maxRow, lastDataRow); i++) {
+        try {
+          sheet.getRange(i, 1).shiftRowGroupDepth(-1);
+        } catch (e) {
+          // グループがない場合は無視
+        }
+      }
+    }
+  } catch (e) {
+    // エラーは無視
+  }
+  
+  // 各月のデータ行をグループ化（最新月以外を折りたたみ可能に）
+  for (let i = 0; i < monthStartRows.length; i++) {
+    const startRow = monthStartRows[i].startRow;
+    const endRow = (i < monthStartRows.length - 1) ? monthStartRows[i + 1].startRow - 1 : lastDataRow;
+    
+    if (endRow > startRow) {
+      try {
+        // 月の開始行以外をグループ化（開始行は見出しとして残す）
+        const groupRange = sheet.getRange(startRow + 1, 1, endRow - startRow, 1);
+        groupRange.shiftRowGroupDepth(1);
+      } catch (e) {
+        Logger.log('グループ化エラー: ' + e.message);
+      }
+    }
+  }
+}
+
+/**
+ * 勤怠データを1行書き込む（月と日を分離、前の行と比較して月表示を制御）
+ */
+function writeAttendanceRow(sheet, row, attendance, prevMonth) {
+  // 日付のフォーマット
+  const date = new Date(attendance.date);
+  const monthFormatted = (date.getMonth() + 1) + '月';
+  const dayFormatted = date.getDate() + '日';
+  
+  // 時刻のフォーマット
+  const clockInTime = formatTimeOnly(attendance.clock_in);
+  const clockOutTime = formatTimeOnly(attendance.clock_out);
+  
+  // 休憩時間と実働時間のフォーマット
+  const breakHours = Math.floor(attendance.break_minutes / 60);
+  const breakMins = attendance.break_minutes % 60;
+  const breakFormatted = `${breakHours}:${breakMins.toString().padStart(2, '0')}`;
+  
+  const workHours = Math.floor(attendance.work_minutes / 60);
+  const workMins = attendance.work_minutes % 60;
+  const workFormatted = `${workHours}:${workMins.toString().padStart(2, '0')}`;
+  
+  // 勤務タイプのフォーマット
+  let workTypeFormatted = '';
+  if (attendance.work_type === 'remote') {
+    workTypeFormatted = '🏠 リモート';
+  } else if (attendance.work_type === 'office') {
+    workTypeFormatted = '🏢 出社';
+  }
+  
+  // 前の行と同じ月かチェック（同じ月なら月列は空白）
+  const displayMonth = (prevMonth === monthFormatted) ? '' : monthFormatted;
+  
+  // データを書き込み（月と日を分離）
+  sheet.getRange(row, 1, 1, 8).setValues([[
+    displayMonth,
+    dayFormatted,
+    clockInTime,
+    clockOutTime,
+    breakFormatted,
+    workFormatted,
+    workTypeFormatted,
+    attendance.notes
+  ]]);
+  
+  // 勤務タイプに応じて背景色を設定
+  if (attendance.work_type === 'remote') {
+    sheet.getRange(row, 7).setBackground('#e3f2fd');
+  } else if (attendance.work_type === 'office') {
+    sheet.getRange(row, 7).setBackground('#e8f5e9');
+  }
+  
+  // 月が変わった行は背景色を設定して目立たせる
+  if (displayMonth !== '') {
+    sheet.getRange(row, 1).setFontWeight('bold').setBackground('#fff3e0');
+  }
+  
+  return monthFormatted; // 次の行で比較用に返す
 }
 
 /**
