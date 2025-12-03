@@ -488,7 +488,30 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
   const handleEndBreak = async () => {
     try {
       setLoading(true)
+      
+      // リモート出勤の場合は、出社に変更するか確認
+      let newWorkType = attendance.work_type
+      if (attendance.work_type === 'remote') {
+        const changeToOffice = confirm('リモートから戻りますか？\n\n「OK」で出社に変更\n「キャンセル」でリモートのまま')
+        if (changeToOffice) {
+          newWorkType = 'office'
+        }
+      }
+      
       await endBreak(user.id)
+      
+      // work_typeを更新（リモート→出社に変更した場合）
+      if (newWorkType !== attendance.work_type) {
+        // 日本時間で今日の日付を取得
+        const jstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+        const today = jstDate.toISOString().split('T')[0]
+        await supabase
+          .from('attendances')
+          .update({ work_type: newWorkType })
+          .eq('user_id', user.id)
+          .eq('date', today)
+      }
+      
       await loadAttendance()
       
       // Slack通知
