@@ -20,6 +20,7 @@ export default function AdminPage({ isDark }) {
   const [editingAttendance, setEditingAttendance] = useState(null)
   const [selectedUser, setSelectedUser] = useState('all') // ユーザーフィルター
   const [selectedDate, setSelectedDate] = useState('all') // 日付フィルター
+  const [expandedSessions, setExpandedSessions] = useState(new Set()) // 展開されたセッションのID
 
   useEffect(() => {
     loadCurrentUser()
@@ -750,6 +751,65 @@ export default function AdminPage({ isDark }) {
     return `${hours}:${minutes}`
   }
 
+  // 勤務セッションを取得（中抜け対応）
+  const getWorkSessions = (record) => {
+    if (!record.clock_in) return []
+    
+    const sessions = []
+    const clockInTime = formatTimeForInput(record.clock_in)
+    
+    if (!record.break_sessions || record.break_sessions.length === 0) {
+      // 中抜けなし
+      sessions.push({
+        start: clockInTime,
+        end: record.clock_out ? formatTimeForInput(record.clock_out) : null
+      })
+    } else {
+      // 中抜けあり
+      let currentStart = clockInTime
+      
+      for (const breakSession of record.break_sessions) {
+        // 中抜け開始時刻まで勤務
+        const breakStart = formatTimeForInput(breakSession.start)
+        sessions.push({
+          start: currentStart,
+          end: breakStart
+        })
+        
+        // 中抜けから戻った時刻が次の開始
+        if (breakSession.end) {
+          currentStart = formatTimeForInput(breakSession.end)
+        } else {
+          // まだ中抜け中
+          currentStart = null
+        }
+      }
+      
+      // 最後のセッション（中抜けから戻った後〜現在/退勤）
+      if (currentStart) {
+        sessions.push({
+          start: currentStart,
+          end: record.clock_out ? formatTimeForInput(record.clock_out) : null
+        })
+      }
+    }
+    
+    return sessions
+  }
+
+  // セッション展開状態をトグル
+  const toggleSessionExpansion = (attendanceId) => {
+    setExpandedSessions(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(attendanceId)) {
+        newSet.delete(attendanceId)
+      } else {
+        newSet.add(attendanceId)
+      }
+      return newSet
+    })
+  }
+
   const handleUpdateUserRole = async (userId, newRole) => {
     try {
       const { error } = await supabase
@@ -1287,6 +1347,9 @@ export default function AdminPage({ isDark }) {
                               退勤
                             </th>
                             <th className={`px-3 py-2 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                              中抜け
+                            </th>
+                            <th className={`px-3 py-2 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                               休憩
                             </th>
                             <th className={`px-3 py-2 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -1333,6 +1396,13 @@ export default function AdminPage({ isDark }) {
                                           : 'bg-white text-gray-900 border border-gray-300'
                                       }`}
                                     />
+                                  </td>
+                                  <td className={`px-3 py-3 whitespace-nowrap text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                    {(() => {
+                                      const sessions = getWorkSessions(record)
+                                      if (sessions.length <= 1) return '-'
+                                      return `${sessions.length}回`
+                                    })()}
                                   </td>
                                   <td className="px-3 py-3 whitespace-nowrap">
                                     <input
@@ -1413,6 +1483,61 @@ export default function AdminPage({ isDark }) {
                                       : isDark ? 'text-gray-300' : 'text-gray-900'
                                   }`}>
                                     {formatTimeForInput(record.clock_out) || '未退勤'}
+                                  </td>
+                                  <td className="px-3 py-3 whitespace-nowrap">
+                                    {(() => {
+                                      const sessions = getWorkSessions(record)
+                                      const hasMultipleSessions = sessions.length > 1
+                                      const isExpanded = expandedSessions.has(record.id)
+                                      
+                                      if (!hasMultipleSessions) {
+                                        // 中抜けなし
+                                        return (
+                                          <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                            -
+                                          </span>
+                                        )
+                                      }
+                                      
+                                      // 中抜けあり
+                                      if (isExpanded) {
+                                        // 展開状態：全セッション表示
+                                        return (
+                                          <div className="space-y-1">
+                                            <div className={`text-xs ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                              {sessions.map((session, idx) => (
+                                                <div key={idx} className="py-0.5">
+                                                  {session.start}-{session.end || '現在'}
+                                                </div>
+                                              ))}
+                                            </div>
+                                            <button
+                                              onClick={() => toggleSessionExpansion(record.id)}
+                                              className={`text-xs underline ${isDark ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'}`}
+                                            >
+                                              閉じる
+                                            </button>
+                                          </div>
+                                        )
+                                      } else {
+                                        // 折りたたみ状態：最初と最後のみ
+                                        const firstSession = sessions[0]
+                                        const lastSession = sessions[sessions.length - 1]
+                                        return (
+                                          <div className="flex items-center gap-1">
+                                            <span className={`text-xs ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                              {firstSession.start} - {lastSession.end || '現在'}
+                                            </span>
+                                            <button
+                                              onClick={() => toggleSessionExpansion(record.id)}
+                                              className={`text-xs px-1.5 py-0.5 rounded ${isDark ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
+                                            >
+                                              ...
+                                            </button>
+                                          </div>
+                                        )
+                                      }
+                                    })()}
                                   </td>
                                   <td className={`px-3 py-3 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
                                     {record.break_minutes_used || 0}分
