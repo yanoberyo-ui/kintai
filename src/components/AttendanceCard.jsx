@@ -10,8 +10,6 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
   const [attendance, setAttendance] = useState(null)
   const [loading, setLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(new Date())
-  const [showBreakModal, setShowBreakModal] = useState(false)
-  const [breakMinutes, setBreakMinutes] = useState('')
   const [showBirthdayPopup, setShowBirthdayPopup] = useState(false)
   const [birthdayData, setBirthdayData] = useState({ isCurrentUser: false, members: [] })
   const [showConfetti, setShowConfetti] = useState(false)
@@ -232,16 +230,15 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
   const handleClockOut = async () => {
     // 前回のAIフィードバックポップアップが残っていたら閉じる
     setShowAIFeedbackPopup(false)
-    setShowBreakModal(true)
-  }
-
-  const confirmClockOut = async () => {
-    const minutes = parseInt(breakMinutes) || 0
+    
+    // 確認ダイアログ
+    if (!confirm('退勤しますか？\n（中抜け時間は自動的に休憩時間として計算されます）')) {
+      return
+    }
 
     try {
       setLoading(true)
-      setShowBreakModal(false)
-      const result = await clockOut(user.id, minutes)
+      const result = await clockOut(user.id)
       await loadAttendance()
 
       // ユーザー情報を取得（最新のデータを確実に取得）
@@ -333,10 +330,6 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
     }
   }
 
-  const cancelClockOut = () => {
-    setShowBreakModal(false)
-    setBreakMinutes('')
-  }
 
   const handleReClockIn = () => {
     // 再出勤タイプ選択モーダルを表示
@@ -899,16 +892,12 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
                 </button>
               )}
               
-              {/* 退勤ボタン（中抜け中は無効） */}
+              {/* 退勤ボタン（中抜け時間は自動計算される） */}
               <button
                 onClick={handleClockOut}
-                disabled={loading || isOnBreak()}
+                disabled={loading}
                 className={`w-full font-medium py-4 rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg ${
-                  isOnBreak()
-                    ? isDark
-                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : isDark
+                  isDark
                     ? 'bg-white text-gray-900 hover:bg-gray-100 shadow-white/20'
                     : 'bg-gray-900 text-white hover:bg-gray-800 shadow-gray-900/20'
                 }`}
@@ -916,8 +905,8 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
                 🌆 退勤する
               </button>
               {isOnBreak() && (
-                <p className={`text-xs mt-2 text-center ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>
-                  ※ 戻ってから退勤してください
+                <p className={`text-xs mt-2 text-center ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  ※ 中抜け時間は自動的に休憩時間として計算されます
                 </p>
               )}
             </div>
@@ -1065,78 +1054,6 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
         </div>
       )}
 
-      {/* 休憩時間入力モーダル */}
-      {showBreakModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 animate-fade-in">
-          <div className={`rounded-2xl shadow-2xl p-8 max-w-md w-full animate-scale-in ${
-            isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white'
-          }`}>
-            <h3 className={`text-2xl font-semibold mb-4 ${
-              isDark ? 'text-white' : 'text-gray-900'
-            }`}>
-              お疲れ様でした！
-            </h3>
-
-            <p className={`mb-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-              今日の休憩時間を入力してください
-            </p>
-
-            <div className="mb-6">
-              <label className={`block text-sm font-medium mb-2 ${
-                isDark ? 'text-gray-300' : 'text-gray-700'
-              }`}>
-                休憩時間（分）
-              </label>
-              <input
-                type="number"
-                value={breakMinutes}
-                onChange={(e) => setBreakMinutes(e.target.value)}
-                placeholder="60"
-                min="0"
-                className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 ${
-                  isDark
-                    ? 'bg-gray-800 border-gray-700 text-white focus:ring-white/20'
-                    : 'bg-white border-gray-300 text-gray-900 focus:ring-gray-900/20'
-                }`}
-                autoFocus
-              />
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={cancelClockOut}
-                className={`flex-1 py-3 rounded-xl font-medium transition-colors ${
-                  isDark
-                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={confirmClockOut}
-                disabled={!breakMinutes || breakMinutes === ''}
-                className={`flex-1 py-3 rounded-xl font-medium transition-colors shadow-lg ${
-                  !breakMinutes || breakMinutes === ''
-                    ? isDark
-                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : isDark
-                    ? 'bg-white text-gray-900 hover:bg-gray-100'
-                    : 'bg-gray-900 text-white hover:bg-gray-800'
-                }`}
-              >
-                退勤する
-              </button>
-            </div>
-            {(!breakMinutes || breakMinutes === '') && (
-              <p className={`text-xs mt-3 text-center ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>
-                ※ 休憩時間を入力してください（休憩なしの場合は0を入力）
-              </p>
-            )}
-          </div>
-        </div>
-      )}
     </div>
     </>
   )

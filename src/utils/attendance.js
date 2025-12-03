@@ -107,8 +107,9 @@ export async function reClockIn(userId, workType = null) {
 
 /**
  * 退勤打刻
+ * 中抜け時間は自動的に休憩時間として計算される
  */
-export async function clockOut(userId, breakMinutes = 0) {
+export async function clockOut(userId) {
   // 日本時間で今日の日付と現在時刻を取得（より確実な方法）
   const currentTime = new Date()
   const jstDate = new Date(currentTime.getTime() + (9 * 60 * 60 * 1000)) // UTC + 9時間
@@ -121,30 +122,54 @@ export async function clockOut(userId, breakMinutes = 0) {
     throw new Error('出勤打刻がありません');
   }
 
-  // 総勤務時間を計算（分）
-  // 再出勤の場合は、last_clock_out（再出勤時刻）から現在時刻までの時間を計算
-  let startTime;
-  if (attendance.last_clock_out) {
-    // 再出勤後の場合は、再出勤時刻から現在時刻まで
-    startTime = new Date(attendance.last_clock_out);
+  // 中抜け時間を自動計算（break_sessionsから）
+  const breakSessions = attendance.break_sessions || [];
+  let totalBreakMinutes = 0;
+  
+  for (const session of breakSessions) {
+    if (session.end) {
+      // 完了した中抜けセッションの時間を加算
+      totalBreakMinutes += session.minutes || 0;
+    } else {
+      // 未完了の中抜けセッションがある場合は、現在時刻までを計算
+      const breakStart = new Date(session.start);
+      const breakEnd = new Date(now);
+      const breakMinutes = Math.floor((breakEnd - breakStart) / 60000);
+      totalBreakMinutes += breakMinutes;
+      
+      // 未完了セッションを完了にする
+      session.end = now;
+      session.minutes = breakMinutes;
+    }
+  }
+
+  // 最後の勤務セッションの時間を計算
+  let lastWorkStart;
+  if (breakSessions.length > 0) {
+    // 最後の中抜け終了時刻から
+    const lastSession = breakSessions[breakSessions.length - 1];
+    lastWorkStart = new Date(lastSession.end);
+  } else if (attendance.last_clock_out) {
+    // 再出勤後の場合
+    lastWorkStart = new Date(attendance.last_clock_out);
   } else {
-    // 通常の場合は、最初の出勤時刻から現在時刻まで
-    startTime = new Date(attendance.clock_in);
+    // 最初の出勤時刻から
+    lastWorkStart = new Date(attendance.clock_in);
   }
   
   const clockOutTime = new Date(now);
-  const currentSessionMinutes = Math.floor((clockOutTime - startTime) / 60000);
-  const currentWorkMinutes = currentSessionMinutes - breakMinutes;
+  const lastSessionMinutes = Math.floor((clockOutTime - lastWorkStart) / 60000);
   
-  // 前回の勤務時間に今回のセッションの時間を加算
+  // 総勤務時間 = 前回までの勤務時間 + 最後のセッションの時間
   const previousWorkMinutes = attendance.total_work_minutes || 0;
-  const totalWorkMinutes = previousWorkMinutes + currentWorkMinutes;
+  const totalWorkMinutes = previousWorkMinutes + lastSessionMinutes;
 
   const { data, error } = await supabase
     .from('attendances')
     .update({
       clock_out: now,
-      break_minutes_used: (attendance.break_minutes_used || 0) + breakMinutes,
+      break_sessions: breakSessions, // 未完了セッションを更新
+      break_minutes_used: totalBreakMinutes, // 中抜け時間を自動計算
       total_work_minutes: totalWorkMinutes,
       status: 'completed',
       last_clock_out: null // 退勤時はlast_clock_outをクリア
