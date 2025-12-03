@@ -499,13 +499,11 @@ function updateMonthlySummaryFixed(sheet) {
     if (lastDataRowPast >= pastDataStartRow) {
       const pastRange = sheet.getRange(pastDataStartRow, 1, lastDataRowPast - pastDataStartRow + 1, 9);
       pastValues = pastRange.getValues();
-      Logger.log(`過去セクションのデータ行数: ${pastValues.length} (開始行: ${pastDataStartRow}, 終了行: ${lastDataRowPast})`);
     }
   }
   
   // 今月セクションと過去セクションのデータを結合
   const values = [...currentMonthValues, ...pastValues];
-  Logger.log(`今月セクションのデータ行数: ${currentMonthValues.length}, 過去セクションのデータ行数: ${pastValues.length}, 合計: ${values.length}`);
   
   if (values.length === 0) {
     // データがない場合、0で初期化
@@ -543,8 +541,6 @@ function updateMonthlySummaryFixed(sheet) {
     // 今月セクションと過去セクションの境界を検出
     if (index === currentMonthValues.length) {
       isPastSection = true;
-      Logger.log(`過去セクションの開始を検出: 行${index + 4}`);
-      // 過去セクションでは、月ヘッダー行から月を取得する必要がある
       lastSeenMonth = ''; // 過去セクションでは月ヘッダーを再検出
     }
     
@@ -563,7 +559,6 @@ function updateMonthlySummaryFixed(sheet) {
     if (isMonthHeader) {
       // 「11月」のような形式から月を取得
       lastSeenMonth = String(monthValue).replace('月', '');
-      Logger.log(`行${index + 4}: 月ヘッダー行を検出: ${lastSeenMonth}月 (過去セクション: ${isPastSection}, 日列: "${dayValue}")`);
       return; // 月ヘッダー行はスキップ（集計には含めない）
     }
     
@@ -591,10 +586,6 @@ function updateMonthlySummaryFixed(sheet) {
     }
     
     const monthKey = `${year}/${String(monthNum).padStart(2, '0')}`;
-    
-    if (isPastSection && lastSeenMonth) {
-      Logger.log(`行${index + 4}: 過去セクションのデータ - 月${monthNum}月、キー: ${monthKey}`);
-    }
 
     if (!monthlySummary[monthKey]) {
       monthlySummary[monthKey] = {
@@ -616,12 +607,10 @@ function updateMonthlySummaryFixed(sheet) {
     
     if (workTime) {
       // Googleスプレッドシートが時刻として解釈した場合、Date型になる
-      // その場合は、時刻として扱う（例: 0.383333... = 9:12）
       if (workTime instanceof Date) {
         const hours = workTime.getHours();
         const mins = workTime.getMinutes();
         minutes = hours * 60 + mins;
-        Logger.log(`行${index + 4}: 実働時間（Date）${hours}:${mins.toString().padStart(2, '0')} -> ${minutes}分`);
       } else if (typeof workTime === 'string') {
         // "9:13"のような形式をパース
         const trimmed = workTime.trim();
@@ -631,26 +620,19 @@ function updateMonthlySummaryFixed(sheet) {
           const minsPart = parseInt(parts[1] || 0);
           if (!isNaN(hoursPart) && !isNaN(minsPart)) {
             minutes = hoursPart * 60 + minsPart;
-            Logger.log(`行${index + 4}: 実働時間（文字列）"${trimmed}" -> ${minutes}分`);
           }
         }
       } else if (typeof workTime === 'number') {
         // 数値の場合、時刻の小数値（例: 0.383333... = 9:12）の可能性がある
-        // または、既に分単位の数値の可能性もある
-        // 時刻の小数値の場合: 1日 = 1.0, 9時間12分 = 0.383333...
         if (workTime < 1 && workTime > 0) {
           // 時刻の小数値として扱う
           const totalMinutes = Math.round(workTime * 24 * 60);
           minutes = totalMinutes;
-          Logger.log(`行${index + 4}: 実働時間（時刻小数値）${workTime} -> ${minutes}分`);
         } else {
           // 既に分単位の数値として扱う
           minutes = workTime;
-          Logger.log(`行${index + 4}: 実働時間（分単位数値）-> ${minutes}分`);
         }
       }
-    } else {
-      Logger.log(`行${index + 4}: 実働時間が空です。行データ: [${row.map((v, i) => `${i}:${v}`).join(', ')}]`);
     }
     
     monthlySummary[monthKey].totalMinutes += minutes;
@@ -664,9 +646,6 @@ function updateMonthlySummaryFixed(sheet) {
     }
   });
   
-  Logger.log(`処理したデータ行数: ${processedRows}`);
-  Logger.log(`今月のキー: ${currentMonthKey}`);
-  Logger.log(`集計結果: ${JSON.stringify(monthlySummary)}`);
 
   // 固定セルに今月の合計を書き込み（J列、K列）
   const currentSummary = monthlySummary[currentMonthKey] || { days: 0, totalMinutes: 0, remoteDays: 0, officeDays: 0 };
@@ -692,11 +671,8 @@ function updateMonthlySummaryFixed(sheet) {
   const lastMonthNum = lastMonthDate.getMonth() + 1;
   const lastMonthKey = `${lastMonthYear}/${String(lastMonthNum).padStart(2, '0')}`;
   
-  Logger.log(`先月のキー: ${lastMonthKey} (${lastMonthYear}年${lastMonthNum}月)`);
-
   // 先月のデータを集計（今月セクションと過去セクションの両方から）
   const lastSummary = monthlySummary[lastMonthKey] || { days: 0, totalMinutes: 0, remoteDays: 0, officeDays: 0 };
-  Logger.log(`先月の集計結果: ${JSON.stringify(lastSummary)}`);
   const lastHours = Math.floor(lastSummary.totalMinutes / 60);
   const lastMinutes = lastSummary.totalMinutes % 60;
   // 24時間を超える場合は「XX時間XX分」形式、それ以下は「XX:XX」形式
@@ -1601,12 +1577,6 @@ function rebuildAllSheets() {
           if (recordYear === lastMonthYear && recordMonth === lastMonthNum) {
             // データベースの値をそのまま使用（管理者ダッシュボードと同じ）
             const workMinutes = record.work_minutes || 0;
-            
-            // デバッグ: 異常に大きな値がある場合はログ出力
-            if (workMinutes > 1000) {
-              Logger.log(`  警告: ${userName} ${record.date} work_minutes=${workMinutes}, status=${record.status}, clock_out=${record.clock_out}`);
-            }
-            
             lastMonthTotalMinutes += workMinutes;
             lastMonthDays++;
             if (record.work_type === 'remote') lastMonthRemoteDays++;
