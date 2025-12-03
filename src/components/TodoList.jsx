@@ -28,6 +28,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { supabase } from '../utils/supabase'
+import { checkTodoStreakRisk } from '../utils/streaks'
 
 export default function TodoList({ user, isDark, currentUser = null }) {
   const [todoList, setTodoList] = useState(null)
@@ -50,6 +51,9 @@ export default function TodoList({ user, isDark, currentUser = null }) {
   const [rootsDailyTodos, setRootsDailyTodos] = useState([])
   const [rootsDailyLoading, setRootsDailyLoading] = useState(false)
 
+  // ストリーク警告 state
+  const [streakWarning, setStreakWarning] = useState(null)
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -71,6 +75,26 @@ export default function TodoList({ user, isDark, currentUser = null }) {
       }
     }
   }, [user])
+
+  // ストリーク警告をチェック
+  useEffect(() => {
+    if (user && !loading) {
+      checkStreakRisk()
+    }
+  }, [user, todoList, loading])
+
+  const checkStreakRisk = async () => {
+    try {
+      const risk = await checkTodoStreakRisk(user.id)
+      if (risk.isAtRisk) {
+        setStreakWarning(risk)
+      } else {
+        setStreakWarning(null)
+      }
+    } catch (error) {
+      console.error('Error checking streak risk:', error)
+    }
+  }
   
   // codex-dev DailyTodoを読み込む（読み取り専用）
   const loadRootsDailyTodos = async () => {
@@ -339,6 +363,8 @@ export default function TodoList({ user, isDark, currentUser = null }) {
       // 追加完了後、リストを再読み込み
       await loadTodoList()
       setResetKey(prev => prev + 1)
+      // ストリーク警告を再チェック
+      await checkStreakRisk()
     } catch (error) {
       console.error('Error bulk adding tasks:', error)
       await loadTodoList()
@@ -381,6 +407,8 @@ export default function TodoList({ user, isDark, currentUser = null }) {
 
       // 入力欄をリセット（新しいキーで再マウント）
       setResetKey(prev => prev + 1)
+      // ストリーク警告を再チェック
+      await checkStreakRisk()
     } catch (error) {
       console.error('Error adding task:', error)
       // エラー時は元に戻す
@@ -542,6 +570,40 @@ export default function TodoList({ user, isDark, currentUser = null }) {
           </div>
         </div>
       </div>
+
+      {/* ストリーク警告 */}
+      {streakWarning && (
+        <div className={`backdrop-blur-xl rounded-3xl shadow-lg border overflow-hidden transition-colors duration-500 relative mb-6 animate-pulse ${
+          isDark
+            ? 'bg-yellow-900/20 border-yellow-700/50 shadow-yellow-900/20'
+            : 'bg-yellow-50 border-yellow-200/50 shadow-yellow-200/20'
+        }`}>
+          <div className="p-4 md:p-6">
+            <div className="flex items-start gap-3">
+              <div className="text-2xl md:text-3xl flex-shrink-0">⚠️</div>
+              <div className="flex-1">
+                <p className={`text-sm md:text-base font-medium ${
+                  isDark ? 'text-yellow-300' : 'text-yellow-800'
+                }`}>
+                  {streakWarning.message}
+                </p>
+              </div>
+              <button
+                onClick={() => setStreakWarning(null)}
+                className={`flex-shrink-0 p-1 rounded-full transition-colors ${
+                  isDark
+                    ? 'hover:bg-yellow-900/30 text-yellow-300'
+                    : 'hover:bg-yellow-100 text-yellow-700'
+                }`}
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 定常TODOセクション */}
       <div className={`backdrop-blur-xl rounded-3xl shadow-lg border overflow-hidden transition-colors duration-500 relative mb-6 ${

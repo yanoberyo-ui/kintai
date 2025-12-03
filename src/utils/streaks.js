@@ -137,6 +137,78 @@ export async function calculateTodoStreak(userId) {
 }
 
 /**
+ * TODOストリークが切れそうかどうかを判定
+ * @returns {Object} { isAtRisk: boolean, message: string, daysUntilBreak: number }
+ */
+export async function checkTodoStreakRisk(userId) {
+  // 現在のストリークを取得
+  const currentStreak = await calculateTodoStreak(userId);
+  
+  // ストリークが0の場合は警告不要
+  if (currentStreak === 0) {
+    return { isAtRisk: false, message: '', daysUntilBreak: 0 };
+  }
+
+  // 今日の日付（日本時間）
+  const now = new Date();
+  const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+  const today = jstNow.toISOString().split('T')[0];
+  const todayDate = parseJSTDate(today);
+
+  // 今日が平日かどうか
+  const todayIsWeekday = isWeekday(todayDate);
+
+  // 今日のToDoリストを取得
+  const { data: todayTodoList } = await supabase
+    .from('todo_lists')
+    .select(`
+      date,
+      todo_items (*)
+    `)
+    .eq('user_id', userId)
+    .eq('date', today)
+    .maybeSingle();
+
+  const hasTodayTodos = todayTodoList && todayTodoList.todo_items && todayTodoList.todo_items.length > 0;
+
+  // 明日の日付を計算
+  const tomorrowDate = new Date(todayDate);
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrowIsWeekday = isWeekday(tomorrowDate);
+
+  // 警告条件：
+  // 1. 今日が平日で、まだToDoを出していない
+  // 2. または、今日が金曜で、まだToDoを出していない（来週月曜までストリークが切れる）
+  if (todayIsWeekday && !hasTodayTodos) {
+    // 今日が金曜の場合
+    if (todayDate.getDay() === 5) {
+      return {
+        isAtRisk: true,
+        message: `⚠️ ${currentStreak}日間のストリークが切れそうです！今日ToDoを出さないと、来週月曜までストリークが切れてしまいます。`,
+        daysUntilBreak: 3 // 土日を挟んで月曜まで
+      };
+    } else {
+      return {
+        isAtRisk: true,
+        message: `⚠️ ${currentStreak}日間のストリークが切れそうです！今日ToDoを出さないとストリークが切れてしまいます。`,
+        daysUntilBreak: 0 // 今日
+      };
+    }
+  }
+
+  // 明日が平日で、今日ToDoを出していない場合（明日出さないとストリークが切れる）
+  if (tomorrowIsWeekday && !hasTodayTodos) {
+    return {
+      isAtRisk: true,
+      message: `⚠️ ${currentStreak}日間のストリークを続けるには、今日ToDoを出してください！`,
+      daysUntilBreak: 1 // 明日
+    };
+  }
+
+  return { isAtRisk: false, message: '', daysUntilBreak: 0 };
+}
+
+/**
  * 両方のストリークを一度に取得
  */
 export async function getStreaks(userId) {
