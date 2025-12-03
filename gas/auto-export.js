@@ -111,6 +111,7 @@ function fetchAttendanceData(date) {
       date: record.date,
       clock_in: record.clock_in,
       clock_out: record.clock_out,
+      break_sessions: record.break_sessions || [],
       break_minutes: record.break_minutes_used || 0,
       work_minutes: record.total_work_minutes || 0,
       work_type: record.work_type || '',
@@ -149,6 +150,22 @@ function writeToUserSheet(attendance) {
   const clockInTime = formatTimeOnly(attendance.clock_in);
   const clockOutTime = formatTimeOnly(attendance.clock_out);
 
+  // 中抜け情報のフォーマット
+  let breakSessionsFormatted = '-';
+  if (attendance.break_sessions && attendance.break_sessions.length > 0) {
+    const sessions = attendance.break_sessions
+      .filter(session => session.start) // 開始時刻があるもののみ
+      .map(session => {
+        const startTime = formatTimeOnly(session.start);
+        const endTime = session.end ? formatTimeOnly(session.end) : '中抜け中';
+        return `${startTime}-${endTime}`;
+      });
+    
+    if (sessions.length > 0) {
+      breakSessionsFormatted = sessions.join(' / ');
+    }
+  }
+
   // 休憩時間と実働時間のフォーマット
   const breakHours = Math.floor(attendance.break_minutes / 60);
   const breakMins = attendance.break_minutes % 60;
@@ -180,11 +197,12 @@ function writeToUserSheet(attendance) {
   }
 
   // データを書き込み（月と日を分離）
-  sheet.getRange(newRow, 1, 1, 8).setValues([[
+  sheet.getRange(newRow, 1, 1, 9).setValues([[
     displayMonth,
     dayFormatted,
     clockInTime,
     clockOutTime,
+    breakSessionsFormatted,
     breakFormatted,
     workFormatted,
     workTypeFormatted,
@@ -193,9 +211,9 @@ function writeToUserSheet(attendance) {
 
   // 勤務タイプに応じて背景色を設定
   if (attendance.work_type === 'remote') {
-    sheet.getRange(newRow, 7).setBackground('#e3f2fd'); // 薄い青
+    sheet.getRange(newRow, 8).setBackground('#e3f2fd'); // 薄い青
   } else if (attendance.work_type === 'office') {
-    sheet.getRange(newRow, 7).setBackground('#e8f5e9'); // 薄い緑
+    sheet.getRange(newRow, 8).setBackground('#e8f5e9'); // 薄い緑
   }
 
   // 月が変わった行は背景色を設定
@@ -253,7 +271,7 @@ function createSheetHeader(sheet, userName, employeeId) {
   sheet.getRange(2, 18).setValue('0日');
 
   // ヘッダー行（月と日を分離）
-  const headers = ['月', '日', '出勤', '退勤', '休憩', '実働', '勤務タイプ', '備考'];
+  const headers = ['月', '日', '出勤', '退勤', '中抜け', '休憩', '実働', '勤務タイプ', '備考'];
   sheet.getRange(3, 1, 1, headers.length).setValues([headers]);
   sheet.getRange(3, 1, 1, headers.length)
     .setFontWeight('bold')
@@ -265,10 +283,11 @@ function createSheetHeader(sheet, userName, employeeId) {
   sheet.setColumnWidth(2, 50);  // 日
   sheet.setColumnWidth(3, 60);  // 出勤
   sheet.setColumnWidth(4, 60);  // 退勤
-  sheet.setColumnWidth(5, 50);  // 休憩
-  sheet.setColumnWidth(6, 60);  // 実働
-  sheet.setColumnWidth(7, 100); // 勤務タイプ
-  sheet.setColumnWidth(8, 150); // 備考
+  sheet.setColumnWidth(5, 120); // 中抜け
+  sheet.setColumnWidth(6, 50);  // 休憩
+  sheet.setColumnWidth(7, 60);  // 実働
+  sheet.setColumnWidth(8, 100); // 勤務タイプ
+  sheet.setColumnWidth(9, 150); // 備考
   sheet.setColumnWidth(10, 100); // 今月合計ラベル
   sheet.setColumnWidth(11, 80); // 今月合計値
   sheet.setColumnWidth(12, 100); // 今月リモート/出社ラベル
@@ -339,8 +358,8 @@ function updateMonthlySummaryFixed(sheet) {
   const lastDataRow = findLastDataRow(sheet);
   if (lastDataRow <= 3) return; // データがない場合
 
-  // データ範囲（4行目からデータ最終行まで、8列：新形式）
-  const dataRange = sheet.getRange(4, 1, lastDataRow - 3, 8);
+  // データ範囲（4行目からデータ最終行まで、9列：中抜け列追加）
+  const dataRange = sheet.getRange(4, 1, lastDataRow - 3, 9);
   const values = dataRange.getValues();
 
   // 月ごとに集計
@@ -385,8 +404,8 @@ function updateMonthlySummaryFixed(sheet) {
 
     monthlySummary[monthKey].days++;
 
-    // 実働時間を分に変換（6列目：実働）
-    const workTime = row[5];
+    // 実働時間を分に変換（7列目：実働、中抜け列追加により列番号が1つずれた）
+    const workTime = row[6];
     if (workTime) {
       let minutes = 0;
       if (typeof workTime === 'string') {
@@ -400,8 +419,8 @@ function updateMonthlySummaryFixed(sheet) {
       monthlySummary[monthKey].totalMinutes += minutes;
     }
 
-    // 勤務タイプを集計（7列目：勤務タイプ）
-    const workType = row[6];
+    // 勤務タイプを集計（8列目：勤務タイプ、中抜け列追加により列番号が1つずれた）
+    const workType = row[7];
     if (workType && String(workType).includes('リモート')) {
       monthlySummary[monthKey].remoteDays++;
     } else if (workType && String(workType).includes('出社')) {
