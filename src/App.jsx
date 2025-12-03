@@ -688,8 +688,10 @@ function App() {
             .limit(10)
 
           if (pendingRequests && pendingRequests.length > 0) {
-            // 閉じていない最新のお願いものを探す
-            const unnotifiedRequest = pendingRequests.find(request => !isDismissed('request', request.id))
+            // 閉じていない最新のお願いもの（show_popup=trueのみ）を探す
+            const unnotifiedRequest = pendingRequests.find(request => 
+              !isDismissed('request', request.id) && request.show_popup !== false
+            )
             if (unnotifiedRequest) {
               setRequestNotification(unnotifiedRequest)
             }

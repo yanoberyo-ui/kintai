@@ -310,7 +310,8 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
     link_title: '', // リンクタイトル
     voting_deadline: '', // 投票期限
     event_type: 'none', // none, participation, schedule
-    participants_only_message: '' // 参加者限定メッセージ
+    participants_only_message: '', // 参加者限定メッセージ
+    show_popup: true // ポップアップ表示するか
   })
   const [imagePreviews, setImagePreviews] = useState([]) // 複数画像プレビュー
   const [isDragging, setIsDragging] = useState(false) // ドラッグ状態
@@ -1010,6 +1011,7 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
           link_title: formData.link_title || null,
           voting_deadline: formData.voting_deadline ? fromJSTDatetimeLocal(formData.voting_deadline) : null,
           participants_only_message: formData.category === 'event' && formData.participants_only_message ? formData.participants_only_message : null,
+          show_popup: formData.show_popup,
           author_id: currentUser.id
         })
         .select()
@@ -1047,7 +1049,8 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
         link_title: '',
         voting_deadline: '',
         event_type: 'none',
-        participants_only_message: ''
+        participants_only_message: '',
+        show_popup: true
       })
       setImagePreviews([])
       setShowCreateModal(false)
@@ -1750,6 +1753,36 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* ポップアップ表示設定 */}
+                <div className={`flex items-center justify-between p-4 rounded-xl ${
+                  isDark ? 'bg-gray-800/50' : 'bg-gray-50'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🔔</span>
+                    <div>
+                      <div className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        ポップアップ通知
+                      </div>
+                      <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                        未読ユーザーにポップアップで表示
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, show_popup: !formData.show_popup })}
+                    className={`relative w-12 h-7 rounded-full transition-colors ${
+                      formData.show_popup
+                        ? 'bg-green-500'
+                        : isDark ? 'bg-gray-700' : 'bg-gray-300'
+                    }`}
+                  >
+                    <div className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                      formData.show_popup ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
                 </div>
 
                 {/* 画像アップロード */}

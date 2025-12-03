@@ -151,12 +151,12 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
       // 通常のTODOと定常TODOを結合
       const allTodoItems = [...normalTodos, ...routineTodoItems]
 
-      // Slack通知を送信（出勤・退勤のみ）
-      await sendSlackNotification(
+      // Slack通知を送信（非同期、UIをブロックしない）
+      sendSlackNotification(
         'clock_in',
         { id: user.id, name: userData?.name || user.email },
         result
-      )
+      ).catch(err => console.error('Slack通知エラー:', err))
 
       // 誕生日チェック
       await checkBirthdays()
@@ -283,12 +283,12 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
       // 通常のTODOと定常TODOを結合
       const allTodoItems = [...normalTodos, ...routineTodoItems]
 
-      // Slack通知を送信（出勤・退勤のみ）
-      await sendSlackNotification(
+      // Slack通知を送信（非同期、UIをブロックしない）
+      sendSlackNotification(
         'clock_out',
         { id: user.id, name: userData?.name || user.email },
         result
-      )
+      ).catch(err => console.error('Slack通知エラー:', err))
 
       setBreakMinutes('')
 
@@ -385,12 +385,12 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
       // 通常のTODOと定常TODOを結合
       const allTodoItems = [...normalTodos, ...routineTodoItems]
 
-      // Slack通知を送信（出勤・退勤のみ）
-      await sendSlackNotification(
+      // Slack通知を送信（非同期、UIをブロックしない）
+      sendSlackNotification(
         'clock_in',
         { id: user.id, name: userData?.name || user.email },
         result
-      )
+      ).catch(err => console.error('Slack通知エラー:', err))
     } catch (error) {
       console.error('Error re-clocking in:', error)
     } finally {
@@ -464,18 +464,18 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
       await startBreak(user.id)
       await loadAttendance()
       
-      // Slack通知
-      const { data: userData } = await supabase
-        .from('users')
-        .select('name')
-        .eq('id', user.id)
-        .single()
-      
-      await sendSlackNotification(
-        'break_start',
-        { id: user.id, name: userData?.name || user.email },
-        attendance
-      )
+      // Slack通知は頻繁すぎるため無効化（出勤/退勤のみ通知）
+      // const { data: userData } = await supabase
+      //   .from('users')
+      //   .select('name')
+      //   .eq('id', user.id)
+      //   .single()
+      // 
+      // sendSlackNotification(
+      //   'break_start',
+      //   { id: user.id, name: userData?.name || user.email },
+      //   attendance
+      // ).catch(err => console.error('Slack通知エラー:', err))
     } catch (error) {
       console.error('Error starting break:', error)
       alert(error.message || '中抜け開始に失敗しました')
@@ -514,18 +514,18 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
       
       await loadAttendance()
       
-      // Slack通知
-      const { data: userData } = await supabase
-        .from('users')
-        .select('name')
-        .eq('id', user.id)
-        .single()
-      
-      await sendSlackNotification(
-        'break_end',
-        { id: user.id, name: userData?.name || user.email },
-        attendance
-      )
+      // Slack通知は頻繁すぎるため無効化（出勤/退勤のみ通知）
+      // const { data: userData } = await supabase
+      //   .from('users')
+      //   .select('name')
+      //   .eq('id', user.id)
+      //   .single()
+      // 
+      // sendSlackNotification(
+      //   'break_end',
+      //   { id: user.id, name: userData?.name || user.email },
+      //   attendance
+      // ).catch(err => console.error('Slack通知エラー:', err))
     } catch (error) {
       console.error('Error ending break:', error)
       alert(error.message || '戻りに失敗しました')

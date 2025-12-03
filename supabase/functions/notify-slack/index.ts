@@ -101,15 +101,29 @@ serve(async (req) => {
       };
     }
 
-    // Slackへ送信
+    // Slackへ送信（タイムアウト5秒）
     if (SLACK_WEBHOOK_URL) {
-      await fetch(SLACK_WEBHOOK_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(slackMessage),
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      try {
+        await fetch(SLACK_WEBHOOK_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(slackMessage),
+          signal: controller.signal,
+        });
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          console.error('Slack通知がタイムアウトしました');
+        } else {
+          console.error('Slack通知エラー:', error);
+        }
+      } finally {
+        clearTimeout(timeoutId);
+      }
     }
 
     return new Response(

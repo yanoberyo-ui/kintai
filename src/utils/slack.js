@@ -5,7 +5,12 @@ import { supabase } from './supabase.js';
  */
 export async function sendSlackNotification(type, userData, attendanceData) {
   try {
-    const { data, error} = await supabase.functions.invoke('notify-slack', {
+    // タイムアウト付きで送信（5秒）
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Slack通知がタイムアウトしました')), 5000)
+    );
+    
+    const invokePromise = supabase.functions.invoke('notify-slack', {
       body: {
         type: type, // 'clock_in', 'clock_out', 'break_start', 'break_end'
         user_id: userData.id,
@@ -17,6 +22,8 @@ export async function sendSlackNotification(type, userData, attendanceData) {
       }
     });
 
+    const { data, error } = await Promise.race([invokePromise, timeoutPromise]);
+    
     if (error) throw error;
     return data;
   } catch (error) {
