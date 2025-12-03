@@ -20,16 +20,40 @@ const SUPABASE_ANON_KEY = PropertiesService.getScriptProperties().getProperty('S
 const SUPABASE_SERVICE_KEY = PropertiesService.getScriptProperties().getProperty('SUPABASE_SERVICE_ROLE_KEY');
 
 /**
+ * 3:00amに日付が切り替わる「昨日」の日付を取得
+ */
+function getYesterdayDate() {
+  const now = new Date();
+  // 日本時間に変換（UTC + 9時間）
+  const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+  // 3時間を引いてから日付を判定（3:00amに日付が切り替わる）
+  const adjustedDate = new Date(jstDate.getTime() - (3 * 60 * 60 * 1000));
+  // 1日前にする
+  adjustedDate.setDate(adjustedDate.getDate() - 1);
+  return Utilities.formatDate(adjustedDate, 'Asia/Tokyo', 'yyyy-MM-dd');
+}
+
+/**
+ * 3:00amに日付が切り替わる「今日」の日付を取得
+ */
+function getTodayDate() {
+  const now = new Date();
+  // 日本時間に変換（UTC + 9時間）
+  const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+  // 3時間を引いてから日付を判定（3:00amに日付が切り替わる）
+  const adjustedDate = new Date(jstDate.getTime() - (3 * 60 * 60 * 1000));
+  return Utilities.formatDate(adjustedDate, 'Asia/Tokyo', 'yyyy-MM-dd');
+}
+
+/**
  * メイン関数 - トリガーから実行される
  */
 function exportDailyAttendance() {
   try {
     Logger.log('勤怠データの自動出力を開始します');
 
-    // 前日の日付を取得
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const dateString = Utilities.formatDate(yesterday, 'Asia/Tokyo', 'yyyy-MM-dd');
+    // 3:00amに日付が切り替わる「昨日」の日付を取得
+    const dateString = getYesterdayDate();
 
     Logger.log('対象日: ' + dateString);
 
@@ -104,6 +128,47 @@ function fetchAttendanceData(date) {
   // データの整形
   return data.map(record => {
     const user = record.users;
+    
+    // 勤務時間を計算（異常値の場合は再計算）
+    let workMinutes = record.total_work_minutes || 0;
+    let calculatedMinutes = 0;
+    
+    // clock_inとclock_outから計算値を算出
+    if (record.clock_in && record.clock_out) {
+      const clockIn = new Date(record.clock_in);
+      const clockOut = new Date(record.clock_out);
+      
+      // 日付が有効な場合のみ計算
+      if (!isNaN(clockIn.getTime()) && !isNaN(clockOut.getTime()) && clockOut > clockIn) {
+        const totalMinutes = Math.floor((clockOut - clockIn) / 60000);
+        const breakMinutes = record.break_minutes_used || 0;
+        calculatedMinutes = Math.max(0, totalMinutes - breakMinutes);
+      }
+    }
+    
+    // 異常値の判定：
+    // 1. 24時間以上の場合
+    // 2. 12時間以上で、計算値との乖離が2時間以上の場合
+    // 3. 計算値が存在し、データベースの値との乖離が2時間以上の場合
+    if (workMinutes > 0 && calculatedMinutes > 0) {
+      const isAbnormal = 
+        workMinutes > 24 * 60 || // 24時間以上
+        (workMinutes > 12 * 60 && Math.abs(workMinutes - calculatedMinutes) > 120) || // 12時間以上で計算値との乖離が2時間以上
+        Math.abs(workMinutes - calculatedMinutes) > 120; // 計算値との乖離が2時間以上
+      
+      if (isAbnormal) {
+        // 異常値の場合は計算値を使用
+        workMinutes = calculatedMinutes;
+        // それでも24時間以上になる場合は、24時間に制限
+        if (workMinutes > 24 * 60) {
+          workMinutes = 24 * 60;
+        }
+      }
+    } else if (workMinutes > 24 * 60) {
+      // 計算値が存在しないが、24時間以上の場合
+      workMinutes = 24 * 60;
+    }
+    
     return {
       user_id: record.user_id,
       user_name: user.name,
@@ -113,7 +178,7 @@ function fetchAttendanceData(date) {
       clock_out: record.clock_out,
       break_sessions: record.break_sessions || [],
       break_minutes: record.break_minutes_used || 0,
-      work_minutes: record.total_work_minutes || 0,
+      work_minutes: workMinutes,
       work_type: record.work_type || '',
       notes: record.notes || ''
     };
@@ -158,12 +223,38 @@ function writeToUserSheet(attendance) {
   // 既存の集計行を削除（「合計」を含む行を探して削除）
   clearSummaryRows(sheet);
 
-  // データ行を追加（集計行を除いた最終行の次）
-  const lastRow = findLastDataRow(sheet);
-  const newRow = lastRow + 1;
-
   // 日付のフォーマット
   const date = new Date(attendance.date);
+  
+  // 3:00am基準で今月かどうかを判定
+  const todayDateStr = getTodayDate(); // 3:00am基準の今日の日付文字列（YYYY-MM-DD）
+  const todayDate = new Date(todayDateStr + 'T00:00:00+09:00');
+  const currentYearStr = Utilities.formatDate(todayDate, 'Asia/Tokyo', 'yyyy');
+  const currentMonthStr = Utilities.formatDate(todayDate, 'Asia/Tokyo', 'MM');
+  const currentYear = parseInt(currentYearStr);
+  const currentMonth = parseInt(currentMonthStr);
+  
+  const recordDate = new Date(attendance.date + 'T00:00:00+09:00');
+  const recordYearStr = Utilities.formatDate(recordDate, 'Asia/Tokyo', 'yyyy');
+  const recordMonthStr = Utilities.formatDate(recordDate, 'Asia/Tokyo', 'MM');
+  const recordYear = parseInt(recordYearStr);
+  const recordMonth = parseInt(recordMonthStr);
+  
+  const isCurrentMonth = (recordYear === currentYear && recordMonth === currentMonth);
+  
+  // データ行を追加（今月のデータは今月セクションに、過去のデータは過去セクションに）
+  let lastRow;
+  const PAST_DATA_START_ROW = 33; // 過去のデータ開始行
+  
+  if (isCurrentMonth) {
+    // 今月のデータ: 今月セクション（4行目〜32行目）の最終行を探す
+    lastRow = findLastDataRowInCurrentMonthSection(sheet, PAST_DATA_START_ROW);
+  } else {
+    // 過去のデータ: 過去セクション（33行目以降）の最終行を探す
+    lastRow = findLastDataRowInPastSection(sheet, PAST_DATA_START_ROW);
+  }
+  
+  const newRow = lastRow + 1;
   const dateFormatted = Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy/MM/dd');
 
   // 時刻のフォーマット
@@ -362,6 +453,48 @@ function findLastDataRow(sheet) {
 }
 
 /**
+ * 今月セクション（4行目〜pastDataStartRow-1行目）の最終データ行を見つける
+ */
+function findLastDataRowInCurrentMonthSection(sheet, pastDataStartRow) {
+  const lastRow = Math.min(sheet.getLastRow(), pastDataStartRow - 1);
+  if (lastRow <= 3) return 3;
+
+  // 下から上に向かってデータ行を探す（過去データセクションの前まで）
+  for (let row = lastRow; row >= 4; row--) {
+    const cellValueA = sheet.getRange(row, 1).getValue();
+    const cellValueB = sheet.getRange(row, 2).getValue();
+    // 「合計」を含まない行で、「月」か「日」のデータがある行を探す
+    const isDataRow = (cellValueA && String(cellValueA).includes('月') && !String(cellValueA).includes('合計')) ||
+                      (cellValueB && String(cellValueB).includes('日'));
+    if (isDataRow) {
+      return row;
+    }
+  }
+  return 3;
+}
+
+/**
+ * 過去セクション（pastDataStartRow行目以降）の最終データ行を見つける
+ */
+function findLastDataRowInPastSection(sheet, pastDataStartRow) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < pastDataStartRow) return pastDataStartRow - 1;
+
+  // 下から上に向かってデータ行を探す（過去データセクションから）
+  for (let row = lastRow; row >= pastDataStartRow; row--) {
+    const cellValueA = sheet.getRange(row, 1).getValue();
+    const cellValueB = sheet.getRange(row, 2).getValue();
+    // 「合計」を含まない行で、「月」か「日」のデータがある行を探す
+    const isDataRow = (cellValueA && String(cellValueA).includes('月') && !String(cellValueA).includes('合計')) ||
+                      (cellValueB && String(cellValueB).includes('日'));
+    if (isDataRow) {
+      return row;
+    }
+  }
+  return pastDataStartRow - 1;
+}
+
+/**
  * 月次集計を更新（従来版 - 互換性のため残す）
  */
 function updateMonthlySummary(sheet) {
@@ -375,42 +508,130 @@ function updateMonthlySummaryFixed(sheet) {
   // まず既存の集計行を削除
   clearSummaryRows(sheet);
   
-  const lastDataRow = findLastDataRow(sheet);
-  if (lastDataRow <= 3) return; // データがない場合
+  const PAST_DATA_START_ROW = 33; // 過去のデータ開始行
+  
+  // 今月セクション（4行目〜32行目）の最終データ行を取得
+  const lastDataRowCurrentMonth = findLastDataRowInCurrentMonthSection(sheet, PAST_DATA_START_ROW);
+  
+  // 過去セクション（33行目以降）の最終データ行を取得（先月のデータが含まれる可能性がある）
+  const lastDataRowPast = sheet.getLastRow();
+  
+  // 今月セクションのデータ範囲
+  let currentMonthValues = [];
+  if (lastDataRowCurrentMonth > 3) {
+    const currentMonthRange = sheet.getRange(4, 1, lastDataRowCurrentMonth - 3, 9);
+    currentMonthValues = currentMonthRange.getValues();
+  }
+  
+  // 過去セクションのデータ範囲（先月のデータが含まれる可能性がある）
+  let pastValues = [];
+  if (lastDataRowPast >= PAST_DATA_START_ROW) {
+    // 過去セクションの開始行を探す（「過去の勤怠データ」ヘッダーをスキップ）
+    let pastDataStartRow = PAST_DATA_START_ROW;
+    const headerCell = sheet.getRange(PAST_DATA_START_ROW, 1).getValue();
+    if (headerCell && String(headerCell).includes('過去の勤怠データ')) {
+      pastDataStartRow = PAST_DATA_START_ROW + 1; // ヘッダーの次の行から
+    }
+    
+    if (lastDataRowPast >= pastDataStartRow) {
+      const pastRange = sheet.getRange(pastDataStartRow, 1, lastDataRowPast - pastDataStartRow + 1, 9);
+      pastValues = pastRange.getValues();
+      Logger.log(`過去セクションのデータ行数: ${pastValues.length} (開始行: ${pastDataStartRow}, 終了行: ${lastDataRowPast})`);
+    }
+  }
+  
+  // 今月セクションと過去セクションのデータを結合
+  const values = [...currentMonthValues, ...pastValues];
+  Logger.log(`今月セクションのデータ行数: ${currentMonthValues.length}, 過去セクションのデータ行数: ${pastValues.length}, 合計: ${values.length}`);
+  
+  if (values.length === 0) {
+    // データがない場合、0で初期化
+    sheet.getRange(1, 11).setValue('0:00');
+    sheet.getRange(1, 11).setFontWeight('bold').setFontSize(12);
+    sheet.getRange(2, 11).setValue('0日');
+    sheet.getRange(1, 13).setValue('0日');
+    sheet.getRange(2, 13).setValue('0日');
+    
+    // 先月も0で初期化
+    sheet.getRange(1, 16).setValue('0:00');
+    sheet.getRange(1, 16).setFontWeight('bold').setFontSize(12);
+    sheet.getRange(2, 16).setValue('0日');
+    sheet.getRange(1, 18).setValue('0日');
+    sheet.getRange(2, 18).setValue('0日');
+    return;
+  }
 
-  // データ範囲（4行目からデータ最終行まで、9列：中抜け列追加）
-  const dataRange = sheet.getRange(4, 1, lastDataRow - 3, 9);
-  const values = dataRange.getValues();
-
-  // 月ごとに集計
-  const monthlySummary = {};
-  const now = new Date();
-  const currentMonthNum = now.getMonth() + 1;
-  const currentYear = now.getFullYear();
+  // 3:00am基準で現在の年月を取得
+  const todayDateStr = getTodayDate(); // 3:00am基準の今日の日付文字列（YYYY-MM-DD）
+  const todayDate = new Date(todayDateStr + 'T00:00:00+09:00'); // 日本時間として解釈
+  const currentYearStr = Utilities.formatDate(todayDate, 'Asia/Tokyo', 'yyyy');
+  const currentMonthStr = Utilities.formatDate(todayDate, 'Asia/Tokyo', 'MM');
+  const currentYear = parseInt(currentYearStr);
+  const currentMonthNum = parseInt(currentMonthStr);
   const currentMonthKey = `${currentYear}/${String(currentMonthNum).padStart(2, '0')}`;
   
+  // 月ごとに集計
+  const monthlySummary = {};
   let lastSeenMonth = '';
+  let processedRows = 0;
+  let isPastSection = false; // 過去セクションかどうかのフラグ
 
-  values.forEach(row => {
+  values.forEach((row, index) => {
+    // 今月セクションと過去セクションの境界を検出
+    if (index === currentMonthValues.length) {
+      isPastSection = true;
+      Logger.log(`過去セクションの開始を検出: 行${index + 4}`);
+      // 過去セクションでは、月ヘッダー行から月を取得する必要がある
+      lastSeenMonth = ''; // 過去セクションでは月ヘッダーを再検出
+    }
+    
     // 月列の値を取得
     let monthValue = row[0];
-    if (monthValue && String(monthValue).includes('月')) {
+    const dayValue = row[1];
+    
+    // 月ヘッダー行の検出条件:
+    // 1. 月列に「月」が含まれる
+    // 2. 日列が空、または「X日」形式（過去セクションの月ヘッダーには合計日数が表示される）
+    // 3. 出勤列（2列目）が空（データ行ではない）
+    const isMonthHeader = monthValue && String(monthValue).includes('月') && 
+                          (!dayValue || String(dayValue).trim() === '' || String(dayValue).includes('日')) &&
+                          (!row[2] || String(row[2]).trim() === ''); // 出勤列が空
+    
+    if (isMonthHeader) {
       // 「11月」のような形式から月を取得
       lastSeenMonth = String(monthValue).replace('月', '');
+      Logger.log(`行${index + 4}: 月ヘッダー行を検出: ${lastSeenMonth}月 (過去セクション: ${isPastSection}, 日列: "${dayValue}")`);
+      return; // 月ヘッダー行はスキップ（集計には含めない）
     }
     
     // 「合計」を含む行はスキップ
-    if (String(row[0]).includes('合計') || String(row[1]).includes('合計')) return;
+    if (String(row[0] || '').includes('合計') || String(row[1] || '').includes('合計')) return;
     
-    // 日列から日を取得
-    const dayValue = row[1];
-    if (!dayValue) return;
+    // 日列から日を取得（日列が空の行はスキップ）
+    if (!dayValue || !String(dayValue).includes('日')) return;
     
     // 月と日から実際の月を特定
     const monthNum = lastSeenMonth ? parseInt(lastSeenMonth) : currentMonthNum;
-    // 年は現在の年を使用（TODO: 年またぎの場合は調整が必要）
-    const year = monthNum > currentMonthNum ? currentYear - 1 : currentYear;
+    
+    // 年の判定
+    let year = currentYear;
+    if (isPastSection) {
+      // 過去セクションの場合、月ヘッダーから取得した月を使用
+      // 11月のデータが12月に表示される場合、同じ年
+      year = currentYear;
+    } else {
+      // 今月セクションの場合
+      if (monthNum > currentMonthNum) {
+        // 月が現在の月より大きい場合は前年（例: 1月が現在の12月より大きい）
+        year = currentYear - 1;
+      }
+    }
+    
     const monthKey = `${year}/${String(monthNum).padStart(2, '0')}`;
+    
+    if (isPastSection && lastSeenMonth) {
+      Logger.log(`行${index + 4}: 過去セクションのデータ - 月${monthNum}月、キー: ${monthKey}`);
+    }
 
     if (!monthlySummary[monthKey]) {
       monthlySummary[monthKey] = {
@@ -423,23 +644,55 @@ function updateMonthlySummaryFixed(sheet) {
     }
 
     monthlySummary[monthKey].days++;
+    processedRows++;
 
-    // 実働時間を分に変換（7列目：実働、中抜け列追加により列番号が1つずれた）
+    // 実働時間を分に変換（7列目：実働、0ベースなのでrow[6]）
+    // 列の順序: 0=月, 1=日, 2=出勤, 3=退勤, 4=中抜け, 5=休憩, 6=実働, 7=勤務タイプ, 8=備考
     const workTime = row[6];
+    let minutes = 0;
+    
     if (workTime) {
-      let minutes = 0;
-      if (typeof workTime === 'string') {
-        const parts = workTime.split(':');
-        minutes = parseInt(parts[0] || 0) * 60 + parseInt(parts[1] || 0);
-      } else if (workTime instanceof Date) {
+      // Googleスプレッドシートが時刻として解釈した場合、Date型になる
+      // その場合は、時刻として扱う（例: 0.383333... = 9:12）
+      if (workTime instanceof Date) {
         const hours = workTime.getHours();
         const mins = workTime.getMinutes();
         minutes = hours * 60 + mins;
+        Logger.log(`行${index + 4}: 実働時間（Date）${hours}:${mins.toString().padStart(2, '0')} -> ${minutes}分`);
+      } else if (typeof workTime === 'string') {
+        // "9:13"のような形式をパース
+        const trimmed = workTime.trim();
+        if (trimmed && trimmed !== '-') {
+          const parts = trimmed.split(':');
+          const hoursPart = parseInt(parts[0] || 0);
+          const minsPart = parseInt(parts[1] || 0);
+          if (!isNaN(hoursPart) && !isNaN(minsPart)) {
+            minutes = hoursPart * 60 + minsPart;
+            Logger.log(`行${index + 4}: 実働時間（文字列）"${trimmed}" -> ${minutes}分`);
+          }
+        }
+      } else if (typeof workTime === 'number') {
+        // 数値の場合、時刻の小数値（例: 0.383333... = 9:12）の可能性がある
+        // または、既に分単位の数値の可能性もある
+        // 時刻の小数値の場合: 1日 = 1.0, 9時間12分 = 0.383333...
+        if (workTime < 1 && workTime > 0) {
+          // 時刻の小数値として扱う
+          const totalMinutes = Math.round(workTime * 24 * 60);
+          minutes = totalMinutes;
+          Logger.log(`行${index + 4}: 実働時間（時刻小数値）${workTime} -> ${minutes}分`);
+        } else {
+          // 既に分単位の数値として扱う
+          minutes = workTime;
+          Logger.log(`行${index + 4}: 実働時間（分単位数値）-> ${minutes}分`);
+        }
       }
-      monthlySummary[monthKey].totalMinutes += minutes;
+    } else {
+      Logger.log(`行${index + 4}: 実働時間が空です。行データ: [${row.map((v, i) => `${i}:${v}`).join(', ')}]`);
     }
+    
+    monthlySummary[monthKey].totalMinutes += minutes;
 
-    // 勤務タイプを集計（8列目：勤務タイプ、中抜け列追加により列番号が1つずれた）
+    // 勤務タイプを集計（8列目：勤務タイプ、0ベースなのでrow[7]）
     const workType = row[7];
     if (workType && String(workType).includes('リモート')) {
       monthlySummary[monthKey].remoteDays++;
@@ -447,6 +700,10 @@ function updateMonthlySummaryFixed(sheet) {
       monthlySummary[monthKey].officeDays++;
     }
   });
+  
+  Logger.log(`処理したデータ行数: ${processedRows}`);
+  Logger.log(`今月のキー: ${currentMonthKey}`);
+  Logger.log(`集計結果: ${JSON.stringify(monthlySummary)}`);
 
   // 固定セルに今月の合計を書き込み（J列、K列）
   const currentSummary = monthlySummary[currentMonthKey] || { days: 0, totalMinutes: 0, remoteDays: 0, officeDays: 0 };
@@ -461,14 +718,18 @@ function updateMonthlySummaryFixed(sheet) {
   sheet.getRange(1, 13).setValue(currentSummary.remoteDays + '日');
   sheet.getRange(2, 13).setValue(currentSummary.officeDays + '日');
 
-  // 先月のキーを計算
-  const lastMonthDate = new Date(currentYear, currentMonthNum - 2, 1); // 先月の1日
+  // 先月のキーを計算（3:00am基準）
+  const lastMonthDate = new Date(todayDate);
+  lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
   const lastMonthYear = lastMonthDate.getFullYear();
   const lastMonthNum = lastMonthDate.getMonth() + 1;
   const lastMonthKey = `${lastMonthYear}/${String(lastMonthNum).padStart(2, '0')}`;
+  
+  Logger.log(`先月のキー: ${lastMonthKey} (${lastMonthYear}年${lastMonthNum}月)`);
 
-  // 固定セルの値を更新（先月）
+  // 先月のデータを集計（今月セクションと過去セクションの両方から）
   const lastSummary = monthlySummary[lastMonthKey] || { days: 0, totalMinutes: 0, remoteDays: 0, officeDays: 0 };
+  Logger.log(`先月の集計結果: ${JSON.stringify(lastSummary)}`);
   const lastHours = Math.floor(lastSummary.totalMinutes / 60);
   const lastMinutes = lastSummary.totalMinutes % 60;
   const lastTotalTimeFormatted = `${lastHours}:${lastMinutes.toString().padStart(2, '0')}`;
@@ -540,10 +801,10 @@ function updateDashboard() {
   // 全ユーザーの今月のデータを取得
   const allAttendances = fetchMonthlyAttendanceData();
   
-  // 今月のTODOデータを取得
+  // 今月のTODOデータを取得（3:00am基準の日付を使用）
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
   const firstDayStr = Utilities.formatDate(firstDay, 'Asia/Tokyo', 'yyyy-MM-dd');
-  const todayStr = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy-MM-dd');
+  const todayStr = getTodayDate(); // 3:00am基準の今日の日付
   const allTodoData = fetchTodoDataRange(firstDayStr, todayStr);
 
   // ユーザーごとに集計
@@ -567,6 +828,7 @@ function updateDashboard() {
     }
 
     userSummary[userId].days++;
+    // fetchMonthlyAttendanceData()はwork_minutesを返すので、それを使用
     userSummary[userId].totalMinutes += record.work_minutes || 0;
 
     // リモート/出社を集計
@@ -682,11 +944,15 @@ function createDashboardHeader(sheet) {
  * 今月の全勤怠データを取得
  */
 function fetchMonthlyAttendanceData() {
-  const now = new Date();
-  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+  // 3:00am基準で今月の開始日を取得
+  const todayDateStr = getTodayDate(); // 3:00am基準の今日の日付文字列（YYYY-MM-DD）
+  const todayDate = new Date(todayDateStr + 'T00:00:00+09:00'); // 日本時間として解釈
+  const currentYear = todayDate.getFullYear();
+  const currentMonth = todayDate.getMonth();
+  const firstDay = new Date(currentYear, currentMonth, 1);
   const firstDayStr = Utilities.formatDate(firstDay, 'Asia/Tokyo', 'yyyy-MM-dd');
   
-  // 今月のデータのみ取得（status関係なく）
+  // 今月のデータのみ取得（status関係なく、3:00am基準）
   const url = `${SUPABASE_URL}/rest/v1/attendances?date=gte.${firstDayStr}&select=*,users(name,department)`;
 
   const options = {
@@ -715,6 +981,41 @@ function fetchMonthlyAttendanceData() {
       const diffMinutes = Math.floor((now - clockIn) / 60000);
       const breakMinutes = record.break_minutes_used || 0;
       workMinutes = Math.max(0, diffMinutes - breakMinutes);
+    } else if (record.clock_in && record.clock_out) {
+      // 退勤済みの場合、異常値チェック
+      const clockIn = new Date(record.clock_in);
+      const clockOut = new Date(record.clock_out);
+      let calculatedMinutes = 0;
+      
+      // 日付が有効な場合のみ計算
+      if (!isNaN(clockIn.getTime()) && !isNaN(clockOut.getTime()) && clockOut > clockIn) {
+        const totalMinutes = Math.floor((clockOut - clockIn) / 60000);
+        const breakMinutes = record.break_minutes_used || 0;
+        calculatedMinutes = Math.max(0, totalMinutes - breakMinutes);
+      }
+      
+      // 異常値の判定：
+      // 1. 24時間以上の場合
+      // 2. 12時間以上で、計算値との乖離が2時間以上の場合
+      // 3. 計算値が存在し、データベースの値との乖離が2時間以上の場合
+      if (workMinutes > 0 && calculatedMinutes > 0) {
+        const isAbnormal = 
+          workMinutes > 24 * 60 || // 24時間以上
+          (workMinutes > 12 * 60 && Math.abs(workMinutes - calculatedMinutes) > 120) || // 12時間以上で計算値との乖離が2時間以上
+          Math.abs(workMinutes - calculatedMinutes) > 120; // 計算値との乖離が2時間以上
+        
+        if (isAbnormal) {
+          // 異常値の場合は計算値を使用
+          workMinutes = calculatedMinutes;
+          // それでも24時間以上になる場合は、24時間に制限
+          if (workMinutes > 24 * 60) {
+            workMinutes = 24 * 60;
+          }
+        }
+      } else if (workMinutes > 24 * 60) {
+        // 計算値が存在しないが、24時間以上の場合
+        workMinutes = 24 * 60;
+      }
     }
     
     return {
@@ -728,6 +1029,139 @@ function fetchMonthlyAttendanceData() {
       work_type: record.work_type || ''
     };
   });
+}
+
+/**
+ * 過去の勤怠データセクションから今月のデータだけを削除（誤って追加されたデータを削除）
+ * 11月などの正しい過去データは残します
+ */
+function clearPastAttendanceData() {
+  try {
+    Logger.log('=== 過去の勤怠データセクションから今月のデータを削除開始 ===');
+    
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const PAST_DATA_START_ROW = 33; // 過去のデータ開始行
+    
+    // 3:00am基準で現在の年月を取得
+    const todayDateStr = getTodayDate(); // 3:00am基準の今日の日付文字列（YYYY-MM-DD）
+    const todayDate = new Date(todayDateStr + 'T00:00:00+09:00'); // 日本時間として解釈
+    const currentYearStr = Utilities.formatDate(todayDate, 'Asia/Tokyo', 'yyyy');
+    const currentMonthStr = Utilities.formatDate(todayDate, 'Asia/Tokyo', 'MM');
+    const currentYear = parseInt(currentYearStr);
+    const currentMonth = parseInt(currentMonthStr);
+    const currentMonthLabel = currentMonth + '月';
+    
+    Logger.log(`削除対象: ${currentYear}年${currentMonth}月のデータ`);
+    
+    // 全シートを取得
+    const sheets = spreadsheet.getSheets();
+    let clearedCount = 0;
+    
+    sheets.forEach(sheet => {
+      try {
+        const sheetName = sheet.getName();
+        // システムシート（ダッシュボード、TODO達成率など）はスキップ
+        if (sheetName === 'ダッシュボード' || sheetName === 'TODO達成率' || sheetName.indexOf('報告/') === 0) {
+          return;
+        }
+        
+        const lastRow = sheet.getLastRow();
+        if (lastRow < PAST_DATA_START_ROW) {
+          return; // 過去データセクションがない場合はスキップ
+        }
+        
+        // 過去データセクション（33行目以降）から今月のデータを探して削除
+        let rowsToDelete = [];
+        
+        // 下から上に向かって今月のデータを探す
+        for (let row = lastRow; row >= PAST_DATA_START_ROW; row--) {
+          const monthCell = sheet.getRange(row, 1).getValue();
+          const dayCell = sheet.getRange(row, 2).getValue();
+          
+          // 月ヘッダー行（例: "12月"）をチェック
+          if (monthCell && String(monthCell) === currentMonthLabel) {
+            // この月グループ全体を削除するため、次の月ヘッダーまたはセクション終端までをマーク
+            let groupEndRow = row;
+            let groupStartRow = row;
+            
+            // この月グループの開始行を探す（上に向かって）
+            for (let checkRow = row; checkRow >= PAST_DATA_START_ROW; checkRow--) {
+              const checkMonthCell = sheet.getRange(checkRow, 1).getValue();
+              if (checkMonthCell && String(checkMonthCell) === currentMonthLabel) {
+                groupStartRow = checkRow;
+              } else if (checkMonthCell && String(checkMonthCell).includes('月') && String(checkMonthCell) !== currentMonthLabel) {
+                // 別の月が見つかったら終了
+                break;
+              }
+            }
+            
+            // この月グループの終了行を探す（下に向かって）
+            for (let checkRow = row + 1; checkRow <= lastRow; checkRow++) {
+              const checkMonthCell = sheet.getRange(checkRow, 1).getValue();
+              if (checkMonthCell && String(checkMonthCell).includes('月') && String(checkMonthCell) !== currentMonthLabel) {
+                // 別の月が見つかったら終了
+                groupEndRow = checkRow - 1;
+                break;
+              }
+              if (checkRow === lastRow) {
+                groupEndRow = lastRow;
+              }
+            }
+            
+            // 削除対象の行を記録（重複を避けるためSetを使用）
+            for (let delRow = groupStartRow; delRow <= groupEndRow; delRow++) {
+              if (!rowsToDelete.includes(delRow)) {
+                rowsToDelete.push(delRow);
+              }
+            }
+            
+            // この月グループを処理したので、次のチェックはこのグループより上から
+            row = groupStartRow - 1;
+          }
+          
+          // データ行で今月の日付かチェック（月ヘッダーがない場合）
+          if (dayCell && String(dayCell).includes('日')) {
+            // 日付から月を判定するため、前の行の月ヘッダーを探す
+            let foundMonth = null;
+            for (let checkRow = row; checkRow >= PAST_DATA_START_ROW; checkRow--) {
+              const checkMonthCell = sheet.getRange(checkRow, 1).getValue();
+              if (checkMonthCell && String(checkMonthCell).includes('月')) {
+                foundMonth = String(checkMonthCell);
+                break;
+              }
+            }
+            
+            // 今月のデータ行の場合、削除対象に追加
+            if (foundMonth === currentMonthLabel && !rowsToDelete.includes(row)) {
+              rowsToDelete.push(row);
+            }
+          }
+        }
+        
+        // 削除対象の行を降順でソート（下から削除しないと行番号がずれる）
+        rowsToDelete.sort((a, b) => b - a);
+        
+        // 行を削除
+        rowsToDelete.forEach(rowNum => {
+          sheet.deleteRow(rowNum);
+          clearedCount++;
+        });
+        
+        if (rowsToDelete.length > 0) {
+          Logger.log(`シート「${sheetName}」から${rowsToDelete.length}行の今月データを削除しました`);
+        }
+      } catch (error) {
+        Logger.log(`シート「${sheet.getName()}」の処理でエラー: ${error.message}`);
+      }
+    });
+    
+    Logger.log(`=== 削除完了: 合計${clearedCount}行を削除しました ===`);
+    Logger.log('次に rebuildAllSheets() を実行して、正しいデータを再構築してください');
+    
+  } catch (error) {
+    Logger.log('エラーが発生しました: ' + error.message);
+    throw error;
+  }
 }
 
 /**
@@ -1032,12 +1466,15 @@ function rebuildAllSheets() {
     
     Logger.log('取得したデータ件数: ' + allAttendances.length);
     
-    // 今月と先月の判定用（日本時間で判定）
-    const now = new Date();
-    const currentYearStr = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy');
-    const currentMonthStr = Utilities.formatDate(now, 'Asia/Tokyo', 'MM');
+    // 3:00am基準で現在の年月を取得
+    const todayDateStr = getTodayDate(); // 3:00am基準の今日の日付文字列（YYYY-MM-DD）
+    const todayDate = new Date(todayDateStr + 'T00:00:00+09:00'); // 日本時間として解釈
+    const currentYearStr = Utilities.formatDate(todayDate, 'Asia/Tokyo', 'yyyy');
+    const currentMonthStr = Utilities.formatDate(todayDate, 'Asia/Tokyo', 'MM');
     const currentYear = parseInt(currentYearStr);
     const currentMonth = parseInt(currentMonthStr);
+    
+    Logger.log(`3:00am基準の現在年月: ${currentYear}年${currentMonth}月`);
     
     // ユーザーごとにグループ化
     const userAttendances = {};
@@ -1050,14 +1487,15 @@ function rebuildAllSheets() {
         };
       }
       
-      // 日付から年月を取得（日本時間で判定）
+      // 日付から年月を取得（3:00am基準で判定）
+      // record.dateは既に3:00am基準で保存されているので、そのまま使用
       const recordDate = new Date(record.date + 'T00:00:00+09:00'); // 日本時間として解釈
       const recordYearStr = Utilities.formatDate(recordDate, 'Asia/Tokyo', 'yyyy');
       const recordMonthStr = Utilities.formatDate(recordDate, 'Asia/Tokyo', 'MM');
       const recordYear = parseInt(recordYearStr);
       const recordMonth = parseInt(recordMonthStr);
       
-      // 今月かどうかを判定
+      // 今月かどうかを判定（3:00am基準）
       if (recordYear === currentYear && recordMonth === currentMonth) {
         userAttendances[record.user_name].currentMonthRecords.push(record);
       } else {
@@ -1088,9 +1526,10 @@ function rebuildAllSheets() {
         let row = 4;
         let prevMonth = '';
         
-        // 今月ヘッダー
+        // 今月ヘッダー（動的に月名を生成）
         if (userData.currentMonthRecords.length > 0) {
-          sheet.getRange(row, 1).setValue(currentMonth + '月');
+          const currentMonthLabel = currentMonth + '月'; // 動的に月名を生成
+          sheet.getRange(row, 1).setValue(currentMonthLabel);
           sheet.getRange(row, 1).setFontWeight('bold').setBackground('#e8f5e9');
           row++;
         }
@@ -1231,6 +1670,22 @@ function writeAttendanceRowSimple(sheet, row, attendance) {
   const clockInTime = formatTimeOnly(attendance.clock_in);
   const clockOutTime = formatTimeOnly(attendance.clock_out);
   
+  // 中抜け情報のフォーマット
+  let breakSessionsFormatted = '-';
+  if (attendance.break_sessions && attendance.break_sessions.length > 0) {
+    const sessions = attendance.break_sessions
+      .filter(session => session.start) // 開始時刻があるもののみ
+      .map(session => {
+        const startTime = formatTimeOnly(session.start);
+        const endTime = session.end ? formatTimeOnly(session.end) : '中抜け中';
+        return `${startTime}-${endTime}`;
+      });
+    
+    if (sessions.length > 0) {
+      breakSessionsFormatted = sessions.join(' / ');
+    }
+  }
+  
   const breakHours = Math.floor(attendance.break_minutes / 60);
   const breakMins = attendance.break_minutes % 60;
   const breakFormatted = `${breakHours}:${breakMins.toString().padStart(2, '0')}`;
@@ -1246,11 +1701,13 @@ function writeAttendanceRowSimple(sheet, row, attendance) {
     workTypeFormatted = '🏢 出社';
   }
   
-  sheet.getRange(row, 1, 1, 8).setValues([[
+  // 9列で書き込み（中抜け列を含む）
+  sheet.getRange(row, 1, 1, 9).setValues([[
     '',  // 月列は空（ヘッダーで表示済み）
     dayFormatted,
     clockInTime,
     clockOutTime,
+    breakSessionsFormatted,  // 中抜け列を追加
     breakFormatted,
     workFormatted,
     workTypeFormatted,
@@ -1258,9 +1715,9 @@ function writeAttendanceRowSimple(sheet, row, attendance) {
   ]]);
   
   if (attendance.work_type === 'remote') {
-    sheet.getRange(row, 7).setBackground('#e3f2fd');
+    sheet.getRange(row, 8).setBackground('#e3f2fd'); // 8列目（勤務タイプ）
   } else if (attendance.work_type === 'office') {
-    sheet.getRange(row, 7).setBackground('#e8f5e9');
+    sheet.getRange(row, 8).setBackground('#e8f5e9'); // 8列目（勤務タイプ）
   }
   
   return (date.getMonth() + 1) + '月';
@@ -1548,13 +2005,41 @@ function syncUnitAchievementRates() {
 
     // スプレッドシートを開く
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = spreadsheet.getSheetByName('報告/MG粗利11月');
+    
+    // 現在の月に応じてシート名を動的に生成
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1; // 1-12
+    const sheetName = `報告/MG粗利${currentMonth}月`;
+    
+    Logger.log(`シート名を検索: ${sheetName}`);
+    const sheet = spreadsheet.getSheetByName(sheetName);
 
     if (!sheet) {
-      Logger.log('シート「報告/MG粗利11月」が見つかりません');
-      return;
+      Logger.log(`シート「${sheetName}」が見つかりません`);
+      // 代替として、シート名に「報告/MG粗利」を含むシートを検索
+      const allSheets = spreadsheet.getSheets();
+      const matchingSheet = allSheets.find(s => s.getName().indexOf('報告/MG粗利') !== -1);
+      if (matchingSheet) {
+        Logger.log(`代替シート「${matchingSheet.getName()}」を使用します`);
+        return syncUnitAchievementRatesFromSheet(matchingSheet, currentMonth, currentYear);
+      } else {
+        Logger.log('「報告/MG粗利」を含むシートが見つかりません');
+        return;
+      }
     }
+    
+    return syncUnitAchievementRatesFromSheet(sheet, currentMonth, currentYear);
+  } catch (error) {
+    Logger.log('エラーが発生しました: ' + error.message);
+    throw error;
+  }
+}
 
+/**
+ * シートからユニット達成率を同期
+ */
+function syncUnitAchievementRatesFromSheet(sheet, month, year) {
+  try {
     // 各ユニットの達成率を取得
     const units = [
       { name: '第1ユニット', cell: 'L17' },
@@ -1566,18 +2051,22 @@ function syncUnitAchievementRates() {
     const achievementRates = [];
 
     units.forEach(unit => {
-      const cellValue = sheet.getRange(unit.cell).getValue();
-      // パーセンテージを数値に変換（0.85 -> 85）
-      const rate = typeof cellValue === 'number' ? Math.round(cellValue * 100) : 0;
+      try {
+        const cellValue = sheet.getRange(unit.cell).getValue();
+        // パーセンテージを数値に変換（0.85 -> 85）
+        const rate = typeof cellValue === 'number' ? Math.round(cellValue * 100) : 0;
 
-      achievementRates.push({
-        department: unit.name,
-        achievement_rate: rate,
-        month: new Date().getMonth() + 1, // 現在の月
-        year: new Date().getFullYear()
-      });
+        achievementRates.push({
+          department: unit.name,
+          achievement_rate: rate,
+          month: month,
+          year: year
+        });
 
-      Logger.log(`${unit.name}: ${rate}% (セル: ${unit.cell})`);
+        Logger.log(`${unit.name}: ${rate}% (セル: ${unit.cell})`);
+      } catch (error) {
+        Logger.log(`${unit.name}のセル${unit.cell}の読み取りに失敗: ${error.message}`);
+      }
     });
 
     // Supabaseに保存

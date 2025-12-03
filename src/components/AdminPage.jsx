@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../utils/supabase'
+import { getTodayDate } from '../utils/date'
 
 export default function AdminPage({ isDark }) {
   const [currentUser, setCurrentUser] = useState(null)
@@ -257,40 +258,78 @@ export default function AdminPage({ isDark }) {
         if (record.clock_out) {
           const clockOut = new Date(record.clock_out)
           
-          // clock_outが無効な場合はデータベースの値を使用
+          // clock_outが無効な場合はデータベースの値を使用（異常値チェック付き）
           if (isNaN(clockOut.getTime())) {
             workMinutes = record.total_work_minutes || 0
+            // 異常値の場合は0にリセット
+            if (workMinutes > 24 * 60) {
+              workMinutes = 0
+            }
           } else if (clockOut <= clockIn) {
-            // clock_outがclock_inより前の場合はデータベースの値を使用
+            // clock_outがclock_inより前の場合はデータベースの値を使用（異常値チェック付き）
             workMinutes = record.total_work_minutes || 0
+            // 異常値の場合は0にリセット
+            if (workMinutes > 24 * 60) {
+              workMinutes = 0
+            }
           } else {
             // clock_inとclock_outから計算
             const totalMinutes = Math.floor((clockOut - clockIn) / 60000)
             const breakMinutes = record.break_minutes_used || 0
             const calculatedMinutes = Math.max(0, totalMinutes - breakMinutes)
             
-            // データベースの値が存在し、正の値の場合はそれを使用、そうでない場合は計算値を使用
-            // ただし、計算値が0以下の場合はデータベースの値を使用
-            if (calculatedMinutes > 0) {
-              if (record.total_work_minutes && record.total_work_minutes > 0) {
-                workMinutes = record.total_work_minutes
-              } else {
+            // データベースの値をチェック
+            if (record.total_work_minutes && record.total_work_minutes > 0) {
+              // 異常値の判定：
+              // 1. 24時間以上の場合
+              // 2. 12時間以上で、計算値との乖離が2時間以上の場合
+              // 3. 計算値が存在し、データベースの値との乖離が2時間以上の場合
+              const isAbnormal = 
+                record.total_work_minutes > 24 * 60 || // 24時間以上
+                (record.total_work_minutes > 12 * 60 && calculatedMinutes > 0 && Math.abs(record.total_work_minutes - calculatedMinutes) > 120) || // 12時間以上で計算値との乖離が2時間以上
+                (calculatedMinutes > 0 && Math.abs(record.total_work_minutes - calculatedMinutes) > 120); // 計算値との乖離が2時間以上
+              
+              if (isAbnormal) {
+                // 異常値の場合は計算値を使用
                 workMinutes = calculatedMinutes
+              } else {
+                // 正常な値の場合はデータベースの値を使用
+                workMinutes = record.total_work_minutes
               }
             } else {
-              // 計算値が0以下の場合はデータベースの値を使用
-              workMinutes = record.total_work_minutes || 0
+              // データベースの値が存在しない場合は計算値を使用
+              workMinutes = calculatedMinutes
             }
           }
         } else {
           // clock_outが存在しない場合（まだ退勤していない、または退勤打刻を忘れた）
-          // データベースのtotal_work_minutesが存在する場合はそれを使用
+          // データベースのtotal_work_minutesが存在する場合はそれを使用（異常値チェック付き）
           if (record.total_work_minutes && record.total_work_minutes > 0) {
-            workMinutes = record.total_work_minutes
+            // 異常値の場合は計算値を使用
+            if (record.total_work_minutes > 24 * 60) {
+              // 3:00amに日付が切り替わる「今日」の日付を取得
+              const today = getTodayDate()
+              const recordDate = record.date
+              
+              if (recordDate === today) {
+                // 今日のデータで勤務中の場合は、現在時刻までの勤務時間を計算
+                const totalMinutes = Math.floor((jstNow - clockIn) / 60000)
+                const breakMinutes = record.break_minutes_used || 0
+                workMinutes = Math.max(0, totalMinutes - breakMinutes)
+              } else {
+                // 過去のデータで退勤打刻がない場合は、その日の19:00 JSTを退勤時刻として計算
+                const clockOutUTC = new Date(record.date + 'T10:00:00Z')
+                const totalMinutes = Math.floor((clockOutUTC - clockIn) / 60000)
+                const breakMinutes = record.break_minutes_used || 0
+                workMinutes = Math.max(0, totalMinutes - breakMinutes)
+              }
+            } else {
+              // 正常な値の場合はデータベースの値を使用
+              workMinutes = record.total_work_minutes
+            }
           } else {
-            // 今日の日付かどうかを確認
-            const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-            const today = jstNow.toISOString().split('T')[0]
+            // 3:00amに日付が切り替わる「今日」の日付を取得
+            const today = getTodayDate()
             const recordDate = record.date
             
             if (recordDate === today) {
@@ -459,34 +498,78 @@ export default function AdminPage({ isDark }) {
         if (record.clock_out) {
           const clockOut = new Date(record.clock_out)
           
-          // clock_outが無効な場合はデータベースの値を使用
+          // clock_outが無効な場合はデータベースの値を使用（異常値チェック付き）
           if (isNaN(clockOut.getTime())) {
             workMinutes = record.total_work_minutes || 0
+            // 異常値の場合は0にリセット
+            if (workMinutes > 24 * 60) {
+              workMinutes = 0
+            }
           } else if (clockOut <= clockIn) {
-            // clock_outがclock_inより前の場合はデータベースの値を使用
+            // clock_outがclock_inより前の場合はデータベースの値を使用（異常値チェック付き）
             workMinutes = record.total_work_minutes || 0
+            // 異常値の場合は0にリセット
+            if (workMinutes > 24 * 60) {
+              workMinutes = 0
+            }
           } else {
             // clock_inとclock_outから計算
             const totalMinutes = Math.floor((clockOut - clockIn) / 60000)
             const breakMinutes = record.break_minutes_used || 0
             const calculatedMinutes = Math.max(0, totalMinutes - breakMinutes)
             
-            // データベースの値が存在し、正の値の場合はそれを使用、そうでない場合は計算値を使用
+            // データベースの値をチェック
             if (record.total_work_minutes && record.total_work_minutes > 0) {
-              workMinutes = record.total_work_minutes
+              // 異常値の判定：
+              // 1. 24時間以上の場合
+              // 2. 12時間以上で、計算値との乖離が2時間以上の場合
+              // 3. 計算値が存在し、データベースの値との乖離が2時間以上の場合
+              const isAbnormal = 
+                record.total_work_minutes > 24 * 60 || // 24時間以上
+                (record.total_work_minutes > 12 * 60 && calculatedMinutes > 0 && Math.abs(record.total_work_minutes - calculatedMinutes) > 120) || // 12時間以上で計算値との乖離が2時間以上
+                (calculatedMinutes > 0 && Math.abs(record.total_work_minutes - calculatedMinutes) > 120); // 計算値との乖離が2時間以上
+              
+              if (isAbnormal) {
+                // 異常値の場合は計算値を使用
+                workMinutes = calculatedMinutes
+              } else {
+                // 正常な値の場合はデータベースの値を使用
+                workMinutes = record.total_work_minutes
+              }
             } else {
+              // データベースの値が存在しない場合は計算値を使用
               workMinutes = calculatedMinutes
             }
           }
         } else {
           // clock_outが存在しない場合（まだ退勤していない、または退勤打刻を忘れた）
-          // データベースのtotal_work_minutesが存在する場合はそれを使用
+          // データベースのtotal_work_minutesが存在する場合はそれを使用（異常値チェック付き）
           if (record.total_work_minutes && record.total_work_minutes > 0) {
-            workMinutes = record.total_work_minutes
+            // 異常値の場合は計算値を使用
+            if (record.total_work_minutes > 24 * 60) {
+              // 3:00amに日付が切り替わる「今日」の日付を取得
+              const today = getTodayDate()
+              const recordDate = record.date
+              
+              if (recordDate === today) {
+                // 今日のデータで勤務中の場合は、現在時刻までの勤務時間を計算
+                const totalMinutes = Math.floor((jstNow - clockIn) / 60000)
+                const breakMinutes = record.break_minutes_used || 0
+                workMinutes = Math.max(0, totalMinutes - breakMinutes)
+              } else {
+                // 過去のデータで退勤打刻がない場合は、その日の19:00 JSTを退勤時刻として計算
+                const clockOutUTC = new Date(record.date + 'T10:00:00Z')
+                const totalMinutes = Math.floor((clockOutUTC - clockIn) / 60000)
+                const breakMinutes = record.break_minutes_used || 0
+                workMinutes = Math.max(0, totalMinutes - breakMinutes)
+              }
+            } else {
+              // 正常な値の場合はデータベースの値を使用
+              workMinutes = record.total_work_minutes
+            }
           } else {
-            // 今日の日付かどうかを確認
-            const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-            const today = jstNow.toISOString().split('T')[0]
+            // 3:00amに日付が切り替わる「今日」の日付を取得
+            const today = getTodayDate()
             const recordDate = record.date
             
             if (recordDate === today) {
@@ -629,18 +712,42 @@ export default function AdminPage({ isDark }) {
       // 時刻をフォーマット
       const formattedData = data?.map(record => {
         let workMinutes = 0
+        let calculatedMinutes = 0
         
+        // clock_inとclock_outから計算
         if (record.clock_in && record.clock_out) {
           const clockIn = new Date(record.clock_in)
           const clockOut = new Date(record.clock_out)
-          if (!isNaN(clockIn.getTime()) && !isNaN(clockOut.getTime())) {
-            workMinutes = Math.floor((clockOut - clockIn) / 60000) - (record.break_minutes_used || 0)
+          if (!isNaN(clockIn.getTime()) && !isNaN(clockOut.getTime()) && clockOut > clockIn) {
+            calculatedMinutes = Math.floor((clockOut - clockIn) / 60000) - (record.break_minutes_used || 0)
           }
         }
         
-        // データベースの total_work_minutes があればそれを使用
+        // データベースの total_work_minutes をチェック
         if (record.total_work_minutes && record.total_work_minutes > 0) {
-          workMinutes = record.total_work_minutes
+          // 異常値の判定：
+          // 1. 24時間以上の場合
+          // 2. 12時間以上で、計算値との乖離が2時間以上の場合
+          // 3. 計算値が存在し、データベースの値との乖離が2時間以上の場合
+          const isAbnormal = 
+            record.total_work_minutes > 24 * 60 || // 24時間以上
+            (record.total_work_minutes > 12 * 60 && calculatedMinutes > 0 && Math.abs(record.total_work_minutes - calculatedMinutes) > 120) || // 12時間以上で計算値との乖離が2時間以上
+            (calculatedMinutes > 0 && Math.abs(record.total_work_minutes - calculatedMinutes) > 120); // 計算値との乖離が2時間以上
+          
+          if (isAbnormal) {
+            // 異常値の場合は計算値を使用
+            workMinutes = Math.max(0, calculatedMinutes)
+            // それでも24時間以上になる場合は24時間に制限
+            if (workMinutes > 24 * 60) {
+              workMinutes = 24 * 60
+            }
+          } else {
+            // 正常な値の場合はデータベースの値を使用
+            workMinutes = record.total_work_minutes
+          }
+        } else {
+          // total_work_minutesが存在しない場合は計算値を使用
+          workMinutes = Math.max(0, calculatedMinutes)
         }
 
         return {
