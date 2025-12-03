@@ -63,7 +63,11 @@ serve(async (req) => {
       );
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    // 3:00amに日付が切り替わる「今日」の日付を取得
+    const now = new Date();
+    const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+    const adjustedDate = new Date(jstDate.getTime() - (3 * 60 * 60 * 1000));
+    const today = adjustedDate.toISOString().split('T')[0];
 
     if (payload.command === '/出勤' || payload.command === '/shukkin') {
       // 出勤処理

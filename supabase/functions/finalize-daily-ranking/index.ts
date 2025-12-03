@@ -25,10 +25,11 @@ serve(async (req) => {
       }
     )
 
-    // 日本時間で今日の日付を取得
+    // 3:00amに日付が切り替わる「今日」の日付を取得
     const now = new Date()
     const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000))
-    const today = jstDate.toISOString().split('T')[0]
+    const adjustedDate = new Date(jstDate.getTime() - (3 * 60 * 60 * 1000))
+    const today = adjustedDate.toISOString().split('T')[0]
 
     console.log(`Finalizing ranking for date: ${today}`)
 

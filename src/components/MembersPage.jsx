@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '../utils/supabase'
 import { calculateProgress } from '../utils/todo'
 import TodoList from './TodoList'
+import { getTodayDate } from '../utils/date'
 
 export default function MembersPage({ user, isDark }) {
   const [members, setMembers] = useState([])
@@ -899,8 +900,7 @@ export default function MembersPage({ user, isDark }) {
                       
                       try {
                         // 日本時間（JST）で現在時刻と今日の日付を取得
-                        const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-                        const today = jstNow.toISOString().split('T')[0]
+                        const today = getTodayDate()
                         
                         const clockInTime = memberAttendance.clock_in.includes('T') 
                           ? memberAttendance.clock_in.split('T')[1] 

@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { getTodayDate } from './date.js'
 
 /**
  * 全メンバーの今日のタスク情報を取得して順位を計算
@@ -6,10 +7,11 @@ import { supabase } from './supabase'
  */
 export async function calculateTodayRanking(userId) {
   try {
-    // 日本時間で今日の日付と時刻を取得
+    // 3:00amに日付が切り替わる「今日」の日付を取得
+    const today = getTodayDate()
+    // 現在時刻（日本時間）を取得して19:00以降かチェック
     const now = new Date()
     const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000))
-    const today = jstDate.toISOString().split('T')[0]
     const currentHour = jstDate.getHours()
     const isAfter19 = currentHour >= 19
 

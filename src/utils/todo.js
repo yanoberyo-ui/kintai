@@ -1,13 +1,12 @@
 import { supabase } from './supabase.js';
+import { getTodayDate, getYesterdayDate, getDateString } from './date.js';
 
 /**
  * 今日のTODOリストを取得
  */
 export async function getTodayTodoList(userId) {
-  // 日本時間で今日の日付を取得
-  const now = new Date();
-  const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000)); // UTC + 9時間
-  const today = jstDate.toISOString().split('T')[0];
+  // 3:00amに日付が切り替わる「今日」の日付を取得
+  const today = getTodayDate();
 
   const { data, error } = await supabase
     .from('todo_lists')
@@ -48,11 +47,8 @@ export async function getTodayTodoList(userId) {
  * 前日のTODOリストを取得
  */
 export async function getYesterdayTodoList(userId) {
-  // 日本時間で昨日の日付を取得
-  const now = new Date();
-  const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000)); // UTC + 9時間
-  jstDate.setDate(jstDate.getDate() - 1); // 1日前
-  const yesterdayStr = jstDate.toISOString().split('T')[0];
+  // 3:00amに日付が切り替わる「昨日」の日付を取得
+  const yesterdayStr = getYesterdayDate();
 
   const { data, error } = await supabase
     .from('todo_lists')
@@ -111,10 +107,8 @@ export async function carryOverUncompletedTodos(userId, newListId) {
  * 今日のTODOリストを作成
  */
 export async function createTodayTodoList(userId, title = '今日のtodo') {
-  // 日本時間で今日の日付を取得
-  const now = new Date();
-  const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000)); // UTC + 9時間
-  const today = jstDate.toISOString().split('T')[0];
+  // 3:00amに日付が切り替わる「今日」の日付を取得
+  const today = getTodayDate();
 
   const { data, error } = await supabase
     .from('todo_lists')

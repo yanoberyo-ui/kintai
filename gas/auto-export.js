@@ -129,45 +129,8 @@ function fetchAttendanceData(date) {
   return data.map(record => {
     const user = record.users;
     
-    // 勤務時間を計算（異常値の場合は再計算）
+    // 勤務時間を取得（データベースの値をそのまま使用）
     let workMinutes = record.total_work_minutes || 0;
-    let calculatedMinutes = 0;
-    
-    // clock_inとclock_outから計算値を算出
-    if (record.clock_in && record.clock_out) {
-      const clockIn = new Date(record.clock_in);
-      const clockOut = new Date(record.clock_out);
-      
-      // 日付が有効な場合のみ計算
-      if (!isNaN(clockIn.getTime()) && !isNaN(clockOut.getTime()) && clockOut > clockIn) {
-        const totalMinutes = Math.floor((clockOut - clockIn) / 60000);
-        const breakMinutes = record.break_minutes_used || 0;
-        calculatedMinutes = Math.max(0, totalMinutes - breakMinutes);
-      }
-    }
-    
-    // 異常値の判定：
-    // 1. 24時間以上の場合
-    // 2. 12時間以上で、計算値との乖離が2時間以上の場合
-    // 3. 計算値が存在し、データベースの値との乖離が2時間以上の場合
-    if (workMinutes > 0 && calculatedMinutes > 0) {
-      const isAbnormal = 
-        workMinutes > 24 * 60 || // 24時間以上
-        (workMinutes > 12 * 60 && Math.abs(workMinutes - calculatedMinutes) > 120) || // 12時間以上で計算値との乖離が2時間以上
-        Math.abs(workMinutes - calculatedMinutes) > 120; // 計算値との乖離が2時間以上
-      
-      if (isAbnormal) {
-        // 異常値の場合は計算値を使用
-        workMinutes = calculatedMinutes;
-        // それでも24時間以上になる場合は、24時間に制限
-        if (workMinutes > 24 * 60) {
-          workMinutes = 24 * 60;
-        }
-      }
-    } else if (workMinutes > 24 * 60) {
-      // 計算値が存在しないが、24時間以上の場合
-      workMinutes = 24 * 60;
-    }
     
     return {
       user_id: record.user_id,
@@ -709,10 +672,14 @@ function updateMonthlySummaryFixed(sheet) {
   const currentSummary = monthlySummary[currentMonthKey] || { days: 0, totalMinutes: 0, remoteDays: 0, officeDays: 0 };
   const hours = Math.floor(currentSummary.totalMinutes / 60);
   const minutes = currentSummary.totalMinutes % 60;
-  const totalTimeFormatted = `${hours}:${minutes.toString().padStart(2, '0')}`;
+  // 24時間を超える場合は「XX時間XX分」形式、それ以下は「XX:XX」形式
+  const totalTimeFormatted = hours >= 24 
+    ? `${hours}時間${minutes}分`
+    : `${hours}:${minutes.toString().padStart(2, '0')}`;
 
   // 固定セルの値を更新（今月）
   sheet.getRange(1, 11).setValue(totalTimeFormatted);
+  sheet.getRange(1, 11).setNumberFormat('@'); // プレーンテキストとして表示
   sheet.getRange(1, 11).setFontWeight('bold').setFontSize(12);
   sheet.getRange(2, 11).setValue(currentSummary.days + '日');
   sheet.getRange(1, 13).setValue(currentSummary.remoteDays + '日');
@@ -732,9 +699,13 @@ function updateMonthlySummaryFixed(sheet) {
   Logger.log(`先月の集計結果: ${JSON.stringify(lastSummary)}`);
   const lastHours = Math.floor(lastSummary.totalMinutes / 60);
   const lastMinutes = lastSummary.totalMinutes % 60;
-  const lastTotalTimeFormatted = `${lastHours}:${lastMinutes.toString().padStart(2, '0')}`;
+  // 24時間を超える場合は「XX時間XX分」形式、それ以下は「XX:XX」形式
+  const lastTotalTimeFormatted = lastHours >= 24 
+    ? `${lastHours}時間${lastMinutes}分`
+    : `${lastHours}:${lastMinutes.toString().padStart(2, '0')}`;
 
   sheet.getRange(1, 16).setValue(lastTotalTimeFormatted);
+  sheet.getRange(1, 16).setNumberFormat('@'); // プレーンテキストとして表示
   sheet.getRange(1, 16).setFontWeight('bold').setFontSize(12);
   sheet.getRange(2, 16).setValue(lastSummary.days + '日');
   sheet.getRange(1, 18).setValue(lastSummary.remoteDays + '日');
@@ -952,8 +923,8 @@ function fetchMonthlyAttendanceData() {
   const firstDay = new Date(currentYear, currentMonth, 1);
   const firstDayStr = Utilities.formatDate(firstDay, 'Asia/Tokyo', 'yyyy-MM-dd');
   
-  // 今月のデータのみ取得（status関係なく、3:00am基準）
-  const url = `${SUPABASE_URL}/rest/v1/attendances?date=gte.${firstDayStr}&select=*,users(name,department)`;
+  // 今月のデータのみ取得（clock_inが存在するデータ、管理者ダッシュボードと同じ条件）
+  const url = `${SUPABASE_URL}/rest/v1/attendances?date=gte.${firstDayStr}&clock_in=not.is.null&select=*,users(name,department)`;
 
   const options = {
     method: 'get',
@@ -981,41 +952,6 @@ function fetchMonthlyAttendanceData() {
       const diffMinutes = Math.floor((now - clockIn) / 60000);
       const breakMinutes = record.break_minutes_used || 0;
       workMinutes = Math.max(0, diffMinutes - breakMinutes);
-    } else if (record.clock_in && record.clock_out) {
-      // 退勤済みの場合、異常値チェック
-      const clockIn = new Date(record.clock_in);
-      const clockOut = new Date(record.clock_out);
-      let calculatedMinutes = 0;
-      
-      // 日付が有効な場合のみ計算
-      if (!isNaN(clockIn.getTime()) && !isNaN(clockOut.getTime()) && clockOut > clockIn) {
-        const totalMinutes = Math.floor((clockOut - clockIn) / 60000);
-        const breakMinutes = record.break_minutes_used || 0;
-        calculatedMinutes = Math.max(0, totalMinutes - breakMinutes);
-      }
-      
-      // 異常値の判定：
-      // 1. 24時間以上の場合
-      // 2. 12時間以上で、計算値との乖離が2時間以上の場合
-      // 3. 計算値が存在し、データベースの値との乖離が2時間以上の場合
-      if (workMinutes > 0 && calculatedMinutes > 0) {
-        const isAbnormal = 
-          workMinutes > 24 * 60 || // 24時間以上
-          (workMinutes > 12 * 60 && Math.abs(workMinutes - calculatedMinutes) > 120) || // 12時間以上で計算値との乖離が2時間以上
-          Math.abs(workMinutes - calculatedMinutes) > 120; // 計算値との乖離が2時間以上
-        
-        if (isAbnormal) {
-          // 異常値の場合は計算値を使用
-          workMinutes = calculatedMinutes;
-          // それでも24時間以上になる場合は、24時間に制限
-          if (workMinutes > 24 * 60) {
-            workMinutes = 24 * 60;
-          }
-        }
-      } else if (workMinutes > 24 * 60) {
-        // 計算値が存在しないが、24時間以上の場合
-        workMinutes = 24 * 60;
-      }
     }
     
     return {
@@ -1624,10 +1560,92 @@ function rebuildAllSheets() {
           });
         }
         
-        // 集計を更新
-        updateMonthlySummaryFixed(sheet);
+        // 集計を更新（データベースから取得した値を直接使用）
+        // 今月の集計
+        let currentMonthTotalMinutes = 0;
+        let currentMonthRemoteDays = 0;
+        let currentMonthOfficeDays = 0;
+        userData.currentMonthRecords.forEach(record => {
+          // 勤務時間を計算（管理者ダッシュボードと同じロジック）
+          let workMinutes = record.work_minutes || 0;
+          
+          // 勤務中（status === 'working' かつ clock_outがない）の場合のみ、現在時刻までの時間を計算
+          if (record.clock_in && !record.clock_out && record.status === 'working') {
+            const clockIn = new Date(record.clock_in);
+            const now = new Date();
+            const diffMinutes = Math.floor((now - clockIn) / 60000);
+            const breakMinutes = record.break_minutes || 0;
+            workMinutes = Math.max(0, diffMinutes - breakMinutes);
+          }
+          
+          currentMonthTotalMinutes += workMinutes;
+          if (record.work_type === 'remote') currentMonthRemoteDays++;
+          if (record.work_type === 'office') currentMonthOfficeDays++;
+        });
         
-        Logger.log(userName + ': 今月' + userData.currentMonthRecords.length + '件, 過去' + userData.pastRecords.length + '件 完了');
+        // 先月の集計（先月のデータを過去レコードから取得）
+        const lastMonthDate = new Date(todayDate);
+        lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
+        const lastMonthYear = lastMonthDate.getFullYear();
+        const lastMonthNum = lastMonthDate.getMonth() + 1;
+        
+        let lastMonthTotalMinutes = 0;
+        let lastMonthRemoteDays = 0;
+        let lastMonthOfficeDays = 0;
+        let lastMonthDays = 0;
+        userData.pastRecords.forEach(record => {
+          const recordDate = new Date(record.date);
+          const recordYear = recordDate.getFullYear();
+          const recordMonth = recordDate.getMonth() + 1;
+          // 年と月の両方が一致する場合のみ集計
+          if (recordYear === lastMonthYear && recordMonth === lastMonthNum) {
+            // データベースの値をそのまま使用（管理者ダッシュボードと同じ）
+            const workMinutes = record.work_minutes || 0;
+            
+            // デバッグ: 異常に大きな値がある場合はログ出力
+            if (workMinutes > 1000) {
+              Logger.log(`  警告: ${userName} ${record.date} work_minutes=${workMinutes}, status=${record.status}, clock_out=${record.clock_out}`);
+            }
+            
+            lastMonthTotalMinutes += workMinutes;
+            lastMonthDays++;
+            if (record.work_type === 'remote') lastMonthRemoteDays++;
+            if (record.work_type === 'office') lastMonthOfficeDays++;
+          }
+        });
+        
+        // デバッグログ
+        Logger.log(`${userName}: 今月=${userData.currentMonthRecords.length}日(${currentMonthTotalMinutes}分), 先月(${lastMonthYear}/${lastMonthNum})=${lastMonthDays}日(${lastMonthTotalMinutes}分)`);
+        
+        // 今月の合計を書き込み
+        const currentHours = Math.floor(currentMonthTotalMinutes / 60);
+        const currentMinutes = currentMonthTotalMinutes % 60;
+        const currentTimeStr = currentHours >= 24 
+          ? `${currentHours}時間${currentMinutes}分`
+          : `${currentHours}:${currentMinutes.toString().padStart(2, '0')}`;
+        
+        sheet.getRange(1, 11).setValue(currentTimeStr);
+        sheet.getRange(1, 11).setNumberFormat('@');
+        sheet.getRange(1, 11).setFontWeight('bold').setFontSize(12);
+        sheet.getRange(2, 11).setValue(userData.currentMonthRecords.length + '日');
+        sheet.getRange(1, 13).setValue(currentMonthRemoteDays + '日');
+        sheet.getRange(2, 13).setValue(currentMonthOfficeDays + '日');
+        
+        // 先月の合計を書き込み
+        const lastHours = Math.floor(lastMonthTotalMinutes / 60);
+        const lastMinutes = lastMonthTotalMinutes % 60;
+        const lastTimeStr = lastHours >= 24 
+          ? `${lastHours}時間${lastMinutes}分`
+          : `${lastHours}:${lastMinutes.toString().padStart(2, '0')}`;
+        
+        sheet.getRange(1, 16).setValue(lastTimeStr);
+        sheet.getRange(1, 16).setNumberFormat('@');
+        sheet.getRange(1, 16).setFontWeight('bold').setFontSize(12);
+        sheet.getRange(2, 16).setValue(lastMonthDays + '日');
+        sheet.getRange(1, 18).setValue(lastMonthRemoteDays + '日');
+        sheet.getRange(2, 18).setValue(lastMonthOfficeDays + '日');
+        
+        Logger.log(userName + ': 今月' + userData.currentMonthRecords.length + '件(' + currentMonthTotalMinutes + '分), 過去' + userData.pastRecords.length + '件 完了');
         
       } catch (error) {
         Logger.log('エラー (' + userName + '): ' + error.message);
@@ -1727,7 +1745,8 @@ function writeAttendanceRowSimple(sheet, row, attendance) {
  * 全期間の勤怠データを取得
  */
 function fetchAllAttendanceData() {
-  const url = `${SUPABASE_URL}/rest/v1/attendances?status=eq.completed&select=*,users(*)&order=date.asc`;
+  // clock_inが存在するすべてのデータを取得（管理者ダッシュボードと同じ条件）
+  const url = `${SUPABASE_URL}/rest/v1/attendances?clock_in=not.is.null&select=*,users(*)&order=date.asc`;
   
   const options = {
     method: 'get',
@@ -1757,6 +1776,7 @@ function fetchAllAttendanceData() {
       date: record.date,
       clock_in: record.clock_in,
       clock_out: record.clock_out,
+      status: record.status || '',
       break_minutes: record.break_minutes_used || 0,
       work_minutes: record.total_work_minutes || 0,
       work_type: record.work_type || '',

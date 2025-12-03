@@ -1,4 +1,5 @@
 import { supabase } from '../services/supabase.native';
+import { getTodayDate } from './date.js';
 
 /**
  * すべてのルーチンTODOを取得
@@ -19,7 +20,8 @@ export async function getRoutineTodos(userId) {
  * 今日の完了記録を取得
  */
 export async function getTodayCompletions(userId) {
-  const today = new Date().toISOString().split('T')[0];
+  // 3:00amに日付が切り替わる「今日」の日付を取得
+  const today = getTodayDate();
 
   const { data, error } = await supabase
     .from('routine_todo_completions')
@@ -77,7 +79,8 @@ export async function deleteRoutineTodo(todoId) {
  * ルーチンTODOの完了状態を切り替え
  */
 export async function toggleRoutineTodoCompletion(userId, todoId, isCompleted) {
-  const today = new Date().toISOString().split('T')[0];
+  // 3:00amに日付が切り替わる「今日」の日付を取得
+  const today = getTodayDate();
 
   if (isCompleted) {
     // 完了記録を削除

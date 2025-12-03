@@ -6,6 +6,7 @@ import {
   deleteTodoItem,
   calculateProgress,
 } from '../utils/todo'
+import { getDateString } from '../utils/date'
 
 export default function CalendarPage({ user, isDark }) {
   const [selectedDate, setSelectedDate] = useState(new Date())
@@ -22,8 +23,7 @@ export default function CalendarPage({ user, isDark }) {
   }, [selectedDate, user])
 
   const getDateStr = (date) => {
-    const jstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000))
-    return jstDate.toISOString().split('T')[0]
+    return getDateString(date)
   }
 
   const loadTodoListForDate = async (date) => {
@@ -85,9 +85,8 @@ export default function CalendarPage({ user, isDark }) {
   }
 
   const createTodoListForDate = async (date) => {
-    // 日本時間で日付を取得
-    const jstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000))
-    const dateStr = jstDate.toISOString().split('T')[0]
+    // 3:00amに日付が切り替わる日付を取得
+    const dateStr = getDateString(date)
     
     const { data, error } = await supabase
       .from('todo_lists')

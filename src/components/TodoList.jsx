@@ -12,6 +12,7 @@ import {
   updateTodoItem,
   carryOverUncompletedTodos,
 } from '../utils/todo'
+import { getTodayDate } from '../utils/date'
 import { getDailyTodos } from '../utils/rootsApi'
 import {
   DndContext,
@@ -327,10 +328,8 @@ export default function TodoList({ user, isDark, currentUser = null }) {
 
   const loadTodayCompletions = async () => {
     try {
-      // 日本時間で今日の日付を取得
-      const now = new Date()
-      const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000))
-      const today = jstDate.toISOString().split('T')[0]
+      // 3:00amに日付が切り替わる「今日」の日付を取得
+      const today = getTodayDate()
       const { data, error } = await supabase
         .from('routine_todo_completions')
         .select('routine_todo_id')
@@ -422,10 +421,8 @@ export default function TodoList({ user, isDark, currentUser = null }) {
     try {
       if (isRoutine) {
         // Handle routine todo completion
-        // 日本時間で今日の日付を取得
-        const now = new Date()
-        const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000))
-        const today = jstDate.toISOString().split('T')[0]
+        // 3:00amに日付が切り替わる「今日」の日付を取得
+        const today = getTodayDate()
 
         if (currentIsCompleted) {
           // Currently completed, so uncomplete: remove from completions table

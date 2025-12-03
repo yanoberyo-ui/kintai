@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js';
+import { getTodayDate } from './date.js';
 
 /**
  * 曜日が月〜金かどうかをチェック
@@ -35,10 +36,8 @@ export async function calculateAttendanceStreak(userId) {
 
   if (error) throw error;
 
-  // 今日の日付（日本時間）
-  const now = new Date();
-  const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
-  const today = jstNow.toISOString().split('T')[0];
+  // 3:00amに日付が切り替わる「今日」の日付を取得
+  const today = getTodayDate();
   const todayDate = parseJSTDate(today);
 
   let streak = 0;
@@ -95,10 +94,8 @@ export async function calculateTodoStreak(userId) {
 
   if (error) throw error;
 
-  // 今日の日付（日本時間）
-  const now = new Date();
-  const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
-  const today = jstNow.toISOString().split('T')[0];
+  // 3:00amに日付が切り替わる「今日」の日付を取得
+  const today = getTodayDate();
   const todayDate = parseJSTDate(today);
 
   let streak = 0;
@@ -149,10 +146,8 @@ export async function checkTodoStreakRisk(userId) {
     return { isAtRisk: false, message: '', daysUntilBreak: 0 };
   }
 
-  // 今日の日付（日本時間）
-  const now = new Date();
-  const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
-  const today = jstNow.toISOString().split('T')[0];
+  // 3:00amに日付が切り替わる「今日」の日付を取得
+  const today = getTodayDate();
   const todayDate = parseJSTDate(today);
 
   // 今日が平日かどうか
