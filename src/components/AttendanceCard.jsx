@@ -50,6 +50,7 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
 
     const checkOvertime = () => {
       const today = getTodayDate()
+      const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
       
       const clockInTime = attendance.clock_in.includes('T') 
         ? attendance.clock_in.split('T')[1] 

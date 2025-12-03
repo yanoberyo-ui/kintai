@@ -901,6 +901,7 @@ export default function MembersPage({ user, isDark }) {
                       try {
                         // 日本時間（JST）で現在時刻と今日の日付を取得
                         const today = getTodayDate()
+                        const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
                         
                         const clockInTime = memberAttendance.clock_in.includes('T') 
                           ? memberAttendance.clock_in.split('T')[1] 
