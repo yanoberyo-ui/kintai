@@ -133,6 +133,26 @@ function writeToUserSheet(attendance) {
     // シートが存在しない場合は新規作成
     sheet = spreadsheet.insertSheet(attendance.user_name);
     createSheetHeader(sheet, attendance.user_name, attendance.employee_id);
+  } else {
+    // 既存シートのヘッダーを確認して更新（「中抜け」列が存在しない場合）
+    const headerRange = sheet.getRange(3, 1, 1, 9);
+    const headers = headerRange.getValues()[0];
+    const expectedHeaders = ['月', '日', '出勤', '退勤', '中抜け', '休憩', '実働', '勤務タイプ', '備考'];
+    
+    // ヘッダーが古い形式（8列）または「中抜け」列が存在しない場合は更新
+    if (headers.length < 9 || headers[4] !== '中抜け') {
+      headerRange.setValues([expectedHeaders]);
+      headerRange.setFontWeight('bold')
+        .setBackground('#4285f4')
+        .setFontColor('#ffffff');
+      
+      // 列幅も更新
+      sheet.setColumnWidth(5, 120); // 中抜け
+      sheet.setColumnWidth(6, 50);  // 休憩
+      sheet.setColumnWidth(7, 60);  // 実働
+      sheet.setColumnWidth(8, 100); // 勤務タイプ
+      sheet.setColumnWidth(9, 150); // 備考
+    }
   }
 
   // 既存の集計行を削除（「合計」を含む行を探して削除）
