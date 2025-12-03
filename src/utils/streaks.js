@@ -1,5 +1,4 @@
 import { supabase } from './supabase.js';
-import { calculateProgress } from './todo.js';
 
 /**
  * 曜日が月〜金かどうかをチェック
@@ -76,7 +75,7 @@ export async function calculateAttendanceStreak(userId) {
 }
 
 /**
- * TODO達成率ストリークを計算（90%以上の連続日数）
+ * TODOストリークを計算（ToDoを出した連続日数、月〜金のみ）
  */
 export async function calculateTodoStreak(userId) {
   // 過去90日分のデータを取得
@@ -110,21 +109,17 @@ export async function calculateTodoStreak(userId) {
     currentDate.setDate(currentDate.getDate() - 1);
   }
 
-  // 連続した平日で90%以上達成をカウント
+  // 連続した平日でToDoを出した日をカウント
   while (true) {
     if (isWeekday(currentDate)) {
       const dateStr = currentDate.toISOString().split('T')[0];
       const todoList = todoLists?.find(t => t.date === dateStr);
 
+      // ToDoリストが存在し、ToDoアイテムが1つ以上ある場合
       if (todoList && todoList.todo_items && todoList.todo_items.length > 0) {
-        const progress = calculateProgress(todoList.todo_items);
-        if (progress >= 90) {
-          streak++;
-        } else {
-          break; // 90%未満の日があったら終了
-        }
+        streak++;
       } else {
-        // TODOが存在しない日は0%とみなしてストリーク終了
+        // ToDoを出していない平日があったら終了
         break;
       }
     }

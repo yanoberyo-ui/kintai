@@ -292,7 +292,7 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
 
       setBreakMinutes('')
 
-      // ストリーク通知を表示（TODO達成）
+      // ストリーク通知を表示（TODO連続）
       const streaks = await getStreaks(user.id)
       if (streaks.todoStreak > 0) {
         setStreakValue(streaks.todoStreak)
@@ -685,7 +685,7 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
             </div>
             <div>
               <div className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                {streakNotificationType === 'clockin' ? '連続出勤' : 'TODO達成'}
+                {streakNotificationType === 'clockin' ? '連続出勤' : 'TODO連続'}
               </div>
               <div className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                 {streakValue}日目！
