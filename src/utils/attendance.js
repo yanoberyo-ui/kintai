@@ -1,13 +1,12 @@
 import { supabase } from './supabase.js';
+import { getTodayDate } from './date.js';
 
 /**
  * 今日の勤怠データを取得
  */
 export async function getTodayAttendance(userId) {
-  // 日本時間で今日の日付を取得（より確実な方法）
-  const now = new Date()
-  const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000)) // UTC + 9時間
-  const today = jstDate.toISOString().split('T')[0];
+  // 3:00amに日付が切り替わる「今日」の日付を取得
+  const today = getTodayDate();
 
   const { data, error } = await supabase
     .from('attendances')
@@ -27,11 +26,9 @@ export async function getTodayAttendance(userId) {
  * 出勤打刻
  */
 export async function clockIn(userId, workType = null) {
-  // 日本時間で今日の日付と現在時刻を取得（より確実な方法）
-  const currentTime = new Date()
-  const jstDate = new Date(currentTime.getTime() + (9 * 60 * 60 * 1000)) // UTC + 9時間
-  const today = jstDate.toISOString().split('T')[0];
-  const now = currentTime.toISOString(); // 実際の時刻はUTCで保存
+  // 3:00amに日付が切り替わる「今日」の日付を取得
+  const today = getTodayDate();
+  const now = new Date().toISOString(); // 実際の時刻はUTCで保存
 
   const attendanceData = {
     user_id: userId,
@@ -65,11 +62,9 @@ export async function clockIn(userId, workType = null) {
  * 再出勤（退勤後に再度出勤する）
  */
 export async function reClockIn(userId, workType = null) {
-  // 日本時間で今日の日付を取得
-  const currentTime = new Date()
-  const jstDate = new Date(currentTime.getTime() + (9 * 60 * 60 * 1000)) // UTC + 9時間
-  const today = jstDate.toISOString().split('T')[0];
-  const now = currentTime.toISOString(); // 再出勤時刻をUTCで保存
+  // 3:00amに日付が切り替わる「今日」の日付を取得
+  const today = getTodayDate();
+  const now = new Date().toISOString(); // 再出勤時刻をUTCで保存
 
   // 既存の勤怠データを取得
   const existingAttendance = await getTodayAttendance(userId);
@@ -108,13 +103,13 @@ export async function reClockIn(userId, workType = null) {
 /**
  * 退勤打刻
  * 中抜け時間は自動的に休憩時間として計算される
+ * @param {string} userId - ユーザーID
+ * @param {number} additionalBreakMinutes - 追加の休憩時間（分）
  */
-export async function clockOut(userId) {
-  // 日本時間で今日の日付と現在時刻を取得（より確実な方法）
-  const currentTime = new Date()
-  const jstDate = new Date(currentTime.getTime() + (9 * 60 * 60 * 1000)) // UTC + 9時間
-  const today = jstDate.toISOString().split('T')[0];
-  const now = currentTime.toISOString(); // 実際の時刻はUTCで保存
+export async function clockOut(userId, additionalBreakMinutes = 0) {
+  // 3:00amに日付が切り替わる「今日」の日付を取得
+  const today = getTodayDate();
+  const now = new Date().toISOString(); // 実際の時刻はUTCで保存
 
   // 今日の勤怠データを取得
   const attendance = await getTodayAttendance(userId);
@@ -124,7 +119,7 @@ export async function clockOut(userId) {
 
   // 中抜け時間を自動計算（break_sessionsから）
   const breakSessions = attendance.break_sessions || [];
-  let totalBreakMinutes = 0;
+  let totalBreakMinutes = additionalBreakMinutes; // 追加の休憩時間を初期値とする
   
   for (const session of breakSessions) {
     if (session.end) {
@@ -191,11 +186,9 @@ export async function clockOut(userId) {
  * 中抜け開始
  */
 export async function startBreak(userId) {
-  // 日本時間で今日の日付と現在時刻を取得（より確実な方法）
-  const currentTime = new Date()
-  const jstDate = new Date(currentTime.getTime() + (9 * 60 * 60 * 1000)) // UTC + 9時間
-  const today = jstDate.toISOString().split('T')[0];
-  const now = currentTime.toISOString(); // 実際の時刻はUTCで保存
+  // 3:00amに日付が切り替わる「今日」の日付を取得
+  const today = getTodayDate();
+  const now = new Date().toISOString(); // 実際の時刻はUTCで保存
 
   const attendance = await getTodayAttendance(userId);
   if (!attendance) {
@@ -259,11 +252,9 @@ export async function startBreak(userId) {
  * 中抜け終了（戻り）
  */
 export async function endBreak(userId) {
-  // 日本時間で今日の日付と現在時刻を取得（より確実な方法）
-  const currentTime = new Date()
-  const jstDate = new Date(currentTime.getTime() + (9 * 60 * 60 * 1000)) // UTC + 9時間
-  const today = jstDate.toISOString().split('T')[0];
-  const now = currentTime.toISOString(); // 実際の時刻はUTCで保存
+  // 3:00amに日付が切り替わる「今日」の日付を取得
+  const today = getTodayDate();
+  const now = new Date().toISOString(); // 実際の時刻はUTCで保存
 
   const attendance = await getTodayAttendance(userId);
   if (!attendance) {

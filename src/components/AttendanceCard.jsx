@@ -5,6 +5,7 @@ import { getTodayTodoList } from '../utils/todo'
 import { supabase } from '../utils/supabase'
 import { getAIFeedback } from '../utils/ranking'
 import { getStreaks } from '../utils/streaks'
+import { getTodayDate } from '../utils/date'
 
 export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
   const [attendance, setAttendance] = useState(null)
@@ -24,6 +25,8 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
   const [showAIFeedbackPopup, setShowAIFeedbackPopup] = useState(false)
   const [showWorkTypeModal, setShowWorkTypeModal] = useState(false)
   const [showReClockInWorkTypeModal, setShowReClockInWorkTypeModal] = useState(false)
+  const [showBreakMinutesModal, setShowBreakMinutesModal] = useState(false)
+  const [additionalBreakMinutes, setAdditionalBreakMinutes] = useState(0)
 
   useEffect(() => {
     loadAttendance()
@@ -46,8 +49,7 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
     if (!attendance?.clock_in || attendance?.clock_out || overtimeAlertShown) return
 
     const checkOvertime = () => {
-      const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-      const today = jstNow.toISOString().split('T')[0]
+      const today = getTodayDate()
       
       const clockInTime = attendance.clock_in.includes('T') 
         ? attendance.clock_in.split('T')[1] 
@@ -121,7 +123,7 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
       const normalTodos = todoList?.todo_items || []
 
       // 定常TODOリストを取得
-      const today = new Date().toISOString().split('T')[0]
+      const today = getTodayDate()
       const { data: routineTodos, error: routineError } = await supabase
         .from('routine_todos')
         .select('*')
@@ -231,14 +233,17 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
     // 前回のAIフィードバックポップアップが残っていたら閉じる
     setShowAIFeedbackPopup(false)
     
-    // 確認ダイアログ
-    if (!confirm('退勤しますか？\n（中抜け時間は自動的に休憩時間として計算されます）')) {
-      return
-    }
+    // 休憩時間入力モーダルを表示
+    setAdditionalBreakMinutes(0)
+    setShowBreakMinutesModal(true)
+  }
+
+  const handleClockOutConfirm = async () => {
+    setShowBreakMinutesModal(false)
 
     try {
       setLoading(true)
-      const result = await clockOut(user.id)
+      const result = await clockOut(user.id, additionalBreakMinutes)
       await loadAttendance()
 
       // ユーザー情報を取得（最新のデータを確実に取得）
@@ -253,7 +258,7 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
       const normalTodos = todoList?.todo_items || []
 
       // 定常TODOリストを取得
-      const today = new Date().toISOString().split('T')[0]
+      const today = getTodayDate()
       const { data: routineTodos, error: routineError } = await supabase
         .from('routine_todos')
         .select('*')
@@ -355,7 +360,7 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
       const normalTodos = todoList?.todo_items || []
 
       // 定常TODOリストを取得
-      const today = new Date().toISOString().split('T')[0]
+      const today = getTodayDate()
       const { data: routineTodos, error: routineError } = await supabase
         .from('routine_todos')
         .select('*')
@@ -502,9 +507,8 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
       
       // work_typeを更新（リモート→出社に変更した場合）
       if (newWorkType !== attendance.work_type) {
-        // 日本時間で今日の日付を取得
-        const jstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-        const today = jstDate.toISOString().split('T')[0]
+        // 3:00amに日付が切り替わる「今日」の日付を取得
+        const today = getTodayDate()
         await supabase
           .from('attendances')
           .update({ work_type: newWorkType })
@@ -1073,6 +1077,72 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
             >
               キャンセル
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 休憩時間入力モーダル */}
+      {showBreakMinutesModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`rounded-2xl p-6 md:p-8 max-w-md w-full shadow-2xl ${
+            isDark ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            <h3 className={`text-xl md:text-2xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              🌆 退勤確認
+            </h3>
+            <p className={`text-sm mb-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              中抜け時間は自動的に計算されます。<br />
+              追加で休憩時間がある場合は入力してください。
+            </p>
+
+            <div className="mb-6">
+              <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                追加休憩時間（分）
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="480"
+                step="15"
+                value={additionalBreakMinutes}
+                onChange={(e) => setAdditionalBreakMinutes(parseInt(e.target.value) || 0)}
+                className={`w-full px-4 py-3 rounded-xl border text-lg font-medium ${
+                  isDark
+                    ? 'bg-gray-700 border-gray-600 text-white focus:border-blue-500'
+                    : 'bg-gray-50 border-gray-300 text-gray-900 focus:border-blue-500'
+                } focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+                placeholder="0"
+              />
+              <p className={`text-xs mt-2 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                例: 昼休憩60分、その他の休憩時間など
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={handleClockOutConfirm}
+                disabled={loading}
+                className={`w-full font-medium py-4 rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg ${
+                  isDark
+                    ? 'bg-orange-600 text-white hover:bg-orange-700 shadow-orange-600/20'
+                    : 'bg-orange-500 text-white hover:bg-orange-600 shadow-orange-500/20'
+                }`}
+              >
+                {loading ? '処理中...' : '退勤する'}
+              </button>
+
+              <button
+                onClick={() => setShowBreakMinutesModal(false)}
+                disabled={loading}
+                className={`w-full py-2 text-sm font-medium rounded-lg transition-colors ${
+                  isDark
+                    ? 'text-gray-400 hover:text-gray-300'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                キャンセル
+              </button>
+            </div>
           </div>
         </div>
       )}
