@@ -12,12 +12,7 @@ import {
   updateTodoItem,
   carryOverUncompletedTodos,
 } from '../utils/todo'
-import {
-  fetchRootsTodos,
-  fetchRootsObjectives,
-  convertRootsTodoToKintai,
-  testRootsConnection,
-} from '../utils/rootsApi'
+import { getDailyTodos } from '../utils/rootsApi'
 import {
   DndContext,
   closestCenter,
@@ -51,14 +46,9 @@ export default function TodoList({ user, isDark, currentUser = null }) {
   const [routineTodos, setRoutineTodos] = useState([])
   const [routineCompletions, setRoutineCompletions] = useState(new Set())
 
-  // Roots連携 state
-  const [showRootsModal, setShowRootsModal] = useState(false)
-  const [rootsTodos, setRootsTodos] = useState([])
-  const [rootsObjectives, setRootsObjectives] = useState([])
-  const [rootsLoading, setRootsLoading] = useState(false)
-  const [rootsError, setRootsError] = useState('')
-  const [rootsConnected, setRootsConnected] = useState(false)
-  const [selectedRootsTodos, setSelectedRootsTodos] = useState(new Set())
+  // codex-dev連携 state
+  const [rootsDailyTodos, setRootsDailyTodos] = useState([])
+  const [rootsDailyLoading, setRootsDailyLoading] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -75,8 +65,48 @@ export default function TodoList({ user, isDark, currentUser = null }) {
       loadTodayCompletions()
       loadLoggedInUser()
       loadUsersMap()
+      // codex-dev DailyTodoを読み込む（読み取り専用）
+      if (user.roots_user_id) {
+        loadRootsDailyTodos()
+      }
     }
   }, [user])
+  
+  // codex-dev DailyTodoを読み込む（読み取り専用）
+  const loadRootsDailyTodos = async () => {
+    if (!user?.roots_user_id) return
+    
+    setRootsDailyLoading(true)
+    try {
+      const todos = await getDailyTodos(user.roots_user_id)
+      
+      // codex-devのTodoをkintai形式に変換（読み取り専用）
+      const convertedTodos = todos.map((todo, index) => ({
+        id: `roots_${todo.id}`,
+        content: todo.title,
+        is_completed: todo.isCompleted,
+        order_index: todo.orderIndex ?? index,
+        indent_level: 0,
+        is_roots_todo: true, // 読み取り専用フラグ
+        roots_id: todo.id,
+        children: todo.children?.map((child, childIndex) => ({
+          id: `roots_${child.id}`,
+          content: child.title,
+          is_completed: child.isCompleted,
+          order_index: child.orderIndex ?? childIndex,
+          indent_level: 1,
+          is_roots_todo: true,
+          roots_id: child.id,
+        })) || [],
+      }))
+      
+      setRootsDailyTodos(convertedTodos)
+    } catch (error) {
+      console.error('Error loading codex-dev daily todos:', error)
+    } finally {
+      setRootsDailyLoading(false)
+    }
+  }
 
   // ログイン中のユーザー情報を取得
   const loadLoggedInUser = async () => {
@@ -112,136 +142,29 @@ export default function TodoList({ user, isDark, currentUser = null }) {
     }
   }
 
-  // ===== Roots連携機能 =====
-
-  // Rootsからタスクを取得
-  const loadRootsTodos = async () => {
-    setRootsLoading(true)
-    setRootsError('')
-
-    try {
-      // Supabaseセッションからアクセストークンを取得
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (!session?.provider_token) {
-        // Google OAuthでログインしていない場合
-        setRootsError('Rootsと連携するにはGoogleアカウントでログインしてください')
-        setRootsConnected(false)
-        setRootsLoading(false)
-        return
+  // Calculate progress and items
+  // kintaiのTodoとroots_devのDailyTodoをマージ
+  const kintaiItems = todoList?.todo_items || []
+  // roots_devのTodoをフラット化（子要素も含める）
+  const flattenRootsTodos = (todos) => {
+    const result = []
+    todos.forEach(todo => {
+      result.push(todo)
+      if (todo.children) {
+        todo.children.forEach(child => result.push(child))
       }
-
-      // Roots接続テスト
-      const connectionTest = await testRootsConnection(session.provider_token)
-      
-      if (!connectionTest.connected) {
-        setRootsError('Rootsに接続できませんでした: ' + (connectionTest.error || '不明なエラー'))
-        setRootsConnected(false)
-        setRootsLoading(false)
-        return
-      }
-
-      setRootsConnected(true)
-
-      // ToDoとObjectivesを取得
-      const [todos, objectives] = await Promise.all([
-        fetchRootsTodos(session.provider_token),
-        fetchRootsObjectives(session.provider_token),
-      ])
-
-      setRootsTodos(todos.filter(t => !t.completedAt)) // 未完了のみ
-      setRootsObjectives(objectives)
-    } catch (error) {
-      console.error('Error loading roots todos:', error)
-      setRootsError('Rootsのタスク取得に失敗しました: ' + error.message)
-    } finally {
-      setRootsLoading(false)
-    }
-  }
-
-  // 選択したRootsタスクをインポート
-  const importSelectedRootsTodos = async () => {
-    if (selectedRootsTodos.size === 0) return
-
-    try {
-      // TODOリストがなければ作成
-      let listId = todoList?.id
-      if (!listId) {
-        const newList = await createTodayTodoList(user.id)
-        listId = newList.id
-      }
-
-      // 選択されたタスクをインポート
-      for (const todoId of selectedRootsTodos) {
-        const rootsTodo = rootsTodos.find(t => t.id === todoId)
-        if (rootsTodo) {
-          const kintaiTodo = convertRootsTodoToKintai(rootsTodo)
-          
-          // タスクを追加（Rootsのタスク名 + OKR名をプレフィックス）
-          const content = rootsTodo.objective?.title 
-            ? `[${rootsTodo.objective.title}] ${kintaiTodo.content}`
-            : kintaiTodo.content
-
-          await addTodoItem(listId, content, 0, loggedInUser?.id || user.id)
-
-          // 同期情報を保存（roots_todo_syncテーブルがある場合）
-          try {
-            await supabase.from('roots_todo_sync').insert({
-              kintai_user_id: user.id,
-              roots_todo_id: rootsTodo.id,
-              roots_objective_id: rootsTodo.objective?.id,
-              roots_objective_title: rootsTodo.objective?.title,
-              sync_direction: 'from_roots',
-            })
-          } catch (syncError) {
-            // 同期テーブルがなくてもインポート自体は成功とする
-            console.warn('Sync info save failed:', syncError)
-          }
-        }
-      }
-
-      // リロード
-      await loadTodoList()
-      setShowRootsModal(false)
-      setSelectedRootsTodos(new Set())
-    } catch (error) {
-      console.error('Error importing roots todos:', error)
-      setRootsError('インポートに失敗しました: ' + error.message)
-    }
-  }
-
-  // Rootsタスクの選択を切り替え
-  const toggleRootsTodoSelection = (todoId) => {
-    setSelectedRootsTodos(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(todoId)) {
-        newSet.delete(todoId)
-      } else {
-        newSet.add(todoId)
-      }
-      return newSet
     })
+    return result
   }
-
-  // 全選択/全解除
-  const toggleAllRootsTodos = () => {
-    if (selectedRootsTodos.size === rootsTodos.length) {
-      setSelectedRootsTodos(new Set())
-    } else {
-      setSelectedRootsTodos(new Set(rootsTodos.map(t => t.id)))
-    }
-  }
-
-  // Rootsモーダルを開く
-  const openRootsModal = () => {
-    setShowRootsModal(true)
-    loadRootsTodos()
-  }
-
-  // ===== /Roots連携機能 =====
-
-  // Calculate progress and items (moved before useEffects that use them)
-  const regularItems = todoList?.todo_items || []
+  // codex-devのTodoのorder_indexを大きくして必ず最後に表示（空のTodoは除外）
+  const rootsItems = flattenRootsTodos(rootsDailyTodos)
+    .filter(item => item.content && item.content.trim() !== '') // 空のTodoを除外
+    .map((item, index) => ({
+      ...item,
+      order_index: 10000 + index, // 大きな値を設定して最後に表示
+    }))
+  // マージ（kintaiのTodoを先頭に、codex-devのTodoを一番下に）
+  const regularItems = [...kintaiItems, ...rootsItems]
   const routineItems = routineTodos.map(rt => ({
     ...rt,
     is_routine: true,
@@ -352,7 +275,6 @@ export default function TodoList({ user, isDark, currentUser = null }) {
         if (carriedOverCount > 0) {
           // 引き継ぎ後、リストを再取得
           list = await getTodayTodoList(user.id)
-          console.log(`${carriedOverCount}件のTODOを前日から引き継ぎました`)
         }
       }
 
@@ -402,7 +324,6 @@ export default function TodoList({ user, isDark, currentUser = null }) {
   const handleBulkAdd = async (contents, indent) => {
     if (!contents || contents.length === 0) return
     
-    console.log('handleBulkAdd called with:', contents.length, 'items')
     
     // 他人のTODOに追加する場合は、追加者のIDを記録
     const addedBy = (loggedInUser && user.id !== loggedInUser.id) ? loggedInUser.id : null
@@ -418,7 +339,6 @@ export default function TodoList({ user, isDark, currentUser = null }) {
       // 追加完了後、リストを再読み込み
       await loadTodoList()
       setResetKey(prev => prev + 1)
-      console.log('Bulk add completed')
     } catch (error) {
       console.error('Error bulk adding tasks:', error)
       await loadTodoList()
@@ -426,11 +346,7 @@ export default function TodoList({ user, isDark, currentUser = null }) {
   }
 
   const handleAddTask = async (content, indent) => {
-    console.log('handleAddTask called with:', content, 'indent:', indent, 'insertAtIndex:', insertAtIndex)
-    if (!content.trim()) {
-      console.log('Content is empty, returning')
-      return
-    }
+    if (!content.trim()) return
 
     // 挿入位置とインデントを保存（非同期処理中に変更される可能性があるため）
     const savedInsertAtIndex = insertAtIndex
@@ -441,9 +357,7 @@ export default function TodoList({ user, isDark, currentUser = null }) {
     const addedBy = (loggedInUser && user.id !== loggedInUser.id) ? loggedInUser.id : null
 
     try {
-      console.log('Adding todo item...')
-
-      // バックグラウンドでデータベースに保存
+      // バックグラウンドでデータベースに保存（kintai Supabase）
       if (savedInsertAtIndex !== null) {
         const afterOrderIndex = sortedItems[savedInsertAtIndex]?.order_index ?? null
         await addTodoItemAtPosition(todoList.id, content.trim(), savedIndent, afterOrderIndex, addedBy)
@@ -451,7 +365,6 @@ export default function TodoList({ user, isDark, currentUser = null }) {
         await addTodoItem(todoList.id, content.trim(), savedIndent, addedBy)
       }
 
-      console.log('Todo item added, reloading list...')
       // 保存完了後、リストを再読み込み
       await loadTodoList()
 
@@ -468,7 +381,6 @@ export default function TodoList({ user, isDark, currentUser = null }) {
 
       // 入力欄をリセット（新しいキーで再マウント）
       setResetKey(prev => prev + 1)
-      console.log('List reloaded')
     } catch (error) {
       console.error('Error adding task:', error)
       // エラー時は元に戻す
@@ -478,7 +390,7 @@ export default function TodoList({ user, isDark, currentUser = null }) {
     }
   }
 
-  const handleToggle = async (itemId, currentIsCompleted, isRoutine = false) => {
+  const handleToggle = async (itemId, currentIsCompleted, isRoutine = false, isRootsTodo = false) => {
     try {
       if (isRoutine) {
         // Handle routine todo completion
@@ -513,8 +425,11 @@ export default function TodoList({ user, isDark, currentUser = null }) {
 
           setRoutineCompletions(prev => new Set([...prev, itemId]))
         }
+      } else if (isRootsTodo) {
+        // codex-dev Todoは読み取り専用（操作はcodex-devで行う）
+        return
       } else {
-        // Handle regular todo
+        // Handle regular kintai todo
         await toggleTodoItem(itemId, currentIsCompleted)
         await loadTodoList()
       }
@@ -524,7 +439,7 @@ export default function TodoList({ user, isDark, currentUser = null }) {
     }
   }
 
-  const handleDelete = async (itemId, isRoutine = false) => {
+  const handleDelete = async (itemId, isRoutine = false, isRootsTodo = false) => {
     try {
       if (isRoutine) {
         // Handle routine todo deletion
@@ -540,8 +455,11 @@ export default function TodoList({ user, isDark, currentUser = null }) {
           newSet.delete(itemId)
           return newSet
         })
+      } else if (isRootsTodo) {
+        // codex-dev Todoは読み取り専用（削除はcodex-devで行う）
+        return
       } else {
-        // Handle regular todo deletion
+        // Handle regular kintai todo deletion
         await deleteTodoItem(itemId)
         await loadTodoList()
       }
@@ -698,6 +616,9 @@ export default function TodoList({ user, isDark, currentUser = null }) {
                     isDark={isDark}
                     onToggle={handleToggle}
                     onDelete={handleDelete}
+                    usersMap={usersMap}
+                    loggedInUser={loggedInUser}
+                    todoOwner={user}
                     onBackspaceEmpty={() => {
                       // 一つ前の項目にフォーカス
                       if (index > 0) {
@@ -1061,8 +982,6 @@ function NewTaskItem({ isDark, onAdd, onBulkAdd, onBackspaceEmpty, indentLevel, 
   }
 
   const handleKeyDown = async (e) => {
-    console.log('Key pressed:', e.key, 'Content:', content, 'localIndent:', localIndent, 'isSubmitting:', isSubmitting, 'isComposing:', isComposing)
-
     // IME入力中（日本語変換中）はEnterを無視
     if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
       e.preventDefault()
@@ -1071,7 +990,6 @@ function NewTaskItem({ isDark, onAdd, onBulkAdd, onBackspaceEmpty, indentLevel, 
       // 内容がある場合のみ追加（重複送信を防ぐ）
       // 同じ内容を連続して送信しないようにチェック
       if (taskContent && !isSubmitting && taskContent !== lastSubmittedContent.current) {
-        console.log('Adding task:', taskContent, 'with indent:', localIndent)
         setIsSubmitting(true)
         lastSubmittedContent.current = taskContent
 
@@ -1080,7 +998,6 @@ function NewTaskItem({ isDark, onAdd, onBulkAdd, onBackspaceEmpty, indentLevel, 
 
         try {
           await onAdd(taskContent, localIndent)
-          console.log('onAdd completed')
 
           // 保存完了後に入力欄をクリア
           setContent('')
@@ -1095,13 +1012,10 @@ function NewTaskItem({ isDark, onAdd, onBulkAdd, onBackspaceEmpty, indentLevel, 
         } finally {
           setIsSubmitting(false)
         }
-      } else {
-        console.log('Content is empty, already submitting, or duplicate content')
       }
     } else if (e.key === 'Backspace' && content === '' && !isComposing) {
       // 空の状態でBackspaceを押したら一つ上の欄にフォーカス
       e.preventDefault()
-      console.log('Backspace on empty field, focusing previous item')
       onBackspaceEmpty?.()
     } else if (e.key === 'Tab') {
       e.preventDefault()
@@ -1240,7 +1154,7 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
   const handleToggle = async () => {
     // 編集不可の場合はチェックも不可
     if (!canEdit) return
-    await onToggle(item.id, item.is_completed, item.is_routine || false)
+    await onToggle(item.id, item.is_completed, item.is_routine || false, item.is_roots_todo || false)
   }
 
   const handleEdit = () => {
@@ -1340,7 +1254,7 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
       e.preventDefault()
       setIsDeleting(true)
       setTimeout(() => {
-        onDelete(item.id, item.is_routine || false)
+        onDelete(item.id, item.is_routine || false, item.is_roots_todo || false)
         onBackspaceEmpty?.()
       }, 200) // 200msのアニメーション後に削除
     } else if (e.key === 'Backspace' && !isEditing && !isComposing) {
@@ -1351,7 +1265,7 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
       e.preventDefault()
       setIsDeleting(true)
       setTimeout(() => {
-        onDelete(item.id, item.is_routine || false)
+        onDelete(item.id, item.is_routine || false, item.is_roots_todo || false)
         onBackspaceEmpty?.()
       }, 200)
     }
@@ -1385,6 +1299,8 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
                 : 'bg-gray-300 text-gray-700'
               : isAddedByOther && addedByUser
               ? '' // 他の人が追加した場合はアバターを表示
+              : item.is_roots_todo
+              ? 'bg-blue-700 text-white hover:bg-blue-800' // roots_devからのTodoはネイビー系
               : isDark
               ? 'bg-white text-gray-900 hover:bg-gray-100'
               : 'bg-gray-900 text-white hover:bg-gray-800'
@@ -1467,7 +1383,7 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
               : isDark ? 'text-gray-100' : 'text-gray-900'
           }`}
         >
-          {item.content}
+{item.content}
         </span>
       )}
     </div>

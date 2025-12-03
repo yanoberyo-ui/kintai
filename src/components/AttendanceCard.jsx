@@ -230,6 +230,8 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
   }
 
   const handleClockOut = async () => {
+    // 前回のAIフィードバックポップアップが残っていたら閉じる
+    setShowAIFeedbackPopup(false)
     setShowBreakModal(true)
   }
 
@@ -681,7 +683,7 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
         </div>
       )}
     
-    <div className={`backdrop-blur-xl rounded-3xl shadow-lg border p-8 transition-colors duration-500 ${
+    <div className={`backdrop-blur-xl rounded-3xl shadow-lg border p-8 transition-colors duration-500 relative z-10 ${
       isDark
         ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
         : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
@@ -904,7 +906,7 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
 
       {/* 休憩時間入力モーダル */}
       {showBreakModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-fade-in">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 animate-fade-in">
           <div className={`rounded-2xl shadow-2xl p-8 max-w-md w-full animate-scale-in ${
             isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white'
           }`}>
@@ -952,8 +954,13 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
               </button>
               <button
                 onClick={confirmClockOut}
+                disabled={!breakMinutes || breakMinutes === ''}
                 className={`flex-1 py-3 rounded-xl font-medium transition-colors shadow-lg ${
-                  isDark
+                  !breakMinutes || breakMinutes === ''
+                    ? isDark
+                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : isDark
                     ? 'bg-white text-gray-900 hover:bg-gray-100'
                     : 'bg-gray-900 text-white hover:bg-gray-800'
                 }`}
@@ -961,6 +968,11 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
                 退勤する
               </button>
             </div>
+            {(!breakMinutes || breakMinutes === '') && (
+              <p className={`text-xs mt-3 text-center ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>
+                ※ 休憩時間を入力してください（休憩なしの場合は0を入力）
+              </p>
+            )}
           </div>
         </div>
       )}

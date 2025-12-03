@@ -14,6 +14,7 @@ import AttendanceHistoryPage from './components/AttendanceHistoryPage'
 import Avatar from './components/Avatar'
 import { getStreaks } from './utils/streaks'
 import { getHeatmapData } from './utils/heatmap'
+import { getRootsUserByEmail } from './utils/rootsApi'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -202,7 +203,6 @@ function App() {
 
             // ユーザーが存在しない場合（Google OAuth 初回ログイン時など）は自動作成
             if (userError && userError.code === 'PGRST116') {
-              console.log('🔄 Creating new user from Google OAuth...')
               const newUserData = {
                 id: session.user.id,
                 email: session.user.email,
@@ -222,23 +222,59 @@ function App() {
                 console.error('Error creating user:', insertError)
                 setUser(session.user)
               } else {
-                console.log('✅ User created successfully:', createdUser)
+                
+                // roots_devのユーザーIDを取得して保存
+                try {
+                  const rootsUser = await getRootsUserByEmail(session.user.email)
+                  if (rootsUser?.id) {
+                    await supabase
+                      .from('users')
+                      .update({ roots_user_id: rootsUser.id })
+                      .eq('id', session.user.id)
+                    createdUser.roots_user_id = rootsUser.id
+                  }
+                } catch (rootsError) {
+                  console.warn('⚠️ Could not link roots_dev user:', rootsError.message)
+                }
+                
                 setUser(createdUser)
               }
             } else if (userData) {
-              // 既存ユーザーの場合、Google IDが未設定なら更新
-              if (isGoogleAuth && googleId && !userData.google_id) {
-                console.log('🔄 Updating existing user with Google ID...')
-                const { data: updatedUser } = await supabase
-                  .from('users')
-                  .update({
-                    google_id: googleId,
-                    image: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || userData.image,
-                  })
-                  .eq('id', session.user.id)
-                  .select()
-                  .single()
-                setUser(updatedUser || userData)
+              // 既存ユーザーの場合、Google IDまたはroots_user_idが未設定なら更新
+              const needsGoogleIdUpdate = isGoogleAuth && googleId && !userData.google_id
+              const needsRootsIdUpdate = !userData.roots_user_id
+              
+              if (needsGoogleIdUpdate || needsRootsIdUpdate) {
+                const updateData = {}
+                
+                if (needsGoogleIdUpdate) {
+                  updateData.google_id = googleId
+                  updateData.image = session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || userData.image
+                }
+                
+                // roots_devのユーザーIDを取得
+                if (needsRootsIdUpdate) {
+                  try {
+                    const rootsUser = await getRootsUserByEmail(session.user.email)
+                    if (rootsUser?.id) {
+                      updateData.roots_user_id = rootsUser.id
+                    }
+                  } catch (rootsError) {
+                    console.warn('⚠️ Could not link roots_dev user:', rootsError.message)
+                  }
+                }
+                
+                if (Object.keys(updateData).length > 0) {
+                  const { data: updatedUser } = await supabase
+                    .from('users')
+                    .update(updateData)
+                    .eq('id', session.user.id)
+                    .select()
+                    .single()
+                  setUser(updatedUser || userData)
+                } else {
+                  setUser(userData)
+                }
               } else {
                 setUser(userData)
               }
