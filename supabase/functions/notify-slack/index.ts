@@ -70,31 +70,31 @@ serve(async (req) => {
         ]
       };
     } else if (payload.type === 'break_start') {
-      // 休憩開始通知
+      // 中抜け開始通知
       const time = formatTime(new Date(payload.timestamp));
       slackMessage = {
-        text: `${payload.user_name}さんが休憩を開始しました`,
+        text: `${payload.user_name}さんが中抜けしました`,
         blocks: [
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*☕ ${payload.user_name}さんが休憩を開始しました*\n⏰ ${time}`
+              text: `*🚶 ${payload.user_name}さんが中抜けしました*\n⏰ ${time}`
             }
           }
         ]
       };
     } else if (payload.type === 'break_end') {
-      // 休憩終了通知
+      // 中抜け終了（戻り）通知
       const time = formatTime(new Date(payload.timestamp));
       slackMessage = {
-        text: `${payload.user_name}さんが休憩を終了しました`,
+        text: `${payload.user_name}さんが戻りました`,
         blocks: [
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*💪 ${payload.user_name}さんが休憩を終了しました*\n⏰ ${time}`
+              text: `*🔙 ${payload.user_name}さんが戻りました*\n⏰ ${time}`
             }
           }
         ]

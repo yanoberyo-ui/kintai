@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getTodayAttendance, clockIn, clockOut, reClockIn } from '../utils/attendance'
+import { getTodayAttendance, clockIn, clockOut, reClockIn, startBreak, endBreak } from '../utils/attendance'
 import { sendSlackNotification } from '../utils/slack'
 import { getTodayTodoList } from '../utils/todo'
 import { supabase } from '../utils/supabase'
@@ -411,6 +411,113 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
     return 'working'
   }
 
+  // 中抜け中かどうかを判定
+  const isOnBreak = () => {
+    if (!attendance?.break_sessions || attendance.break_sessions.length === 0) return false
+    const lastSession = attendance.break_sessions[attendance.break_sessions.length - 1]
+    return lastSession && !lastSession.end
+  }
+
+  // 勤務セッションを取得（時刻表示用）
+  const getWorkSessions = () => {
+    if (!attendance?.clock_in) return []
+    
+    const sessions = []
+    const clockInTime = formatTime(attendance.clock_in)
+    
+    if (!attendance.break_sessions || attendance.break_sessions.length === 0) {
+      // 中抜けなし
+      sessions.push({
+        start: clockInTime,
+        end: attendance.clock_out ? formatTime(attendance.clock_out) : null
+      })
+    } else {
+      // 中抜けあり
+      let currentStart = clockInTime
+      
+      for (const breakSession of attendance.break_sessions) {
+        // 中抜け開始時刻まで勤務
+        const breakStart = formatTime(breakSession.start)
+        sessions.push({
+          start: currentStart,
+          end: breakStart
+        })
+        
+        // 中抜けから戻った時刻が次の開始
+        if (breakSession.end) {
+          currentStart = formatTime(breakSession.end)
+        } else {
+          // まだ中抜け中
+          currentStart = null
+        }
+      }
+      
+      // 最後のセッション（中抜けから戻った後〜現在/退勤）
+      if (currentStart) {
+        sessions.push({
+          start: currentStart,
+          end: attendance.clock_out ? formatTime(attendance.clock_out) : null
+        })
+      }
+    }
+    
+    return sessions
+  }
+
+  // 中抜け開始
+  const handleStartBreak = async () => {
+    try {
+      setLoading(true)
+      await startBreak(user.id)
+      await loadAttendance()
+      
+      // Slack通知
+      const { data: userData } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', user.id)
+        .single()
+      
+      await sendSlackNotification(
+        'break_start',
+        { id: user.id, name: userData?.name || user.email },
+        attendance
+      )
+    } catch (error) {
+      console.error('Error starting break:', error)
+      alert(error.message || '中抜け開始に失敗しました')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 中抜け終了（戻り）
+  const handleEndBreak = async () => {
+    try {
+      setLoading(true)
+      await endBreak(user.id)
+      await loadAttendance()
+      
+      // Slack通知
+      const { data: userData } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', user.id)
+        .single()
+      
+      await sendSlackNotification(
+        'break_end',
+        { id: user.id, name: userData?.name || user.email },
+        attendance
+      )
+    } catch (error) {
+      console.error('Error ending break:', error)
+      alert(error.message || '戻りに失敗しました')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const getWorkDuration = () => {
     if (!attendance?.clock_in) return '0:00'
 
@@ -422,33 +529,43 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
       return `${hours}:${minutes.toString().padStart(2, '0')}`
     }
 
-    // 勤務中の場合は、現在時刻までの時間を計算
-    // 再出勤の場合は、last_clock_out（再出勤時刻）から現在時刻まで
-    let startTime
-    if (attendance.last_clock_out) {
-      // 再出勤後の場合は、再出勤時刻から現在時刻まで
-      const lastClockOutTime = attendance.last_clock_out.includes('T')
-        ? attendance.last_clock_out.split('T')[1]
-        : attendance.last_clock_out
-      const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-      const today = jstNow.toISOString().split('T')[0]
-      startTime = new Date(`${today}T${lastClockOutTime}`)
-    } else {
-      // 通常の場合は、最初の出勤時刻から現在時刻まで
-      const clockInTime = attendance.clock_in.includes('T') 
-        ? attendance.clock_in.split('T')[1] 
-        : attendance.clock_in
-      const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-      const today = jstNow.toISOString().split('T')[0]
-      startTime = new Date(`${today}T${clockInTime}`)
+    const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+    const today = jstNow.toISOString().split('T')[0]
+
+    // 勤務時間を計算（中抜け対応）
+    let totalMinutes = attendance.total_work_minutes || 0
+    
+    // 中抜け中の場合は、現在のセッションは計算しない
+    if (isOnBreak()) {
+      // 中抜け中なので、前回までの勤務時間のみ表示
+      const hours = Math.floor(totalMinutes / 60)
+      const minutes = totalMinutes % 60
+      return `${hours}:${minutes.toString().padStart(2, '0')}`
+    }
+
+    // 勤務中の場合、最後の勤務開始時刻から現在までを計算
+    let lastWorkStart
+    
+    if (attendance.break_sessions && attendance.break_sessions.length > 0) {
+      // 中抜け履歴がある場合、最後の戻り時刻から
+      const lastSession = attendance.break_sessions[attendance.break_sessions.length - 1]
+      if (lastSession.end) {
+        lastWorkStart = new Date(lastSession.end)
+      }
     }
     
-    const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-    const currentSessionMinutes = Math.floor((jstNow - startTime) / 1000 / 60) // 分
+    if (!lastWorkStart) {
+      if (attendance.last_clock_out) {
+        // 再出勤後の場合
+        lastWorkStart = new Date(attendance.last_clock_out)
+      } else {
+        // 最初の出勤時刻から
+        lastWorkStart = new Date(attendance.clock_in)
+      }
+    }
     
-    // 前回の勤務時間に今回のセッションの時間を加算
-    const previousWorkMinutes = attendance.total_work_minutes || 0
-    const totalMinutes = previousWorkMinutes + currentSessionMinutes
+    const currentSessionMinutes = Math.max(0, Math.floor((jstNow - lastWorkStart) / 1000 / 60))
+    totalMinutes += currentSessionMinutes
 
     const hours = Math.floor(totalMinutes / 60)
     const minutes = totalMinutes % 60
@@ -709,7 +826,7 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
             {status === 'not_started'
               ? '未出勤'
               : status === 'working'
-              ? '出勤中'
+              ? (isOnBreak() ? '中抜け中' : '出勤中')
               : '退勤済み'}
           </span>
         </div>
@@ -718,8 +835,13 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
         {status !== 'not_started' && (
           <div className="space-y-2">
             <p className={`text-sm font-light ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-              {formatTime(attendance.clock_in)} -{' '}
-              {status === 'completed' ? formatTime(attendance.clock_out) : '現在'}
+              {getWorkSessions().map((session, index) => (
+                <span key={index}>
+                  {index > 0 && ' '}
+                  {session.start}-{session.end || '現在'}
+                </span>
+              ))}
+              {isOnBreak() && <span className={`ml-2 ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>(中抜け中)</span>}
             </p>
             <p className={`text-5xl font-light tracking-tight ${
               isDark ? 'text-white' : 'text-gray-900'
@@ -749,17 +871,56 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
           )}
 
           {status === 'working' && (
-            <button
-              onClick={handleClockOut}
-              disabled={loading}
-              className={`w-full font-medium py-4 rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg ${
-                isDark
-                  ? 'bg-white text-gray-900 hover:bg-gray-100 shadow-white/20'
-                  : 'bg-gray-900 text-white hover:bg-gray-800 shadow-gray-900/20'
-              }`}
-            >
-              🌆 退勤する
-            </button>
+            <div className="relative">
+              {/* 中抜け/戻りボタン（右上に小さく） */}
+              {isOnBreak() ? (
+                <button
+                  onClick={handleEndBreak}
+                  disabled={loading}
+                  className={`absolute -top-2 -right-2 px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-200 disabled:opacity-50 shadow-md z-10 ${
+                    isDark
+                      ? 'bg-green-600 text-white hover:bg-green-700'
+                      : 'bg-green-500 text-white hover:bg-green-600'
+                  }`}
+                >
+                  🔙 戻る
+                </button>
+              ) : (
+                <button
+                  onClick={handleStartBreak}
+                  disabled={loading}
+                  className={`absolute -top-2 -right-2 px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-200 disabled:opacity-50 shadow-md z-10 ${
+                    isDark
+                      ? 'bg-yellow-600 text-white hover:bg-yellow-700'
+                      : 'bg-yellow-500 text-white hover:bg-yellow-600'
+                  }`}
+                >
+                  🚶 中抜け
+                </button>
+              )}
+              
+              {/* 退勤ボタン（中抜け中は無効） */}
+              <button
+                onClick={handleClockOut}
+                disabled={loading || isOnBreak()}
+                className={`w-full font-medium py-4 rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg ${
+                  isOnBreak()
+                    ? isDark
+                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : isDark
+                    ? 'bg-white text-gray-900 hover:bg-gray-100 shadow-white/20'
+                    : 'bg-gray-900 text-white hover:bg-gray-800 shadow-gray-900/20'
+                }`}
+              >
+                🌆 退勤する
+              </button>
+              {isOnBreak() && (
+                <p className={`text-xs mt-2 text-center ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>
+                  ※ 戻ってから退勤してください
+                </p>
+              )}
+            </div>
           )}
 
           {status === 'completed' && (

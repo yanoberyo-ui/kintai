@@ -163,7 +163,7 @@ export async function clockOut(userId, breakMinutes = 0) {
 }
 
 /**
- * 休憩開始
+ * 中抜け開始
  */
 export async function startBreak(userId) {
   // 日本時間で今日の日付と現在時刻を取得（より確実な方法）
@@ -177,13 +177,34 @@ export async function startBreak(userId) {
     throw new Error('出勤打刻がありません');
   }
 
-  // 休憩時間の上限チェック（60分）
-  if (attendance.break_minutes_used >= 60) {
-    throw new Error('本日の休憩時間は上限に達しています');
+  // 既に中抜け中でないかチェック
+  const breakSessions = attendance.break_sessions || [];
+  if (breakSessions.length > 0) {
+    const lastSession = breakSessions[breakSessions.length - 1];
+    if (!lastSession.end) {
+      throw new Error('既に中抜け中です');
+    }
   }
 
-  // 新しい休憩セッションを追加
-  const breakSessions = attendance.break_sessions || [];
+  // 中抜け開始前の勤務時間を計算して保存
+  let lastWorkStart;
+  if (breakSessions.length > 0) {
+    // 前回の中抜け終了時刻から
+    const lastSession = breakSessions[breakSessions.length - 1];
+    lastWorkStart = new Date(lastSession.end);
+  } else if (attendance.last_clock_out) {
+    // 再出勤時刻から
+    lastWorkStart = new Date(attendance.last_clock_out);
+  } else {
+    // 最初の出勤時刻から
+    lastWorkStart = new Date(attendance.clock_in);
+  }
+  
+  const breakStartTime = new Date(now);
+  const currentSessionMinutes = Math.max(0, Math.floor((breakStartTime - lastWorkStart) / 60000));
+  const totalWorkMinutes = (attendance.total_work_minutes || 0) + currentSessionMinutes;
+
+  // 新しい中抜けセッションを追加
   breakSessions.push({
     start: now,
     end: null,
@@ -193,7 +214,8 @@ export async function startBreak(userId) {
   const { data, error } = await supabase
     .from('attendances')
     .update({
-      break_sessions: breakSessions
+      break_sessions: breakSessions,
+      total_work_minutes: totalWorkMinutes
     })
     .eq('user_id', userId)
     .eq('date', today)
@@ -209,7 +231,7 @@ export async function startBreak(userId) {
 }
 
 /**
- * 休憩終了
+ * 中抜け終了（戻り）
  */
 export async function endBreak(userId) {
   // 日本時間で今日の日付と現在時刻を取得（より確実な方法）
@@ -225,32 +247,30 @@ export async function endBreak(userId) {
 
   const breakSessions = attendance.break_sessions || [];
   if (breakSessions.length === 0) {
-    throw new Error('開始された休憩がありません');
+    throw new Error('中抜け記録がありません');
   }
 
-  // 最後の休憩セッションを更新
+  // 最後の中抜けセッションを更新
   const lastSession = breakSessions[breakSessions.length - 1];
   if (lastSession.end) {
-    throw new Error('すでに休憩は終了しています');
+    throw new Error('既に戻り済みです');
   }
 
   const breakStart = new Date(lastSession.start);
   const breakEnd = new Date(now);
   const breakMinutes = Math.floor((breakEnd - breakStart) / 60000);
 
-  // 上限チェック
-  const totalBreakMinutes = attendance.break_minutes_used + breakMinutes;
-  const finalBreakMinutes = Math.min(totalBreakMinutes, 60);
-  const actualBreakMinutes = Math.min(breakMinutes, 60 - attendance.break_minutes_used);
+  // 中抜け時間を記録（上限なし）
+  const totalBreakMinutes = (attendance.break_minutes_used || 0) + breakMinutes;
 
   lastSession.end = now;
-  lastSession.minutes = actualBreakMinutes;
+  lastSession.minutes = breakMinutes;
 
   const { data, error } = await supabase
     .from('attendances')
     .update({
       break_sessions: breakSessions,
-      break_minutes_used: finalBreakMinutes
+      break_minutes_used: totalBreakMinutes
     })
     .eq('user_id', userId)
     .eq('date', today)
