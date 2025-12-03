@@ -1314,7 +1314,7 @@ export default function AdminPage({ isDark }) {
                             <th className={`px-3 py-2 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                               退勤
                             </th>
-                            <th className={`px-3 py-2 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                            <th className={`px-3 py-2 text-center text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                               中抜け
                             </th>
                             <th className={`px-3 py-2 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -1365,7 +1365,7 @@ export default function AdminPage({ isDark }) {
                                       }`}
                                     />
                                   </td>
-                                  <td className={`px-3 py-3 whitespace-nowrap text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                  <td className={`px-3 py-3 whitespace-nowrap text-center text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                                     {(() => {
                                       const breakSessions = getBreakSessions(record)
                                       if (breakSessions.length === 0) return '-'
@@ -1452,7 +1452,7 @@ export default function AdminPage({ isDark }) {
                                   }`}>
                                     {formatTimeForInput(record.clock_out) || '未退勤'}
                                   </td>
-                                  <td className="px-3 py-3 whitespace-nowrap">
+                                  <td className="px-3 py-3 whitespace-nowrap text-center">
                                     {(() => {
                                       const breakSessions = getBreakSessions(record)
                                       const hasBreaks = breakSessions.length > 0
@@ -1496,7 +1496,7 @@ export default function AdminPage({ isDark }) {
                                           : `${firstBreak.start}-${firstBreak.end || '中抜け中'} ... ${lastBreak.start}-${lastBreak.end || '中抜け中'}`
                                         
                                         return (
-                                          <div className="flex items-center gap-1">
+                                          <div className="flex items-center justify-center gap-1">
                                             <span className={`text-xs ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
                                               {displayText}
                                             </span>
