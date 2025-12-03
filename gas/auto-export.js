@@ -28,7 +28,7 @@ function exportDailyAttendance() {
 
     // 前日の日付を取得
     const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 0);
+    yesterday.setDate(yesterday.getDate() - 1);
     const dateString = Utilities.formatDate(yesterday, 'Asia/Tokyo', 'yyyy-MM-dd');
 
     Logger.log('対象日: ' + dateString);
@@ -1012,10 +1012,12 @@ function rebuildAllSheets() {
     
     Logger.log('取得したデータ件数: ' + allAttendances.length);
     
-    // 今月と先月の判定用
+    // 今月と先月の判定用（日本時間で判定）
     const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1;
+    const currentYearStr = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy');
+    const currentMonthStr = Utilities.formatDate(now, 'Asia/Tokyo', 'MM');
+    const currentYear = parseInt(currentYearStr);
+    const currentMonth = parseInt(currentMonthStr);
     
     // ユーザーごとにグループ化
     const userAttendances = {};
@@ -1028,10 +1030,12 @@ function rebuildAllSheets() {
         };
       }
       
-      // 日付から年月を取得
-      const recordDate = new Date(record.date);
-      const recordYear = recordDate.getFullYear();
-      const recordMonth = recordDate.getMonth() + 1;
+      // 日付から年月を取得（日本時間で判定）
+      const recordDate = new Date(record.date + 'T00:00:00+09:00'); // 日本時間として解釈
+      const recordYearStr = Utilities.formatDate(recordDate, 'Asia/Tokyo', 'yyyy');
+      const recordMonthStr = Utilities.formatDate(recordDate, 'Asia/Tokyo', 'MM');
+      const recordYear = parseInt(recordYearStr);
+      const recordMonth = parseInt(recordMonthStr);
       
       // 今月かどうかを判定
       if (recordYear === currentYear && recordMonth === currentMonth) {
