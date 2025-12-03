@@ -751,50 +751,18 @@ export default function AdminPage({ isDark }) {
     return `${hours}:${minutes}`
   }
 
-  // 勤務セッションを取得（中抜け対応）
-  const getWorkSessions = (record) => {
-    if (!record.clock_in) return []
-    
-    const sessions = []
-    const clockInTime = formatTimeForInput(record.clock_in)
-    
+  // 中抜けセッションを取得（実際に中抜けしていた時間帯のみ）
+  const getBreakSessions = (record) => {
     if (!record.break_sessions || record.break_sessions.length === 0) {
-      // 中抜けなし
-      sessions.push({
-        start: clockInTime,
-        end: record.clock_out ? formatTimeForInput(record.clock_out) : null
-      })
-    } else {
-      // 中抜けあり
-      let currentStart = clockInTime
-      
-      for (const breakSession of record.break_sessions) {
-        // 中抜け開始時刻まで勤務
-        const breakStart = formatTimeForInput(breakSession.start)
-        sessions.push({
-          start: currentStart,
-          end: breakStart
-        })
-        
-        // 中抜けから戻った時刻が次の開始
-        if (breakSession.end) {
-          currentStart = formatTimeForInput(breakSession.end)
-        } else {
-          // まだ中抜け中
-          currentStart = null
-        }
-      }
-      
-      // 最後のセッション（中抜けから戻った後〜現在/退勤）
-      if (currentStart) {
-        sessions.push({
-          start: currentStart,
-          end: record.clock_out ? formatTimeForInput(record.clock_out) : null
-        })
-      }
+      return []
     }
     
-    return sessions
+    return record.break_sessions
+      .filter(session => session.start) // 開始時刻があるもののみ
+      .map(session => ({
+        start: formatTimeForInput(session.start),
+        end: session.end ? formatTimeForInput(session.end) : null
+      }))
   }
 
   // セッション展開状態をトグル
@@ -1399,9 +1367,9 @@ export default function AdminPage({ isDark }) {
                                   </td>
                                   <td className={`px-3 py-3 whitespace-nowrap text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                                     {(() => {
-                                      const sessions = getWorkSessions(record)
-                                      if (sessions.length <= 1) return '-'
-                                      return `${sessions.length}回`
+                                      const breakSessions = getBreakSessions(record)
+                                      if (breakSessions.length === 0) return '-'
+                                      return `${breakSessions.length}回`
                                     })()}
                                   </td>
                                   <td className="px-3 py-3 whitespace-nowrap">
@@ -1486,11 +1454,11 @@ export default function AdminPage({ isDark }) {
                                   </td>
                                   <td className="px-3 py-3 whitespace-nowrap">
                                     {(() => {
-                                      const sessions = getWorkSessions(record)
-                                      const hasMultipleSessions = sessions.length > 1
+                                      const breakSessions = getBreakSessions(record)
+                                      const hasBreaks = breakSessions.length > 0
                                       const isExpanded = expandedSessions.has(record.id)
                                       
-                                      if (!hasMultipleSessions) {
+                                      if (!hasBreaks) {
                                         // 中抜けなし
                                         return (
                                           <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
@@ -1501,13 +1469,13 @@ export default function AdminPage({ isDark }) {
                                       
                                       // 中抜けあり
                                       if (isExpanded) {
-                                        // 展開状態：全セッション表示
+                                        // 展開状態：全中抜けセッション表示
                                         return (
                                           <div className="space-y-1">
                                             <div className={`text-xs ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                                              {sessions.map((session, idx) => (
+                                              {breakSessions.map((session, idx) => (
                                                 <div key={idx} className="py-0.5">
-                                                  {session.start}-{session.end || '現在'}
+                                                  {session.start}-{session.end || '中抜け中'}
                                                 </div>
                                               ))}
                                             </div>
@@ -1520,20 +1488,26 @@ export default function AdminPage({ isDark }) {
                                           </div>
                                         )
                                       } else {
-                                        // 折りたたみ状態：最初と最後のみ
-                                        const firstSession = sessions[0]
-                                        const lastSession = sessions[sessions.length - 1]
+                                        // 折りたたみ状態：最初と最後の中抜けのみ
+                                        const firstBreak = breakSessions[0]
+                                        const lastBreak = breakSessions[breakSessions.length - 1]
+                                        const displayText = breakSessions.length === 1
+                                          ? `${firstBreak.start}-${firstBreak.end || '中抜け中'}`
+                                          : `${firstBreak.start}-${firstBreak.end || '中抜け中'} ... ${lastBreak.start}-${lastBreak.end || '中抜け中'}`
+                                        
                                         return (
                                           <div className="flex items-center gap-1">
                                             <span className={`text-xs ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                                              {firstSession.start} - {lastSession.end || '現在'}
+                                              {displayText}
                                             </span>
-                                            <button
-                                              onClick={() => toggleSessionExpansion(record.id)}
-                                              className={`text-xs px-1.5 py-0.5 rounded ${isDark ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
-                                            >
-                                              ...
-                                            </button>
+                                            {breakSessions.length > 1 && (
+                                              <button
+                                                onClick={() => toggleSessionExpansion(record.id)}
+                                                className={`text-xs px-1.5 py-0.5 rounded ${isDark ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
+                                              >
+                                                ...
+                                              </button>
+                                            )}
                                           </div>
                                         )
                                       }
