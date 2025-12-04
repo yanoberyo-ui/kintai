@@ -15,9 +15,9 @@ export default function ProfileEdit({ user, onClose, onUpdate }) {
 
       const file = event.target.files[0]
       
-      // ファイルサイズチェック（5MB以下）
-      if (file.size > 5 * 1024 * 1024) {
-        throw new Error('ファイルサイズは5MB以下にしてください')
+      // ファイルサイズチェック（10MB以下）
+      if (file.size > 10 * 1024 * 1024) {
+        throw new Error('ファイルサイズは10MB以下にしてください')
       }
 
       const fileExt = file.name.split('.').pop().toLowerCase()
@@ -137,7 +137,7 @@ export default function ProfileEdit({ user, onClose, onUpdate }) {
               </label>
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 text-center">
-              JPG, PNG, GIF (最大5MB)
+              JPG, PNG, GIF (最大10MB)
             </p>
           </div>
 
