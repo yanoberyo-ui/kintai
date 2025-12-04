@@ -58,9 +58,7 @@ export default function Avatar({
           src={getOptimizedAvatarUrl(avatarUrl, pixelSizes[size])}
           alt={name || email || 'Avatar'}
           className="w-full h-full object-cover"
-          loading="lazy"
           decoding="async"
-          fetchPriority="low"
           onError={handleImageError}
         />
       ) : (
