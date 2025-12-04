@@ -14,14 +14,26 @@ export default function ProfileEdit({ user, onClose, onUpdate }) {
       }
 
       const file = event.target.files[0]
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${user.id}.${fileExt}`
+      
+      // ファイルサイズチェック（5MB以下）
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error('ファイルサイズは5MB以下にしてください')
+      }
+
+      const fileExt = file.name.split('.').pop().toLowerCase()
+      // タイムスタンプを追加してキャッシュ問題を回避
+      const fileName = `${user.id}_${Date.now()}.${fileExt}`
       const filePath = `${user.id}/${fileName}`
 
-      // 既存のアバターを削除
+      // 既存のアバターを削除（エラーは無視）
       if (user.avatar_url) {
-        const oldPath = user.avatar_url.split('/').slice(-2).join('/')
-        await supabase.storage.from('avatars').remove([oldPath])
+        try {
+          const oldPath = user.avatar_url.split('/').slice(-2).join('/')
+          await supabase.storage.from('avatars').remove([oldPath])
+        } catch (e) {
+          // 削除に失敗しても続行
+          console.log('既存アバターの削除をスキップ:', e)
+        }
       }
 
       // 新しいアバターをアップロード
@@ -33,25 +45,28 @@ export default function ProfileEdit({ user, onClose, onUpdate }) {
         throw uploadError
       }
 
-      // 公開URLを取得
+      // 公開URLを取得（キャッシュバスター付き）
       const { data } = supabase.storage
         .from('avatars')
         .getPublicUrl(filePath)
+      
+      const newAvatarUrl = `${data.publicUrl}?t=${Date.now()}`
 
       // ユーザーテーブルを更新
       const { error: updateError } = await supabase
         .from('users')
-        .update({ avatar_url: data.publicUrl })
+        .update({ avatar_url: newAvatarUrl })
         .eq('id', user.id)
 
       if (updateError) {
         throw updateError
       }
 
-      setAvatarUrl(data.publicUrl)
+      setAvatarUrl(newAvatarUrl)
       alert('アイコンを更新しました！')
       onUpdate?.()
     } catch (error) {
+      console.error('アバターアップロードエラー:', error)
       alert('エラーが発生しました: ' + error.message)
     } finally {
       setUploading(false)
