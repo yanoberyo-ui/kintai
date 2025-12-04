@@ -5,11 +5,8 @@
 
 import { useState, useEffect } from 'react'
 
-// 画像URLをそのまま使用（Supabaseの画像変換は無効化）
-const getAvatarUrl = (url) => {
-  if (!url) return null
-  return url
-}
+// 画像キャッシュ（メモリ内）
+const imageCache = new Set()
 
 export default function Avatar({
   avatarUrl,
@@ -18,11 +15,37 @@ export default function Avatar({
   size = 'md',
   className = ''
 }) {
+  const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
 
-  // avatarUrlが変更されたときにエラー状態をリセット
+  // avatarUrlが変更されたときに状態をリセット
   useEffect(() => {
+    if (!avatarUrl) {
+      setImageLoaded(false)
+      setImageError(false)
+      return
+    }
+
+    // キャッシュ済みならすぐに表示
+    if (imageCache.has(avatarUrl)) {
+      setImageLoaded(true)
+      setImageError(false)
+      return
+    }
+
+    // 新しい画像を読み込み
+    setImageLoaded(false)
     setImageError(false)
+
+    const img = new Image()
+    img.onload = () => {
+      imageCache.add(avatarUrl)
+      setImageLoaded(true)
+    }
+    img.onerror = () => {
+      setImageError(true)
+    }
+    img.src = avatarUrl
   }, [avatarUrl])
 
   const sizeClasses = {
@@ -32,31 +55,21 @@ export default function Avatar({
     xl: 'w-16 h-16 text-xl'
   }
 
-  const pixelSizes = {
-    sm: 32,
-    md: 40,
-    lg: 48,
-    xl: 64
-  }
-
   const getInitial = () => {
     if (name) return name.charAt(0).toUpperCase()
     if (email) return email.charAt(0).toUpperCase()
     return '?'
   }
 
-  const handleImageError = () => {
-    setImageError(true)
-  }
+  const showImage = avatarUrl && imageLoaded && !imageError
 
   return (
     <div className={`${sizeClasses[size]} rounded-full overflow-hidden flex items-center justify-center font-bold ${className}`}>
-      {avatarUrl && !imageError ? (
+      {showImage ? (
         <img
-          src={getAvatarUrl(avatarUrl)}
+          src={avatarUrl}
           alt={name || email || 'Avatar'}
           className="w-full h-full object-cover"
-          onError={handleImageError}
         />
       ) : (
         <span>{getInitial()}</span>
