@@ -5,11 +5,9 @@
 
 import { useState, useEffect } from 'react'
 
-const getOptimizedAvatarUrl = (url, size = 100) => {
+// 画像URLをそのまま使用（Supabaseの画像変換は無効化）
+const getAvatarUrl = (url) => {
   if (!url) return null
-  if (url.includes('supabase')) {
-    return `${url}?width=${size}&height=${size}&resize=contain&format=origin&quality=60`
-  }
   return url
 }
 
@@ -55,10 +53,9 @@ export default function Avatar({
     <div className={`${sizeClasses[size]} rounded-full overflow-hidden flex items-center justify-center font-bold ${className}`}>
       {avatarUrl && !imageError ? (
         <img
-          src={getOptimizedAvatarUrl(avatarUrl, pixelSizes[size])}
+          src={getAvatarUrl(avatarUrl)}
           alt={name || email || 'Avatar'}
           className="w-full h-full object-cover"
-          decoding="async"
           onError={handleImageError}
         />
       ) : (
