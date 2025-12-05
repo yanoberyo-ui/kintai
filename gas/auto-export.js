@@ -734,15 +734,15 @@ function updateDashboard() {
     createDashboardHeader(sheet);
   }
 
-  // 最終更新日時を更新
+  // 最終更新日時を更新（行1）
   const now = new Date();
   const dateStr = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
-  sheet.getRange(2, 1).setValue('最終更新: ' + dateStr);
+  sheet.getRange(1, 1).setValue(dateStr);
 
   // 既存データをクリア（ヘッダーは残す）
   const lastRow = sheet.getLastRow();
-  if (lastRow > 3) {
-    sheet.getRange(4, 1, lastRow - 3, 8).clearContent();
+  if (lastRow > 2) {
+    sheet.getRange(3, 1, lastRow - 2, 8).clearContent();
   }
 
   // 全ユーザーの今月のデータを取得
@@ -805,16 +805,16 @@ function updateDashboard() {
     }
   });
 
-  // データを書き込み
-  let row = 4;
+  // データを書き込み（行3から）
+  let row = 3;
   Object.values(userSummary).forEach(summary => {
     const hours = Math.floor(summary.totalMinutes / 60);
     const minutes = summary.totalMinutes % 60;
-    const workTimeFormatted = `${hours}:${minutes.toString().padStart(2, '0')}`;
+    const workTimeFormatted = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     const avgMinutes = summary.days > 0 ? Math.floor(summary.totalMinutes / summary.days) : 0;
     const avgHours = Math.floor(avgMinutes / 60);
     const avgMins = avgMinutes % 60;
-    const avgFormatted = `${avgHours}:${avgMins.toString().padStart(2, '0')}`;
+    const avgFormatted = `${avgHours.toString().padStart(2, '0')}:${avgMins.toString().padStart(2, '0')}`;
     
     // TODO達成率を計算
     var todoRate = 0;
@@ -842,8 +842,8 @@ function updateDashboard() {
   });
 
   // 中央揃え
-  if (row > 4) {
-    const dataRange = sheet.getRange(4, 1, row - 4, 8);
+  if (row > 3) {
+    const dataRange = sheet.getRange(3, 1, row - 3, 8);
     dataRange.setHorizontalAlignment('center');
   }
 }
@@ -852,27 +852,23 @@ function updateDashboard() {
  * ダッシュボードのヘッダーを作成
  */
 function createDashboardHeader(sheet) {
-  // タイトル
-  sheet.getRange(1, 1).setValue('📊 勤怠ダッシュボード');
-  sheet.getRange(1, 1).setFontSize(16).setFontWeight('bold');
-
-  // 更新日時
+  // 更新日時（行1）
   const now = new Date();
   const dateStr = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
-  sheet.getRange(2, 1).setValue('最終更新: ' + dateStr);
+  sheet.getRange(1, 1).setValue(dateStr);
 
-  // ヘッダー行（管理者ページと同じ）
+  // ヘッダー行（行2）
   const headers = ['名前', 'ユニット', '出勤', '🏠リモート', '🏢出社', '合計', '平均', 'TODO'];
-  sheet.getRange(3, 1, 1, headers.length).setValues([headers]);
-  sheet.getRange(3, 1, 1, headers.length)
+  sheet.getRange(2, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(2, 1, 1, headers.length)
     .setFontWeight('bold')
     .setBackground('#4285f4')
     .setFontColor('#ffffff')
     .setHorizontalAlignment('center');
 
   // リモート/出社の列ヘッダーに背景色を設定
-  sheet.getRange(3, 4).setBackground('#1976d2'); // リモート：青
-  sheet.getRange(3, 5).setBackground('#388e3c'); // 出社：緑
+  sheet.getRange(2, 4).setBackground('#1976d2'); // リモート：青
+  sheet.getRange(2, 5).setBackground('#388e3c'); // 出社：緑
 
   // 列幅の設定
   sheet.setColumnWidth(1, 120); // 名前
@@ -884,7 +880,7 @@ function createDashboardHeader(sheet) {
   sheet.setColumnWidth(7, 80);  // 平均
   sheet.setColumnWidth(8, 80);  // TODO
 
-  sheet.setFrozenRows(3);
+  sheet.setFrozenRows(2);
 }
 
 /**
@@ -1629,8 +1625,8 @@ function rebuildAllSheets() {
     let dashboardSheet = spreadsheet.getSheetByName('ダッシュボード');
     if (dashboardSheet) {
       const lastRow = dashboardSheet.getLastRow();
-      if (lastRow > 3) {
-        dashboardSheet.getRange(4, 1, lastRow - 3, 10).clearContent();
+      if (lastRow > 2) {
+        dashboardSheet.getRange(3, 1, lastRow - 2, 10).clearContent();
       }
     }
     
