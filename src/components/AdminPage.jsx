@@ -1205,11 +1205,11 @@ export default function AdminPage({ isDark }) {
                   onClick={() => setShowAddAttendanceModal(true)}
                   className={`px-4 py-2 text-sm font-medium rounded-xl transition-colors flex items-center gap-2 ${
                     isDark
-                      ? 'bg-green-600 text-white hover:bg-green-700'
-                      : 'bg-green-500 text-white hover:bg-green-600'
+                      ? 'bg-gray-800 text-gray-200 hover:bg-gray-700 border border-gray-700'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
                   }`}
                 >
-                  <span className="text-lg">➕</span>
+                  <span>＋</span>
                   勤怠データを追加
                 </button>
               </div>
