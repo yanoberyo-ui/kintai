@@ -26,7 +26,7 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
   const [showWorkTypeModal, setShowWorkTypeModal] = useState(false)
   const [showReClockInWorkTypeModal, setShowReClockInWorkTypeModal] = useState(false)
   const [showBreakMinutesModal, setShowBreakMinutesModal] = useState(false)
-  const [additionalBreakMinutes, setAdditionalBreakMinutes] = useState(0)
+  const [additionalBreakMinutes, setAdditionalBreakMinutes] = useState('')
 
   useEffect(() => {
     loadAttendance()
@@ -235,7 +235,7 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
     setShowAIFeedbackPopup(false)
     
     // 休憩時間入力モーダルを表示
-    setAdditionalBreakMinutes(0)
+    setAdditionalBreakMinutes('')
     setShowBreakMinutesModal(true)
   }
 
@@ -244,7 +244,8 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
 
     try {
       setLoading(true)
-      const result = await clockOut(user.id, additionalBreakMinutes)
+      const breakMinutesValue = parseInt(additionalBreakMinutes) || 0
+      const result = await clockOut(user.id, breakMinutesValue)
       await loadAttendance()
 
       // ユーザー情報を取得（最新のデータを確実に取得）
@@ -1101,12 +1102,16 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
                 追加休憩時間（分）
               </label>
               <input
-                type="number"
-                min="0"
-                max="480"
-                step="15"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={additionalBreakMinutes}
-                onChange={(e) => setAdditionalBreakMinutes(parseInt(e.target.value) || 0)}
+                onChange={(e) => {
+                  // 数字のみ許可し、先頭の0を除去
+                  const value = e.target.value.replace(/[^0-9]/g, '')
+                  const numValue = value === '' ? '' : String(parseInt(value, 10))
+                  setAdditionalBreakMinutes(numValue)
+                }}
                 className={`w-full px-4 py-3 rounded-xl border text-lg font-medium ${
                   isDark
                     ? 'bg-gray-700 border-gray-600 text-white focus:border-blue-500'

@@ -155,9 +155,9 @@ export async function clockOut(userId, additionalBreakMinutes = 0) {
   const clockOutTime = new Date(now);
   const lastSessionMinutes = Math.floor((clockOutTime - lastWorkStart) / 60000);
   
-  // 総勤務時間 = 前回までの勤務時間 + 最後のセッションの時間
+  // 総勤務時間 = 前回までの勤務時間 + 最後のセッションの時間 - 追加休憩時間
   const previousWorkMinutes = attendance.total_work_minutes || 0;
-  const totalWorkMinutes = previousWorkMinutes + lastSessionMinutes;
+  const totalWorkMinutes = Math.max(0, previousWorkMinutes + lastSessionMinutes - additionalBreakMinutes);
 
   const { data, error } = await supabase
     .from('attendances')
