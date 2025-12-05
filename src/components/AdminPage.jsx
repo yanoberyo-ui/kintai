@@ -22,6 +22,15 @@ export default function AdminPage({ isDark }) {
   const [selectedUser, setSelectedUser] = useState('all') // ユーザーフィルター
   const [selectedDate, setSelectedDate] = useState('all') // 日付フィルター
   const [expandedSessions, setExpandedSessions] = useState(new Set()) // 展開されたセッションのID
+  const [showAddAttendanceModal, setShowAddAttendanceModal] = useState(false) // 新規勤怠追加モーダル
+  const [newAttendance, setNewAttendance] = useState({
+    user_id: '',
+    date: getTodayDate(),
+    clock_in: '09:00',
+    clock_out: '18:00',
+    break_minutes_used: 60,
+    work_type: 'office'
+  })
 
   useEffect(() => {
     loadCurrentUser()
@@ -617,6 +626,85 @@ export default function AdminPage({ isDark }) {
     }
   }
 
+  const handleCreateAttendance = async () => {
+    try {
+      // バリデーション
+      if (!newAttendance.user_id) {
+        alert('ユーザーを選択してください')
+        return
+      }
+      if (!newAttendance.date) {
+        alert('日付を入力してください')
+        return
+      }
+      if (!newAttendance.clock_in) {
+        alert('出勤時刻を入力してください')
+        return
+      }
+
+      // 既存データチェック
+      const { data: existing } = await supabase
+        .from('attendances')
+        .select('id')
+        .eq('user_id', newAttendance.user_id)
+        .eq('date', newAttendance.date)
+        .single()
+
+      if (existing) {
+        alert('この日付にはすでに勤怠データが存在します。編集機能を使用してください。')
+        return
+      }
+
+      // 時刻データをISO形式に変換
+      const clockInDate = new Date(`${newAttendance.date}T${newAttendance.clock_in}:00+09:00`)
+      const clockOutDate = newAttendance.clock_out 
+        ? new Date(`${newAttendance.date}T${newAttendance.clock_out}:00+09:00`)
+        : null
+
+      // 合計勤務時間を計算
+      let totalWorkMinutes = 0
+      if (clockOutDate) {
+        const totalMinutes = Math.floor((clockOutDate - clockInDate) / 60000)
+        totalWorkMinutes = Math.max(0, totalMinutes - (newAttendance.break_minutes_used || 0))
+      }
+
+      const insertData = {
+        user_id: newAttendance.user_id,
+        date: newAttendance.date,
+        clock_in: clockInDate.toISOString(),
+        clock_out: clockOutDate ? clockOutDate.toISOString() : null,
+        break_minutes_used: newAttendance.break_minutes_used || 0,
+        total_work_minutes: totalWorkMinutes,
+        work_type: newAttendance.work_type || null
+      }
+
+      const { error } = await supabase
+        .from('attendances')
+        .insert(insertData)
+
+      if (error) throw error
+
+      // データを再読み込み
+      await loadDailyAttendances()
+      
+      // モーダルを閉じてフォームをリセット
+      setShowAddAttendanceModal(false)
+      setNewAttendance({
+        user_id: '',
+        date: getTodayDate(),
+        clock_in: '09:00',
+        clock_out: '18:00',
+        break_minutes_used: 60,
+        work_type: 'office'
+      })
+      
+      alert('勤怠データを追加しました')
+    } catch (error) {
+      console.error('Error creating attendance:', error)
+      alert(`エラー: ${error.message}`)
+    }
+  }
+
   const formatTimeForInput = (isoString) => {
     if (!isoString) return ''
     const date = new Date(isoString)
@@ -1111,6 +1199,21 @@ export default function AdminPage({ isDark }) {
           {/* 日別詳細ビュー */}
           {attendanceViewMode === 'daily' && (
             <div className="space-y-4">
+              {/* 勤怠データ追加ボタン */}
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setShowAddAttendanceModal(true)}
+                  className={`px-4 py-2 text-sm font-medium rounded-xl transition-colors flex items-center gap-2 ${
+                    isDark
+                      ? 'bg-green-600 text-white hover:bg-green-700'
+                      : 'bg-green-500 text-white hover:bg-green-600'
+                  }`}
+                >
+                  <span className="text-lg">➕</span>
+                  勤怠データを追加
+                </button>
+              </div>
+
               {/* 日付でグループ化して表示 */}
               {(() => {
                 // フィルタリング
@@ -1847,6 +1950,200 @@ export default function AdminPage({ isDark }) {
                 <p>ユーザーデータがありません</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 勤怠データ追加モーダル */}
+      {showAddAttendanceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* オーバーレイ */}
+          <div 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowAddAttendanceModal(false)}
+          />
+          
+          {/* モーダル本体 */}
+          <div className={`relative w-full max-w-md rounded-2xl shadow-xl ${
+            isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white'
+          }`}>
+            {/* ヘッダー */}
+            <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
+              <div className="flex items-center justify-between">
+                <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  ➕ 勤怠データを追加
+                </h3>
+                <button
+                  onClick={() => setShowAddAttendanceModal(false)}
+                  className={`p-1 rounded-lg transition-colors ${
+                    isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+                  }`}
+                >
+                  ✕
+                </button>
+              </div>
+              <p className={`mt-1 text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                出勤・退勤を押し忘れた方のデータを手動で追加できます
+              </p>
+            </div>
+
+            {/* フォーム */}
+            <div className="px-6 py-4 space-y-4">
+              {/* ユーザー選択 */}
+              <div>
+                <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                  ユーザー <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={newAttendance.user_id}
+                  onChange={(e) => setNewAttendance({ ...newAttendance, user_id: e.target.value })}
+                  className={`w-full px-3 py-2 rounded-xl transition-colors ${
+                    isDark
+                      ? 'bg-gray-800 text-white border border-gray-700 focus:border-green-500'
+                      : 'bg-white text-gray-900 border border-gray-300 focus:border-green-500'
+                  } focus:outline-none focus:ring-2 focus:ring-green-500/20`}
+                >
+                  <option value="">ユーザーを選択...</option>
+                  {users.map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} ({user.department || '部署未設定'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 日付 */}
+              <div>
+                <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                  日付 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={newAttendance.date}
+                  onChange={(e) => setNewAttendance({ ...newAttendance, date: e.target.value })}
+                  className={`w-full px-3 py-2 rounded-xl transition-colors ${
+                    isDark
+                      ? 'bg-gray-800 text-white border border-gray-700 focus:border-green-500'
+                      : 'bg-white text-gray-900 border border-gray-300 focus:border-green-500'
+                  } focus:outline-none focus:ring-2 focus:ring-green-500/20`}
+                />
+              </div>
+
+              {/* 出勤・退勤時刻 */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    出勤時刻 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="time"
+                    value={newAttendance.clock_in}
+                    onChange={(e) => setNewAttendance({ ...newAttendance, clock_in: e.target.value })}
+                    className={`w-full px-3 py-2 rounded-xl transition-colors ${
+                      isDark
+                        ? 'bg-gray-800 text-white border border-gray-700 focus:border-green-500'
+                        : 'bg-white text-gray-900 border border-gray-300 focus:border-green-500'
+                    } focus:outline-none focus:ring-2 focus:ring-green-500/20`}
+                  />
+                </div>
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    退勤時刻
+                  </label>
+                  <input
+                    type="time"
+                    value={newAttendance.clock_out}
+                    onChange={(e) => setNewAttendance({ ...newAttendance, clock_out: e.target.value })}
+                    className={`w-full px-3 py-2 rounded-xl transition-colors ${
+                      isDark
+                        ? 'bg-gray-800 text-white border border-gray-700 focus:border-green-500'
+                        : 'bg-white text-gray-900 border border-gray-300 focus:border-green-500'
+                    } focus:outline-none focus:ring-2 focus:ring-green-500/20`}
+                  />
+                </div>
+              </div>
+
+              {/* 休憩時間・勤務タイプ */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    休憩時間（分）
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newAttendance.break_minutes_used}
+                    onChange={(e) => setNewAttendance({ ...newAttendance, break_minutes_used: parseInt(e.target.value) || 0 })}
+                    className={`w-full px-3 py-2 rounded-xl transition-colors ${
+                      isDark
+                        ? 'bg-gray-800 text-white border border-gray-700 focus:border-green-500'
+                        : 'bg-white text-gray-900 border border-gray-300 focus:border-green-500'
+                    } focus:outline-none focus:ring-2 focus:ring-green-500/20`}
+                  />
+                </div>
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    勤務タイプ
+                  </label>
+                  <select
+                    value={newAttendance.work_type}
+                    onChange={(e) => setNewAttendance({ ...newAttendance, work_type: e.target.value })}
+                    className={`w-full px-3 py-2 rounded-xl transition-colors ${
+                      isDark
+                        ? 'bg-gray-800 text-white border border-gray-700 focus:border-green-500'
+                        : 'bg-white text-gray-900 border border-gray-300 focus:border-green-500'
+                    } focus:outline-none focus:ring-2 focus:ring-green-500/20`}
+                  >
+                    <option value="">未設定</option>
+                    <option value="office">🏢 出社</option>
+                    <option value="remote">🏠 リモート</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* プレビュー */}
+              {newAttendance.clock_in && newAttendance.clock_out && (
+                <div className={`p-3 rounded-xl ${isDark ? 'bg-gray-800/50' : 'bg-gray-50'}`}>
+                  <div className={`text-xs font-medium mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    稼働時間プレビュー
+                  </div>
+                  <div className={`text-lg font-bold ${isDark ? 'text-green-400' : 'text-green-600'}`}>
+                    {(() => {
+                      const clockIn = new Date(`2000-01-01T${newAttendance.clock_in}`)
+                      const clockOut = new Date(`2000-01-01T${newAttendance.clock_out}`)
+                      const totalMinutes = Math.floor((clockOut - clockIn) / 60000) - (newAttendance.break_minutes_used || 0)
+                      const hours = Math.floor(totalMinutes / 60)
+                      const mins = totalMinutes % 60
+                      return totalMinutes > 0 ? `${hours}時間${mins}分` : '0時間'
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* フッター */}
+            <div className={`px-6 py-4 border-t flex justify-end gap-3 ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
+              <button
+                onClick={() => setShowAddAttendanceModal(false)}
+                className={`px-4 py-2 text-sm font-medium rounded-xl transition-colors ${
+                  isDark
+                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleCreateAttendance}
+                className={`px-4 py-2 text-sm font-medium rounded-xl transition-colors ${
+                  isDark
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-green-500 text-white hover:bg-green-600'
+                }`}
+              >
+                追加する
+              </button>
+            </div>
           </div>
         </div>
       )}
