@@ -729,21 +729,12 @@ function updateDashboard() {
   const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = spreadsheet.getSheetByName('ダッシュボード');
 
-  if (!sheet) {
-    sheet = spreadsheet.insertSheet('ダッシュボード', 0); // 最初のシートとして作成
-    createDashboardHeader(sheet);
+  // シートを削除して再作成（フォーマット変更に対応）
+  if (sheet) {
+    spreadsheet.deleteSheet(sheet);
   }
-
-  // 最終更新日時を更新（行1）
-  const now = new Date();
-  const dateStr = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
-  sheet.getRange(1, 1).setValue(dateStr);
-
-  // 既存データをクリア（ヘッダーは残す）
-  const lastRow = sheet.getLastRow();
-  if (lastRow > 2) {
-    sheet.getRange(3, 1, lastRow - 2, 8).clearContent();
-  }
+  sheet = spreadsheet.insertSheet('ダッシュボード', 0);
+  createDashboardHeader(sheet);
 
   // 全ユーザーの今月のデータを取得
   const allAttendances = fetchMonthlyAttendanceData();
