@@ -18,6 +18,17 @@ function parseJSTDate(dateString) {
 }
 
 /**
+ * DateオブジェクトからJST基準の日付文字列を取得（YYYY-MM-DD形式）
+ * toISOString()はUTC基準なので、JST基準で日付文字列を作成する
+ */
+function formatJSTDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * 出勤ストリークを計算（月〜金の連続出勤日数）
  */
 export async function calculateAttendanceStreak(userId) {
@@ -51,7 +62,7 @@ export async function calculateAttendanceStreak(userId) {
   // 連続した平日の出勤をカウント
   while (true) {
     if (isWeekday(currentDate)) {
-      const dateStr = currentDate.toISOString().split('T')[0];
+      const dateStr = formatJSTDate(currentDate);
       const hasAttendance = attendances?.some(a => a.date === dateStr);
 
       if (hasAttendance) {
@@ -109,7 +120,7 @@ export async function calculateTodoStreak(userId) {
   // 連続した平日でToDoを出した日をカウント
   while (true) {
     if (isWeekday(currentDate)) {
-      const dateStr = currentDate.toISOString().split('T')[0];
+      const dateStr = formatJSTDate(currentDate);
       const todoList = todoLists?.find(t => t.date === dateStr);
 
       // ToDoリストが存在し、ToDoアイテムが1つ以上ある場合
