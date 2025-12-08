@@ -50,10 +50,18 @@ export async function clockIn(userId, workType = null) {
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error('出勤記録の保存エラー:', error);
+    throw new Error(`出勤記録の保存に失敗しました: ${error.message}`);
+  }
 
-  // ログ記録
-  await logAttendanceAction(data.id, 'clock_in', userId, null, { clock_in: now, work_type: workType });
+  // ログ記録（エラーが発生しても出勤記録の保存には影響しない）
+  try {
+    await logAttendanceAction(data.id, 'clock_in', userId, null, { clock_in: now, work_type: workType });
+  } catch (logError) {
+    console.error('ログ記録エラー（出勤記録は保存済み）:', logError);
+    // ログ記録のエラーは無視して続行
+  }
 
   return data;
 }
@@ -92,10 +100,18 @@ export async function reClockIn(userId, workType = null) {
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error('再出勤記録の更新エラー:', error);
+    throw new Error(`再出勤記録の更新に失敗しました: ${error.message}`);
+  }
 
-  // ログ記録
-  await logAttendanceAction(data.id, 're_clock_in', userId, existingAttendance, data);
+  // ログ記録（エラーが発生しても再出勤記録の更新には影響しない）
+  try {
+    await logAttendanceAction(data.id, 're_clock_in', userId, existingAttendance, data);
+  } catch (logError) {
+    console.error('ログ記録エラー（再出勤記録は更新済み）:', logError);
+    // ログ記録のエラーは無視して続行
+  }
 
   return data;
 }
@@ -174,10 +190,18 @@ export async function clockOut(userId, additionalBreakMinutes = 0) {
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error('退勤記録の更新エラー:', error);
+    throw new Error(`退勤記録の更新に失敗しました: ${error.message}`);
+  }
 
-  // ログ記録
-  await logAttendanceAction(data.id, 'clock_out', userId, attendance, data);
+  // ログ記録（エラーが発生しても退勤記録の更新には影響しない）
+  try {
+    await logAttendanceAction(data.id, 'clock_out', userId, attendance, data);
+  } catch (logError) {
+    console.error('ログ記録エラー（退勤記録は更新済み）:', logError);
+    // ログ記録のエラーは無視して続行
+  }
 
   return data;
 }
@@ -240,10 +264,18 @@ export async function startBreak(userId) {
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error('中抜け開始記録の更新エラー:', error);
+    throw new Error(`中抜け開始記録の更新に失敗しました: ${error.message}`);
+  }
 
-  // ログ記録
-  await logAttendanceAction(data.id, 'break_start', userId, attendance, data);
+  // ログ記録（エラーが発生しても中抜け記録の更新には影響しない）
+  try {
+    await logAttendanceAction(data.id, 'break_start', userId, attendance, data);
+  } catch (logError) {
+    console.error('ログ記録エラー（中抜け記録は更新済み）:', logError);
+    // ログ記録のエラーは無視して続行
+  }
 
   return data;
 }
@@ -293,10 +325,18 @@ export async function endBreak(userId) {
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error('中抜け終了記録の更新エラー:', error);
+    throw new Error(`中抜け終了記録の更新に失敗しました: ${error.message}`);
+  }
 
-  // ログ記録
-  await logAttendanceAction(data.id, 'break_end', userId, attendance, data);
+  // ログ記録（エラーが発生しても中抜け記録の更新には影響しない）
+  try {
+    await logAttendanceAction(data.id, 'break_end', userId, attendance, data);
+  } catch (logError) {
+    console.error('ログ記録エラー（中抜け記録は更新済み）:', logError);
+    // ログ記録のエラーは無視して続行
+  }
 
   return data;
 }
@@ -305,7 +345,7 @@ export async function endBreak(userId) {
  * 監査ログの記録
  */
 async function logAttendanceAction(attendanceId, actionType, userId, beforeValue, afterValue) {
-  await supabase
+  const { error } = await supabase
     .from('attendance_logs')
     .insert({
       attendance_id: attendanceId,
@@ -314,6 +354,11 @@ async function logAttendanceAction(attendanceId, actionType, userId, beforeValue
       before_value: beforeValue,
       after_value: afterValue
     });
+  
+  if (error) {
+    // エラーを投げて、呼び出し元で処理できるようにする
+    throw error;
+  }
 }
 
 /**

@@ -179,6 +179,7 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
       }
     } catch (error) {
       console.error('Error clocking in:', error)
+      alert(`出勤記録の保存に失敗しました: ${error.message || error}`)
     } finally {
       setLoading(false)
     }
