@@ -262,11 +262,18 @@ function writeToUserSheet(attendance) {
   const dayFormatted = date.getDate() + '日';
 
   // 前の行と同じ月かチェック（同じ月なら月列は空白）
+  // 上方向に遡って最初に月が表示されている行を探す
   let displayMonth = monthFormatted;
   if (newRow > 4) {
-    const prevMonth = sheet.getRange(newRow - 1, 1).getValue();
-    if (prevMonth === monthFormatted) {
-      displayMonth = '';
+    for (let checkRow = newRow - 1; checkRow >= 4; checkRow--) {
+      const prevMonthValue = sheet.getRange(checkRow, 1).getValue();
+      if (prevMonthValue && String(prevMonthValue).includes('月')) {
+        // 月が見つかった場合、同じ月なら空にする
+        if (prevMonthValue === monthFormatted) {
+          displayMonth = '';
+        }
+        break;
+      }
     }
   }
 
@@ -1481,7 +1488,8 @@ function rebuildAllSheets() {
               const summary = monthSummaries[recordMonthLabel] || { days: 0, totalMinutes: 0, remoteDays: 0, officeDays: 0 };
               const h = Math.floor(summary.totalMinutes / 60);
               const m = summary.totalMinutes % 60;
-              const timeStr = `${h}時間${m}分`;
+              // 常に「XX:XX」形式で統一
+              const timeStr = `${h}:${m.toString().padStart(2, '0')}`;
               
               sheet.getRange(row, 1).setValue(recordMonthLabel);
               sheet.getRange(row, 2).setValue(summary.days + '日');
