@@ -1433,8 +1433,7 @@ function rebuildAllSheets() {
         if (userData.currentMonthRecords.length > 0) {
           const currentMonthLabel = currentMonth + '月'; // 動的に月名を生成
           sheet.getRange(row, 1).setValue(currentMonthLabel);
-          // 月ヘッダー行全体に目立つ背景色を設定（緑系）
-          sheet.getRange(row, 1, 1, 9).setFontWeight('bold').setBackground('#c8e6c9');
+          sheet.getRange(row, 1).setFontWeight('bold').setBackground('#e8f5e9');
           row++;
         }
         
@@ -1467,7 +1466,7 @@ function rebuildAllSheets() {
           
           // 過去データセクションのヘッダー
           sheet.getRange(row, 1).setValue('📁 過去の勤怠データ');
-          sheet.getRange(row, 1, 1, 9).setFontWeight('bold').setBackground('#e0e0e0');
+          sheet.getRange(row, 1, 1, 8).setFontWeight('bold').setBackground('#f5f5f5');
           row++;
           
           let currentGroupMonth = '';
@@ -1497,8 +1496,7 @@ function rebuildAllSheets() {
               sheet.getRange(row, 2).setValue(summary.days + '日');
               sheet.getRange(row, 6).setValue(timeStr);
               sheet.getRange(row, 7).setValue(`🏠${summary.remoteDays} / 🏢${summary.officeDays}`);
-              // 月ヘッダー行全体に目立つ背景色を設定
-              sheet.getRange(row, 1, 1, 9).setFontWeight('bold').setBackground('#ffe0b2');
+              sheet.getRange(row, 1, 1, 8).setFontWeight('bold').setBackground('#fff3e0');
               row++;
             }
             
