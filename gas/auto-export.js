@@ -743,6 +743,7 @@ function updateDashboard() {
   const allAttendances = fetchMonthlyAttendanceData();
   
   // 今月のTODOデータを取得（3:00am基準の日付を使用）
+  const now = new Date();
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
   const firstDayStr = Utilities.formatDate(firstDay, 'Asia/Tokyo', 'yyyy-MM-dd');
   const yesterdayStr = getYesterdayDate(); // 3:00am基準の昨日の日付（GASは昨日分を表示）
