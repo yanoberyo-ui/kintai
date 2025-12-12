@@ -541,29 +541,43 @@ export default function TodoList({ user, isDark, currentUser = null }) {
   
   // Google Calendarのイベントを完了色に更新
   const syncGoogleCalendarCompletion = async (todoId, todoType) => {
+    console.log('[Google Sync] Starting sync for todo:', todoId, 'type:', todoType)
     try {
       // このTodoに紐づくスケジュールを取得
-      const { data: schedules } = await supabase
+      const { data: schedules, error: queryError } = await supabase
         .from('daily_schedules')
-        .select('google_event_id')
+        .select('id, google_event_id, source_todo_id, source_type')
         .eq('source_todo_id', todoId)
         .eq('source_type', todoType)
-        .not('google_event_id', 'is', null)
       
-      if (!schedules || schedules.length === 0) return
+      console.log('[Google Sync] Found schedules:', schedules, 'error:', queryError)
+      
+      if (!schedules || schedules.length === 0) {
+        console.log('[Google Sync] No schedules found for this todo')
+        return
+      }
+      
+      // google_event_idがあるスケジュールをフィルタ
+      const schedulesWithGoogle = schedules.filter(s => s.google_event_id)
+      console.log('[Google Sync] Schedules with google_event_id:', schedulesWithGoogle)
+      
+      if (schedulesWithGoogle.length === 0) {
+        console.log('[Google Sync] No schedules have google_event_id')
+        return
+      }
       
       const accessToken = await getGoogleAccessToken()
+      console.log('[Google Sync] Access token:', accessToken ? 'obtained' : 'NOT obtained')
       if (!accessToken) return
       
       // 各スケジュールのGoogle Calendarイベントを完了色に変更
-      for (const schedule of schedules) {
-        if (schedule.google_event_id) {
-          await markGoogleEventAsCompleted(accessToken, schedule.google_event_id)
-          console.log('Google Calendar event marked as completed:', schedule.google_event_id)
-        }
+      for (const schedule of schedulesWithGoogle) {
+        console.log('[Google Sync] Marking event as completed:', schedule.google_event_id)
+        const result = await markGoogleEventAsCompleted(accessToken, schedule.google_event_id)
+        console.log('[Google Sync] Result:', result)
       }
     } catch (error) {
-      console.error('Error syncing Google Calendar completion:', error)
+      console.error('[Google Sync] Error:', error)
     }
   }
 
