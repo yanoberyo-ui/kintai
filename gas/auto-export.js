@@ -651,10 +651,8 @@ function updateMonthlySummaryFixed(sheet) {
   const currentSummary = monthlySummary[currentMonthKey] || { days: 0, totalMinutes: 0, remoteDays: 0, officeDays: 0 };
   const hours = Math.floor(currentSummary.totalMinutes / 60);
   const minutes = currentSummary.totalMinutes % 60;
-  // 24時間を超える場合は「XX時間XX分」形式、それ以下は「XX:XX」形式
-  const totalTimeFormatted = hours >= 24 
-    ? `${hours}時間${minutes}分`
-    : `${hours}:${minutes.toString().padStart(2, '0')}`;
+  // 常に「XX:XX」形式で統一
+  const totalTimeFormatted = `${hours}:${minutes.toString().padStart(2, '0')}`;
 
   // 固定セルの値を更新（今月）
   sheet.getRange(1, 11).setValue(totalTimeFormatted);
@@ -675,10 +673,8 @@ function updateMonthlySummaryFixed(sheet) {
   const lastSummary = monthlySummary[lastMonthKey] || { days: 0, totalMinutes: 0, remoteDays: 0, officeDays: 0 };
   const lastHours = Math.floor(lastSummary.totalMinutes / 60);
   const lastMinutes = lastSummary.totalMinutes % 60;
-  // 24時間を超える場合は「XX時間XX分」形式、それ以下は「XX:XX」形式
-  const lastTotalTimeFormatted = lastHours >= 24 
-    ? `${lastHours}時間${lastMinutes}分`
-    : `${lastHours}:${lastMinutes.toString().padStart(2, '0')}`;
+  // 常に「XX:XX」形式で統一
+  const lastTotalTimeFormatted = `${lastHours}:${lastMinutes.toString().padStart(2, '0')}`;
 
   sheet.getRange(1, 16).setValue(lastTotalTimeFormatted);
   sheet.getRange(1, 16).setNumberFormat('@'); // プレーンテキストとして表示
@@ -742,8 +738,8 @@ function updateDashboard() {
   // 今月のTODOデータを取得（3:00am基準の日付を使用）
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
   const firstDayStr = Utilities.formatDate(firstDay, 'Asia/Tokyo', 'yyyy-MM-dd');
-  const todayStr = getTodayDate(); // 3:00am基準の今日の日付
-  const allTodoData = fetchTodoDataRange(firstDayStr, todayStr);
+  const yesterdayStr = getYesterdayDate(); // 3:00am基準の昨日の日付（GASは昨日分を表示）
+  const allTodoData = fetchTodoDataRange(firstDayStr, yesterdayStr);
 
   // ユーザーごとに集計
   const userSummary = {};
@@ -1577,9 +1573,8 @@ function rebuildAllSheets() {
         // 今月の合計を書き込み
         const currentHours = Math.floor(currentMonthTotalMinutes / 60);
         const currentMinutes = currentMonthTotalMinutes % 60;
-        const currentTimeStr = currentHours >= 24 
-          ? `${currentHours}時間${currentMinutes}分`
-          : `${currentHours}:${currentMinutes.toString().padStart(2, '0')}`;
+        // 常に「XX:XX」形式で統一
+        const currentTimeStr = `${currentHours}:${currentMinutes.toString().padStart(2, '0')}`;
         
         sheet.getRange(1, 11).setValue(currentTimeStr);
         sheet.getRange(1, 11).setNumberFormat('@');
@@ -1591,9 +1586,8 @@ function rebuildAllSheets() {
         // 先月の合計を書き込み
         const lastHours = Math.floor(lastMonthTotalMinutes / 60);
         const lastMinutes = lastMonthTotalMinutes % 60;
-        const lastTimeStr = lastHours >= 24 
-          ? `${lastHours}時間${lastMinutes}分`
-          : `${lastHours}:${lastMinutes.toString().padStart(2, '0')}`;
+        // 常に「XX:XX」形式で統一
+        const lastTimeStr = `${lastHours}:${lastMinutes.toString().padStart(2, '0')}`;
         
         sheet.getRange(1, 16).setValue(lastTimeStr);
         sheet.getRange(1, 16).setNumberFormat('@');
