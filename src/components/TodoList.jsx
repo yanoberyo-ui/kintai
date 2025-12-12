@@ -52,6 +52,9 @@ export default function TodoList({ user, isDark, currentUser = null }) {
   const [rootsDailyTodos, setRootsDailyTodos] = useState([])
   const [rootsDailyLoading, setRootsDailyLoading] = useState(false)
 
+  // カレンダーから追加されたスケジュール state
+  const [scheduledTodos, setScheduledTodos] = useState([])
+
   // ストリーク警告 state
   const [streakWarning, setStreakWarning] = useState(null)
 
@@ -70,12 +73,34 @@ export default function TodoList({ user, isDark, currentUser = null }) {
       loadTodayCompletions()
       loadLoggedInUser()
       loadUsersMap()
+      loadScheduledTodos()
       // codex-dev DailyTodoを読み込む（読み取り専用）
       if (user.roots_user_id) {
         loadRootsDailyTodos()
       }
     }
   }, [user])
+
+  // カレンダースケジュールのリアルタイム更新
+  useEffect(() => {
+    if (!user?.id) return
+
+    const channel = supabase
+      .channel('todo_schedules_changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'daily_schedules',
+        filter: `user_id=eq.${user.id}`
+      }, () => {
+        loadScheduledTodos()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user?.id])
 
   // ストリーク警告をチェック
   useEffect(() => {
@@ -167,6 +192,30 @@ export default function TodoList({ user, isDark, currentUser = null }) {
     }
   }
 
+  // カレンダーから追加されたスケジュールを取得
+  const loadScheduledTodos = async () => {
+    if (!user?.id) return
+    
+    const today = new Date()
+    const startOfDay = new Date(today)
+    startOfDay.setHours(0, 0, 0, 0)
+    const endOfDay = new Date(today)
+    endOfDay.setHours(23, 59, 59, 999)
+    
+    const { data, error } = await supabase
+      .from('daily_schedules')
+      .select('*')
+      .eq('user_id', user.id)
+      .gte('start_time', startOfDay.toISOString())
+      .lte('start_time', endOfDay.toISOString())
+      .is('source_todo_id', null) // 既存Todoから作成されたものは除外
+      .order('start_time')
+    
+    if (!error && data) {
+      setScheduledTodos(data)
+    }
+  }
+
   // Calculate progress and items
   // kintaiのTodoとroots_devのDailyTodoをマージ
   const kintaiItems = todoList?.todo_items || []
@@ -188,8 +237,22 @@ export default function TodoList({ user, isDark, currentUser = null }) {
       ...item,
       order_index: 10000 + index, // 大きな値を設定して最後に表示
     }))
-  // マージ（kintaiのTodoを先頭に、codex-devのTodoを一番下に）
-  const regularItems = [...kintaiItems, ...rootsItems]
+  // カレンダーから追加されたスケジュールをtodo形式に変換
+  const scheduleItems = scheduledTodos.map((schedule, index) => ({
+    id: `schedule_${schedule.id}`,
+    content: schedule.title,
+    is_completed: false, // スケジュールは完了/未完了の概念なし（表示のみ）
+    order_index: 20000 + index, // 一番下に表示
+    indent_level: 0,
+    is_schedule: true, // スケジュールフラグ
+    schedule_id: schedule.id,
+    start_time: schedule.start_time,
+    end_time: schedule.end_time,
+    created_by: schedule.created_by, // 追加者
+    added_by: schedule.created_by, // usersMapでアバター表示用
+  }))
+  // マージ（kintaiのTodoを先頭に、codex-devのTodoを一番下に、スケジュールを最後に）
+  const regularItems = [...kintaiItems, ...rootsItems, ...scheduleItems]
   const routineItems = routineTodos.map(rt => ({
     ...rt,
     is_routine: true,
@@ -417,7 +480,10 @@ export default function TodoList({ user, isDark, currentUser = null }) {
     }
   }
 
-  const handleToggle = async (itemId, currentIsCompleted, isRoutine = false, isRootsTodo = false) => {
+  const handleToggle = async (itemId, currentIsCompleted, isRoutine = false, isRootsTodo = false, isSchedule = false) => {
+    // スケジュールアイテムは完了切り替え不可
+    if (isSchedule) return
+    
     try {
       if (isRoutine) {
         // Handle routine todo completion
@@ -1167,10 +1233,11 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
   const isAddedByOther = item.added_by && todoOwner && item.added_by !== todoOwner.id
   
   // 編集可能かどうか
+  // - スケジュールアイテムは編集不可（カレンダーで編集）
   // - 自分のTODOリスト → 全て編集可能
   // - 他の人のTODOリスト → 自分が追加したタスク（added_byが自分）のみ編集可能
   const isOwnTodoList = todoOwner && loggedInUser && todoOwner.id === loggedInUser.id
-  const canEdit = isOwnTodoList || (loggedInUser && item.added_by && item.added_by === loggedInUser.id)
+  const canEdit = !item.is_schedule && (isOwnTodoList || (loggedInUser && item.added_by && item.added_by === loggedInUser.id))
   // 削除可能かどうか（canEditと同じ条件）
   const canDelete = canEdit
 
@@ -1432,18 +1499,26 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
           )}
         </>
       ) : (
-        <span
-          onClick={handleEdit}
-          className={`flex-1 text-sm transition-all duration-200 ${
-            canEdit ? 'cursor-text' : 'cursor-default'
-          } ${
-            item.is_completed
-              ? isDark ? 'text-gray-600 line-through' : 'text-gray-400 line-through'
-              : isDark ? 'text-gray-100' : 'text-gray-900'
-          }`}
-        >
-{item.content}
-        </span>
+        <div className="flex-1">
+          <span
+            onClick={handleEdit}
+            className={`text-sm transition-all duration-200 ${
+              canEdit ? 'cursor-text' : 'cursor-default'
+            } ${
+              item.is_completed
+                ? isDark ? 'text-gray-600 line-through' : 'text-gray-400 line-through'
+                : isDark ? 'text-gray-100' : 'text-gray-900'
+            }`}
+          >
+            {item.content}
+          </span>
+          {item.is_schedule && item.start_time && (
+            <div className={`text-xs mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+              📅 {new Date(item.start_time).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+              {item.end_time && ` - ${new Date(item.end_time).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}`}
+            </div>
+          )}
+        </div>
       )}
     </div>
   )

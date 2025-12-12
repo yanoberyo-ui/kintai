@@ -3,6 +3,7 @@ import { supabase } from './utils/supabase'
 import TodoList from './components/TodoList'
 import AttendanceCard from './components/AttendanceCard'
 import CalendarPage from './components/CalendarPage'
+import DailyCalendarPage from './components/DailyCalendarPage'
 import SettingsPage from './components/SettingsPage'
 import MembersPage from './components/MembersPage'
 import PomodoroPage from './components/PomodoroPage'
@@ -12,6 +13,7 @@ import AdminPage from './components/AdminPage'
 import RankingPage from './components/RankingPage'
 import AttendanceHistoryPage from './components/AttendanceHistoryPage'
 import Avatar from './components/Avatar'
+import WeeklyTasksSection from './components/WeeklyTasksSection'
 import { getStreaks } from './utils/streaks'
 import { getHeatmapData } from './utils/heatmap'
 import { getRootsUserByEmail } from './utils/rootsApi'
@@ -950,6 +952,26 @@ function App() {
             </button>
 
             <button
+              onClick={() => setCurrentPage('dailycalendar')}
+              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+                currentPage === 'dailycalendar'
+                  ? isDark
+                    ? 'bg-white text-gray-900'
+                    : 'bg-gray-900 text-white'
+                  : isDark
+                  ? 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/50'
+              }`}
+            >
+              <div className="flex md:flex-row flex-col items-center md:gap-3 gap-0.5">
+                <svg className="w-6 h-6 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="hidden md:inline text-xs md:text-base">日毎</span>
+              </div>
+            </button>
+
+            <button
               onClick={() => setCurrentPage('members')}
               className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
                 currentPage === 'members'
@@ -1198,9 +1220,14 @@ function App() {
 
             {/* TODOリスト */}
             <TodoList user={user} isDark={isDark} currentUser={user} />
+
+            {/* 今週のタスク */}
+            <WeeklyTasksSection user={user} isDark={isDark} />
           </div>
         ) : currentPage === 'calendar' ? (
           <CalendarPage user={user} isDark={isDark} />
+        ) : currentPage === 'dailycalendar' ? (
+          <DailyCalendarPage user={user} isDark={isDark} />
         ) : currentPage === 'members' ? (
           <MembersPage user={user} isDark={isDark} />
         ) : currentPage === 'announcements' ? (
@@ -1856,7 +1883,7 @@ function LoginScreen({ isDark }) {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [googleLoading, setGoogleLoading] = useState(false)
 
-  // Google OAuth ログイン
+  // Google OAuth ログイン（Calendar APIスコープ付き）
   const handleGoogleLogin = async () => {
     setGoogleLoading(true)
     setError('')
@@ -1870,6 +1897,7 @@ function LoginScreen({ isDark }) {
             access_type: 'offline',
             prompt: 'consent',
           },
+          scopes: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events',
         },
       })
 

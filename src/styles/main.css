@@ -55,6 +55,20 @@
   animation: zoom-in 0.2s ease-out;
 }
 
+/* モバイル用ボトムシートスライドアップアニメーション */
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
 /* Appleライクな背景ぼかし効果 */
 .backdrop-blur-xl {
   backdrop-filter: blur(20px) saturate(180%);
