@@ -1740,7 +1740,8 @@ function fetchAllAttendanceData() {
       break_minutes: record.break_minutes_used || 0,
       work_minutes: record.total_work_minutes || 0,
       work_type: record.work_type || '',
-      notes: record.notes || ''
+      notes: record.notes || '',
+      break_sessions: record.break_sessions || []
     };
   });
 }
