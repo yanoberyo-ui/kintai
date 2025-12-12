@@ -260,9 +260,20 @@ export default function DailyCalendarPage({ user, isDark }) {
       )
       .subscribe()
 
+    // routine_todo_completionsの変更を監視
+    const routineCompletionsChannel = supabase
+      .channel('routine_completions_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'routine_todo_completions' },
+        () => loadTodos()
+      )
+      .subscribe()
+
     return () => {
       supabase.removeChannel(todoItemsChannel)
       supabase.removeChannel(weeklyTasksChannel)
+      supabase.removeChannel(routineCompletionsChannel)
     }
   }, [user?.id, selectedDate])
 
@@ -338,7 +349,22 @@ export default function DailyCalendarPage({ user, isDark }) {
       .order('order_index', { ascending: true })
 
     if (routineData) {
-      setRoutineTodos(routineData)
+      // 今日の完了状態を取得
+      const { data: completionsData } = await supabase
+        .from('routine_todo_completions')
+        .select('routine_todo_id')
+        .eq('user_id', user.id)
+        .eq('completed_date', dateStr)
+      
+      const completedIds = new Set(completionsData?.map(c => c.routine_todo_id) || [])
+      
+      // 完了フラグを追加
+      const routinesWithCompletion = routineData.map(r => ({
+        ...r,
+        is_completed_today: completedIds.has(r.id)
+      }))
+      
+      setRoutineTodos(routinesWithCompletion)
     }
   }
 
