@@ -59,11 +59,16 @@ export default function DailyCalendarPage({ user, isDark }) {
   const [todayTodos, setTodayTodos] = useState([])
   const [weeklyTasks, setWeeklyTasks] = useState([])
   const [routineTodos, setRoutineTodos] = useState([])
-  const [showTodoPanel, setShowTodoPanel] = useState(true)
+  const [showTodoPanel, setShowTodoPanel] = useState(false) // モバイルでは初期非表示
   
   // Todoドラッグ&ドロップ
   const [draggingTodo, setDraggingTodo] = useState(null)
   const [dropTargetHour, setDropTargetHour] = useState(null)
+  
+  // モバイル用タッチドラッグ
+  const [touchDraggingTodo, setTouchDraggingTodo] = useState(null)
+  const [touchPosition, setTouchPosition] = useState({ x: 0, y: 0 })
+  const calendarRef = useRef(null)
   
   // 選択中のスケジュール（Backspaceで削除用）
   const [selectedSchedule, setSelectedSchedule] = useState(null)
@@ -441,6 +446,26 @@ export default function DailyCalendarPage({ user, isDark }) {
 
     const title = type === 'weekly' ? todo.title : todo.content
     const color = type === 'weekly' ? COLORS[3] : type === 'routine' ? COLORS[4] : COLORS[0]
+    const description = `${type === 'weekly' ? '週次タスク' : type === 'routine' ? '定常タスク' : '今日のTodo'}から追加`
+
+    // Google Calendar連携（自分のスケジュールの場合のみ）
+    let googleEventId = null
+    if (googleCalendarEnabled && targetUserId === user.id) {
+      const accessToken = await getGoogleAccessToken()
+      if (accessToken) {
+        const googleEvent = await createGoogleCalendarEvent(accessToken, {
+          title,
+          description,
+          start_time: startTime,
+          end_time: endTime,
+          color,
+        })
+        if (googleEvent) {
+          googleEventId = googleEvent.id
+          console.log('Google Calendar event created from Todo:', googleEventId)
+        }
+      }
+    }
 
     const { error } = await supabase
       .from('daily_schedules')
@@ -448,10 +473,13 @@ export default function DailyCalendarPage({ user, isDark }) {
         user_id: targetUserId,
         created_by: user.id,
         title: title,
-        description: `${type === 'weekly' ? '週次タスク' : type === 'routine' ? '定常タスク' : '今日のTodo'}から追加`,
+        description,
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
-        color: color
+        color: color,
+        source_todo_id: todo.id,
+        source_type: type,
+        google_event_id: googleEventId
       })
 
     if (!error) {
@@ -578,6 +606,118 @@ export default function DailyCalendarPage({ user, isDark }) {
     setDropTargetHour(null)
   }
 
+  // モバイル用タッチドラッグ開始
+  const handleTouchStart = (e, todo, type) => {
+    const touch = e.touches[0]
+    setTouchDraggingTodo({ ...todo, type })
+    setTouchPosition({ x: touch.clientX, y: touch.clientY })
+    // パネルを閉じてカレンダーを見えるようにする
+    setShowTodoPanel(false)
+  }
+
+  // モバイル用タッチ移動
+  const handleTouchMove = (e) => {
+    if (!touchDraggingTodo) return
+    const touch = e.touches[0]
+    setTouchPosition({ x: touch.clientX, y: touch.clientY })
+  }
+
+  // モバイル用タッチ終了（ドロップ）
+  const handleTouchEnd = async (e) => {
+    if (!touchDraggingTodo) return
+    
+    const touch = e.changedTouches[0]
+    const dropX = touch.clientX
+    const dropY = touch.clientY
+    
+    // カレンダーグリッド上でドロップされたか確認
+    const calendarElement = calendarRef.current
+    if (!calendarElement) {
+      setTouchDraggingTodo(null)
+      return
+    }
+    
+    const calendarRect = calendarElement.getBoundingClientRect()
+    
+    // カレンダー範囲外ならキャンセル
+    if (dropX < calendarRect.left || dropX > calendarRect.right ||
+        dropY < calendarRect.top || dropY > calendarRect.bottom) {
+      setTouchDraggingTodo(null)
+      return
+    }
+    
+    // Y座標から時間を計算（60pxが1時間）
+    const relativeY = dropY - calendarRect.top + calendarElement.scrollTop
+    const hour = Math.floor(relativeY / 60)
+    
+    if (hour < 0 || hour > 23) {
+      setTouchDraggingTodo(null)
+      return
+    }
+    
+    // X座標からターゲットユーザーを判定
+    const timeColumnWidth = 60 // 時間列の幅
+    const relativeX = dropX - calendarRect.left - timeColumnWidth
+    const columnWidth = 200 // 各ユーザー列の幅
+    
+    let targetUserId = user.id
+    if (relativeX > columnWidth && displayedMembers.length > 0) {
+      const memberIndex = Math.floor((relativeX - columnWidth) / columnWidth)
+      if (memberIndex >= 0 && memberIndex < displayedMembers.length) {
+        targetUserId = displayedMembers[memberIndex].id
+      }
+    }
+    
+    // スケジュールを作成
+    const startTime = new Date(selectedDate)
+    startTime.setHours(hour, 0, 0, 0)
+    const endTime = new Date(startTime)
+    endTime.setHours(hour + 1, 0, 0, 0)
+    
+    const title = touchDraggingTodo.content || touchDraggingTodo.title
+    const color = touchDraggingTodo.type === 'routine' ? '#8B5CF6' : 
+           touchDraggingTodo.type === 'weekly' ? '#F59E0B' : '#3B82F6'
+    
+    // Google Calendar連携（自分のスケジュールの場合のみ）
+    let googleEventId = null
+    if (googleCalendarEnabled && targetUserId === user.id) {
+      const accessToken = await getGoogleAccessToken()
+      if (accessToken) {
+        const googleEvent = await createGoogleCalendarEvent(accessToken, {
+          title,
+          description: '',
+          start_time: startTime,
+          end_time: endTime,
+          color,
+        })
+        if (googleEvent) {
+          googleEventId = googleEvent.id
+          console.log('Google Calendar event created (touch):', googleEventId)
+        }
+      }
+    }
+    
+    const scheduleData = {
+      user_id: targetUserId,
+      title,
+      start_time: startTime.toISOString(),
+      end_time: endTime.toISOString(),
+      color,
+      source_todo_id: touchDraggingTodo.id,
+      source_type: touchDraggingTodo.type,
+      created_by: user.id,
+      google_event_id: googleEventId
+    }
+    
+    const { error } = await supabase.from('daily_schedules').insert(scheduleData)
+    
+    if (!error) {
+      loadSchedules()
+    }
+    
+    setTouchDraggingTodo(null)
+  }
+
   // カレンダー列でのドラッグオーバー
   const handleCalendarDragOver = (e, hour, targetUserId) => {
     e.preventDefault()
@@ -615,6 +755,25 @@ export default function DailyCalendarPage({ user, isDark }) {
     const todoId = draggingTodo.id
     const todoType = draggingTodo.type
     
+    // Google Calendar連携（自分のスケジュールの場合のみ）
+    let googleEventId = null
+    if (googleCalendarEnabled && targetUserId === user.id) {
+      const accessToken = await getGoogleAccessToken()
+      if (accessToken) {
+        const googleEvent = await createGoogleCalendarEvent(accessToken, {
+          title,
+          description: '',
+          start_time: startTime,
+          end_time: endTime,
+          color,
+        })
+        if (googleEvent) {
+          googleEventId = googleEvent.id
+          console.log('Google Calendar event created:', googleEventId)
+        }
+      }
+    }
+    
     const { error } = await supabase
       .from('daily_schedules')
       .insert({
@@ -626,7 +785,8 @@ export default function DailyCalendarPage({ user, isDark }) {
         end_time: endTime.toISOString(),
         color,
         source_todo_id: todoId,
-        source_type: todoType
+        source_type: todoType,
+        google_event_id: googleEventId
       })
     
     if (!error) {
@@ -1078,6 +1238,7 @@ export default function DailyCalendarPage({ user, isDark }) {
                         draggable
                         onDragStart={(e) => handleTodoDragStart(e, todo, 'routine')}
                         onDragEnd={handleTodoDragEnd}
+                        onTouchStart={(e) => handleTouchStart(e, todo, 'routine')}
                         className={`px-3 py-2 rounded-lg text-sm cursor-grab active:cursor-grabbing transition-all hover:scale-[1.02] ${isDark ? 'bg-gray-800/50 text-gray-300 hover:bg-purple-500/20' : 'bg-gray-100/50 text-gray-700 hover:bg-purple-100'}`}
                       >
                         {todo.content}
@@ -1101,6 +1262,7 @@ export default function DailyCalendarPage({ user, isDark }) {
                         draggable={!todo.is_completed}
                         onDragStart={(e) => !todo.is_completed && handleTodoDragStart(e, todo, 'today')}
                         onDragEnd={handleTodoDragEnd}
+                        onTouchStart={(e) => !todo.is_completed && handleTouchStart(e, todo, 'today')}
                         className={`px-3 py-2 rounded-lg text-sm flex items-center gap-2 transition-all ${
                           todo.is_completed
                             ? isDark ? 'bg-gray-800/30 text-gray-500 line-through' : 'bg-gray-100/30 text-gray-400 line-through'
@@ -1135,6 +1297,7 @@ export default function DailyCalendarPage({ user, isDark }) {
                           draggable={!task.completed}
                           onDragStart={(e) => !task.completed && handleTodoDragStart(e, task, 'weekly')}
                           onDragEnd={handleTodoDragEnd}
+                          onTouchStart={(e) => !task.completed && handleTouchStart(e, task, 'weekly')}
                           className={`px-3 py-2 rounded-lg text-sm transition-all ${
                             task.completed
                               ? isDark ? 'bg-gray-800/30 text-gray-500 line-through' : 'bg-gray-100/30 text-gray-400 line-through'
@@ -1217,7 +1380,13 @@ export default function DailyCalendarPage({ user, isDark }) {
               </div>
 
               {/* 時間グリッドコンテンツ */}
-              <div className="flex relative" style={{ height: `${(END_HOUR - START_HOUR + 1) * HOUR_HEIGHT}px` }}>
+              <div 
+                ref={calendarRef}
+                className="flex relative" 
+                style={{ height: `${(END_HOUR - START_HOUR + 1) * HOUR_HEIGHT}px` }}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+              >
                 {/* 時間ラベル（横スクロール時に固定） */}
                 <div className={`w-[70px] flex-shrink-0 sticky left-0 z-10 ${isDark ? 'bg-gray-900' : 'bg-white'}`}>
                   {hours.map(hour => (
@@ -1855,6 +2024,30 @@ export default function DailyCalendarPage({ user, isDark }) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* モバイル用ドラッグプレビュー */}
+      {touchDraggingTodo && (
+        <div
+          className="fixed z-[100] pointer-events-none"
+          style={{
+            left: touchPosition.x - 75,
+            top: touchPosition.y - 20,
+          }}
+        >
+          <div className={`px-4 py-2 rounded-lg text-sm font-medium shadow-lg ${
+            touchDraggingTodo.type === 'routine' 
+              ? 'bg-purple-500 text-white' 
+              : touchDraggingTodo.type === 'weekly'
+              ? 'bg-amber-500 text-white'
+              : 'bg-blue-500 text-white'
+          }`}>
+            {touchDraggingTodo.content || touchDraggingTodo.title}
+          </div>
+          <p className={`text-xs text-center mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+            カレンダーにドロップ
+          </p>
         </div>
       )}
     </div>
