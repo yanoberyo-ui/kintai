@@ -14,6 +14,7 @@ import {
 } from '../utils/todo'
 import { getTodayDate } from '../utils/date'
 import { getDailyTodos } from '../utils/rootsApi'
+import { getGoogleAccessToken, markGoogleEventAsCompleted } from '../utils/googleCalendar'
 import {
   DndContext,
   closestCenter,
@@ -515,6 +516,9 @@ export default function TodoList({ user, isDark, currentUser = null }) {
             })
 
           setRoutineCompletions(prev => new Set([...prev, itemId]))
+          
+          // Google Calendarイベントを完了色に更新
+          await syncGoogleCalendarCompletion(itemId, 'routine')
         }
       } else if (isRootsTodo) {
         // codex-dev Todoは読み取り専用（操作はcodex-devで行う）
@@ -523,10 +527,43 @@ export default function TodoList({ user, isDark, currentUser = null }) {
         // Handle regular kintai todo
         await toggleTodoItem(itemId, currentIsCompleted)
         await loadTodoList()
+        
+        // Todoが完了になった場合、紐づくGoogle Calendarイベントを更新
+        if (!currentIsCompleted) {
+          await syncGoogleCalendarCompletion(itemId, 'today')
+        }
       }
     } catch (error) {
       console.error('Error toggling task:', error)
       alert('チェックの更新に失敗しました')
+    }
+  }
+  
+  // Google Calendarのイベントを完了色に更新
+  const syncGoogleCalendarCompletion = async (todoId, todoType) => {
+    try {
+      // このTodoに紐づくスケジュールを取得
+      const { data: schedules } = await supabase
+        .from('daily_schedules')
+        .select('google_event_id')
+        .eq('source_todo_id', todoId)
+        .eq('source_type', todoType)
+        .not('google_event_id', 'is', null)
+      
+      if (!schedules || schedules.length === 0) return
+      
+      const accessToken = await getGoogleAccessToken()
+      if (!accessToken) return
+      
+      // 各スケジュールのGoogle Calendarイベントを完了色に変更
+      for (const schedule of schedules) {
+        if (schedule.google_event_id) {
+          await markGoogleEventAsCompleted(accessToken, schedule.google_event_id)
+          console.log('Google Calendar event marked as completed:', schedule.google_event_id)
+        }
+      }
+    } catch (error) {
+      console.error('Error syncing Google Calendar completion:', error)
     }
   }
 

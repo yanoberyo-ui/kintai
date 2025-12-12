@@ -51,9 +51,11 @@ export default function DailyCalendarPage({ user, isDark }) {
   // ドラッグ&リサイズ関連の状態
   const [draggingSchedule, setDraggingSchedule] = useState(null)
   const [resizingSchedule, setResizingSchedule] = useState(null)
+  const [pendingDrag, setPendingDrag] = useState(null) // ドラッグ開始待ち
   const [dragStartY, setDragStartY] = useState(0)
   const [originalTop, setOriginalTop] = useState(0)
   const [originalHeight, setOriginalHeight] = useState(0)
+  const DRAG_THRESHOLD = 5 // ドラッグ開始に必要な移動距離（px）
   
   // Todo関連の状態
   const [todayTodos, setTodayTodos] = useState([])
@@ -801,7 +803,8 @@ export default function DailyCalendarPage({ user, isDark }) {
     e.preventDefault()
     e.stopPropagation()
     const { top } = getSchedulePosition(schedule)
-    setDraggingSchedule(schedule)
+    // まずpendingDragにセット（閾値を超えたら実際にドラッグ開始）
+    setPendingDrag({ schedule, top })
     setDragStartY(e.clientY)
     setOriginalTop(top)
   }
@@ -819,6 +822,16 @@ export default function DailyCalendarPage({ user, isDark }) {
 
   // マウス移動
   const handleMouseMove = useCallback((e) => {
+    // pendingDragがある場合、閾値を超えたらドラッグ開始
+    if (pendingDrag && !draggingSchedule) {
+      const deltaY = Math.abs(e.clientY - dragStartY)
+      if (deltaY >= DRAG_THRESHOLD) {
+        setDraggingSchedule(pendingDrag.schedule)
+        setPendingDrag(null)
+      }
+      return
+    }
+    
     if (draggingSchedule) {
       e.preventDefault()
       const deltaY = e.clientY - dragStartY
@@ -876,10 +889,15 @@ export default function DailyCalendarPage({ user, isDark }) {
         return updated
       })
     }
-  }, [draggingSchedule, resizingSchedule, dragStartY, originalTop, originalHeight, selectedDate, user?.id])
+  }, [pendingDrag, draggingSchedule, resizingSchedule, dragStartY, originalTop, originalHeight, selectedDate, user?.id])
 
   // マウスアップ
   const handleMouseUp = useCallback(async () => {
+    // pendingDragがある場合はキャンセル（クリックだけで終了）
+    if (pendingDrag) {
+      setPendingDrag(null)
+    }
+    
     if (draggingSchedule) {
       const schedule = schedules[user.id]?.find(s => s.id === draggingSchedule.id)
       if (schedule) {
@@ -903,11 +921,11 @@ export default function DailyCalendarPage({ user, isDark }) {
       }
       setResizingSchedule(null)
     }
-  }, [draggingSchedule, resizingSchedule, schedules, user?.id])
+  }, [pendingDrag, draggingSchedule, resizingSchedule, schedules, user?.id])
 
   // グローバルマウスイベント
   useEffect(() => {
-    if (draggingSchedule || resizingSchedule) {
+    if (pendingDrag || draggingSchedule || resizingSchedule) {
       window.addEventListener('mousemove', handleMouseMove)
       window.addEventListener('mouseup', handleMouseUp)
       return () => {
@@ -915,7 +933,7 @@ export default function DailyCalendarPage({ user, isDark }) {
         window.removeEventListener('mouseup', handleMouseUp)
       }
     }
-  }, [draggingSchedule, resizingSchedule, handleMouseMove, handleMouseUp])
+  }, [pendingDrag, draggingSchedule, resizingSchedule, handleMouseMove, handleMouseUp])
 
   // メンバー追加
   const handleAddMember = (memberId) => {
