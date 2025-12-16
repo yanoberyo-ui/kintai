@@ -248,8 +248,15 @@ export default function ReservationsPage({ user, isDark }) {
                   </div>
                   {reserved && reservation && (
                     <div className="flex items-center gap-3">
-                      <div className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                        {reservation.title}
+                      <div className="flex items-center gap-2">
+                        {reservation.is_recurring && (
+                          <span className={`text-sm ${isDark ? 'text-blue-400' : 'text-blue-600'}`} title="定期予約">
+                            🔄
+                          </span>
+                        )}
+                        <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                          {reservation.title}
+                        </span>
                       </div>
                       <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                         {reservation.user?.name || reservation.user?.email}
@@ -291,7 +298,7 @@ export default function ReservationsPage({ user, isDark }) {
   )
 }
 
-// 予約作成・編集モーダル（簡易版）
+// 予約作成・編集モーダル
 function ReservationModal({ user, isDark, room, date, timeSlot, onClose, onSave }) {
   const reservation = timeSlot?.reservation
   const isExisting = !!reservation
@@ -302,6 +309,16 @@ function ReservationModal({ user, isDark, room, date, timeSlot, onClose, onSave 
   const [duration, setDuration] = useState(30)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  
+  // 繰り返し予約用の状態
+  const [isRecurring, setIsRecurring] = useState(false)
+  const [recurrenceRule, setRecurrenceRule] = useState('weekly') // 'daily' or 'weekly'
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState(() => {
+    // デフォルトは1ヶ月後
+    const endDate = new Date(date)
+    endDate.setMonth(endDate.getMonth() + 1)
+    return endDate.toISOString().split('T')[0]
+  })
 
   const handleSave = async () => {
     if (!title.trim()) {
@@ -319,18 +336,85 @@ function ReservationModal({ user, isDark, room, date, timeSlot, onClose, onSave 
       const endDateTime = new Date(startDateTime)
       endDateTime.setMinutes(endDateTime.getMinutes() + duration)
 
-      const { error } = await supabase
-        .from('reservations')
-        .insert([{
-          room_id: room.id,
-          user_id: user.id,
-          title,
-          description,
-          start_time: startDateTime.toISOString(),
-          end_time: endDateTime.toISOString(),
-        }])
+      if (isRecurring) {
+        // 繰り返し予約の場合
+        const reservationsToCreate = []
+        const currentDate = new Date(startDateTime)
+        const endDate = new Date(recurrenceEndDate + 'T23:59:59')
+        
+        // 親予約を作成
+        const { data: parentData, error: parentError } = await supabase
+          .from('reservations')
+          .insert([{
+            room_id: room.id,
+            user_id: user.id,
+            title,
+            description,
+            start_time: startDateTime.toISOString(),
+            end_time: endDateTime.toISOString(),
+            is_recurring: true,
+            recurrence_rule: recurrenceRule,
+            recurrence_end_date: recurrenceEndDate,
+          }])
+          .select()
+          .single()
 
-      if (error) throw error
+        if (parentError) throw parentError
+
+        // 子予約を作成（最初の日はスキップ）
+        const parentId = parentData.id
+        const interval = recurrenceRule === 'daily' ? 1 : 7 // 毎日なら1日、毎週なら7日
+        
+        currentDate.setDate(currentDate.getDate() + interval)
+        
+        while (currentDate <= endDate) {
+          const childStart = new Date(currentDate)
+          childStart.setHours(hours, minutes, 0, 0)
+          
+          const childEnd = new Date(childStart)
+          childEnd.setMinutes(childEnd.getMinutes() + duration)
+
+          reservationsToCreate.push({
+            room_id: room.id,
+            user_id: user.id,
+            title,
+            description,
+            start_time: childStart.toISOString(),
+            end_time: childEnd.toISOString(),
+            is_recurring: true,
+            recurrence_rule: recurrenceRule,
+            parent_reservation_id: parentId,
+          })
+
+          currentDate.setDate(currentDate.getDate() + interval)
+        }
+
+        // 子予約を一括挿入
+        if (reservationsToCreate.length > 0) {
+          const { error: childError } = await supabase
+            .from('reservations')
+            .insert(reservationsToCreate)
+
+          if (childError) throw childError
+        }
+
+        const totalCount = reservationsToCreate.length + 1
+        alert(`${totalCount}件の予約を作成しました`)
+      } else {
+        // 単発予約の場合
+        const { error } = await supabase
+          .from('reservations')
+          .insert([{
+            room_id: room.id,
+            user_id: user.id,
+            title,
+            description,
+            start_time: startDateTime.toISOString(),
+            end_time: endDateTime.toISOString(),
+          }])
+
+        if (error) throw error
+      }
 
       onSave()
     } catch (error) {
@@ -341,20 +425,47 @@ function ReservationModal({ user, isDark, room, date, timeSlot, onClose, onSave 
     }
   }
 
-  const handleDelete = async () => {
-    if (!window.confirm('この予約を取り消しますか？')) {
+  const handleDelete = async (deleteAll = false) => {
+    const isRecurringReservation = reservation?.is_recurring
+    const parentId = reservation?.parent_reservation_id || reservation?.id
+    
+    let confirmMessage = 'この予約を取り消しますか？'
+    if (isRecurringReservation && deleteAll) {
+      confirmMessage = 'この繰り返し予約をすべて取り消しますか？'
+    }
+    
+    if (!window.confirm(confirmMessage)) {
       return
     }
 
     setDeleting(true)
 
     try {
-      const { error } = await supabase
-        .from('reservations')
-        .delete()
-        .eq('id', reservation.id)
+      if (isRecurringReservation && deleteAll) {
+        // 繰り返し予約を全て削除
+        // 親予約を特定（自身が親の場合は自身のID、子の場合はparent_reservation_id）
+        const actualParentId = reservation.parent_reservation_id || reservation.id
+        
+        // 子予約を削除
+        await supabase
+          .from('reservations')
+          .delete()
+          .eq('parent_reservation_id', actualParentId)
+        
+        // 親予約を削除
+        await supabase
+          .from('reservations')
+          .delete()
+          .eq('id', actualParentId)
+      } else {
+        // 単発削除
+        const { error } = await supabase
+          .from('reservations')
+          .delete()
+          .eq('id', reservation.id)
 
-      if (error) throw error
+        if (error) throw error
+      }
 
       onSave()
     } catch (error) {
@@ -462,6 +573,87 @@ function ReservationModal({ user, isDark, room, date, timeSlot, onClose, onSave 
             </div>
           </div>
 
+          {/* 繰り返し予約オプション（新規作成時のみ） */}
+          {!isExisting && (
+            <div className={`p-4 rounded-xl border ${
+              isDark ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'
+            }`}>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isRecurring}
+                  onChange={(e) => setIsRecurring(e.target.checked)}
+                  className="w-5 h-5 rounded text-blue-500"
+                />
+                <span className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  🔄 定期予約（固定枠）
+                </span>
+              </label>
+
+              {isRecurring && (
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                      繰り返し
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setRecurrenceRule('daily')}
+                        className={`flex-1 px-4 py-2 rounded-xl font-medium transition-all ${
+                          recurrenceRule === 'daily'
+                            ? isDark
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-blue-500 text-white'
+                            : isDark
+                            ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        毎日
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRecurrenceRule('weekly')}
+                        className={`flex-1 px-4 py-2 rounded-xl font-medium transition-all ${
+                          recurrenceRule === 'weekly'
+                            ? isDark
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-blue-500 text-white'
+                            : isDark
+                            ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        毎週（同じ曜日）
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                      終了日
+                    </label>
+                    <input
+                      type="date"
+                      value={recurrenceEndDate}
+                      onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                      min={new Date(date).toISOString().split('T')[0]}
+                      className={`w-full px-4 py-2 rounded-xl border ${
+                        isDark
+                          ? 'bg-gray-800 border-gray-700 text-white'
+                          : 'bg-gray-50 border-gray-200 text-gray-900'
+                      }`}
+                    />
+                    <p className={`mt-1 text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                      この日まで{recurrenceRule === 'daily' ? '毎日' : '毎週'}予約を作成します
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 既存予約の場合は予約者情報を表示 */}
           {isExisting && reservation && (
             <div className={`p-3 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
@@ -471,38 +663,74 @@ function ReservationModal({ user, isDark, room, date, timeSlot, onClose, onSave 
               <div className={`${isDark ? 'text-white' : 'text-gray-900'}`}>
                 {reservation.user?.name || reservation.user?.email || 'ユーザー'}
               </div>
+              {reservation.is_recurring && (
+                <div className={`mt-2 flex items-center gap-2 text-sm ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
+                  <span>🔄</span>
+                  <span>
+                    定期予約（{reservation.recurrence_rule === 'daily' ? '毎日' : '毎週'}）
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
-          <div className="flex gap-3 pt-4">
+          <div className="flex flex-col gap-3 pt-4">
             {isExisting ? (
               <>
-                <button
-                  onClick={onClose}
-                  className={`flex-1 px-4 py-2 rounded-xl font-medium transition-colors ${
-                    isDark
-                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  閉じる
-                </button>
-                {reservation?.user_id === user?.id && (
+                {reservation?.user_id === user?.id && reservation?.is_recurring && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleDelete(false)}
+                      disabled={deleting}
+                      className={`flex-1 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                        isDark
+                          ? 'bg-orange-600 text-white hover:bg-orange-700'
+                          : 'bg-orange-500 text-white hover:bg-orange-600'
+                      } disabled:opacity-50`}
+                    >
+                      この予約のみ取り消し
+                    </button>
+                    <button
+                      onClick={() => handleDelete(true)}
+                      disabled={deleting}
+                      className={`flex-1 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                        isDark
+                          ? 'bg-red-600 text-white hover:bg-red-700'
+                          : 'bg-red-500 text-white hover:bg-red-600'
+                      } disabled:opacity-50`}
+                    >
+                      すべて取り消し
+                    </button>
+                  </div>
+                )}
+                <div className="flex gap-3">
                   <button
-                    onClick={handleDelete}
-                    disabled={deleting}
+                    onClick={onClose}
                     className={`flex-1 px-4 py-2 rounded-xl font-medium transition-colors ${
                       isDark
-                        ? 'bg-red-600 text-white hover:bg-red-700'
-                        : 'bg-red-500 text-white hover:bg-red-600'
-                    } disabled:opacity-50`}
+                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
                   >
-                    {deleting ? '取り消し中...' : '予約取り消し'}
+                    閉じる
                   </button>
-                )}
+                  {reservation?.user_id === user?.id && !reservation?.is_recurring && (
+                    <button
+                      onClick={() => handleDelete(false)}
+                      disabled={deleting}
+                      className={`flex-1 px-4 py-2 rounded-xl font-medium transition-colors ${
+                        isDark
+                          ? 'bg-red-600 text-white hover:bg-red-700'
+                          : 'bg-red-500 text-white hover:bg-red-600'
+                      } disabled:opacity-50`}
+                    >
+                      {deleting ? '取り消し中...' : '予約取り消し'}
+                    </button>
+                  )}
+                </div>
               </>
             ) : (
-              <>
+              <div className="flex gap-3">
                 <button
                   onClick={onClose}
                   className={`flex-1 px-4 py-2 rounded-xl font-medium transition-colors ${
@@ -522,9 +750,9 @@ function ReservationModal({ user, isDark, room, date, timeSlot, onClose, onSave 
                       : 'bg-gray-900 text-white hover:bg-gray-800'
                   } disabled:opacity-50`}
                 >
-                  {saving ? '保存中...' : '予約する'}
+                  {saving ? '保存中...' : isRecurring ? '定期予約を作成' : '予約する'}
                 </button>
-              </>
+              </div>
             )}
           </div>
         </div>
