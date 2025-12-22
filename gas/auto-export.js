@@ -193,10 +193,11 @@ function updateHeaderSummary(sheet, records, currentYear, currentMonth) {
   const minutes = totalMinutes % 60;
   const timeStr = `${hours}:${minutes.toString().padStart(2, '0')}`;
   
-  // 今月合計を書き込み
-  sheet.getRange(1, 11).setValue(timeStr);
-  sheet.getRange(1, 11).setNumberFormat('@');
-  sheet.getRange(1, 11).setFontWeight('bold').setFontSize(12);
+  // 今月合計を書き込み（書式設定を先に行い、その後に値を設定）
+  const cell = sheet.getRange(1, 11);
+  cell.setNumberFormat('@');
+  cell.setValue(timeStr);
+  cell.setFontWeight('bold').setFontSize(12);
   sheet.getRange(2, 11).setValue(records.length + '日');
   sheet.getRange(1, 13).setValue(remoteDays + '日');
   sheet.getRange(2, 13).setValue(officeDays + '日');
@@ -837,10 +838,11 @@ function updateMonthlySummaryFixed(sheet) {
   // 常に「XX:XX」形式で統一
   const totalTimeFormatted = `${hours}:${minutes.toString().padStart(2, '0')}`;
 
-  // 固定セルの値を更新（今月）
-  sheet.getRange(1, 11).setValue(totalTimeFormatted);
-  sheet.getRange(1, 11).setNumberFormat('@'); // プレーンテキストとして表示
-  sheet.getRange(1, 11).setFontWeight('bold').setFontSize(12);
+  // 固定セルの値を更新（今月）- 書式設定を先に行い、その後に値を設定
+  const currentCell = sheet.getRange(1, 11);
+  currentCell.setNumberFormat('@'); // プレーンテキストとして表示
+  currentCell.setValue(totalTimeFormatted);
+  currentCell.setFontWeight('bold').setFontSize(12);
   sheet.getRange(2, 11).setValue(currentSummary.days + '日');
   sheet.getRange(1, 13).setValue(currentSummary.remoteDays + '日');
   sheet.getRange(2, 13).setValue(currentSummary.officeDays + '日');
@@ -859,9 +861,11 @@ function updateMonthlySummaryFixed(sheet) {
   // 常に「XX:XX」形式で統一
   const lastTotalTimeFormatted = `${lastHours}:${lastMinutes.toString().padStart(2, '0')}`;
 
-  sheet.getRange(1, 16).setValue(lastTotalTimeFormatted);
-  sheet.getRange(1, 16).setNumberFormat('@'); // プレーンテキストとして表示
-  sheet.getRange(1, 16).setFontWeight('bold').setFontSize(12);
+  // 書式設定を先に行い、その後に値を設定
+  const lastCell = sheet.getRange(1, 16);
+  lastCell.setNumberFormat('@'); // プレーンテキストとして表示
+  lastCell.setValue(lastTotalTimeFormatted);
+  lastCell.setFontWeight('bold').setFontSize(12);
   sheet.getRange(2, 16).setValue(lastSummary.days + '日');
   sheet.getRange(1, 18).setValue(lastSummary.remoteDays + '日');
   sheet.getRange(2, 18).setValue(lastSummary.officeDays + '日');
@@ -1766,12 +1770,14 @@ function rebuildAllSheets() {
         // 今月の合計を書き込み
         const currentHours = Math.floor(currentMonthTotalMinutes / 60);
         const currentMinutes = currentMonthTotalMinutes % 60;
-        // 常に「XX:XX」形式で統一
+        // 常に「XX:XX」形式で統一（先頭に'を付けて文字列として扱う）
         const currentTimeStr = `${currentHours}:${currentMinutes.toString().padStart(2, '0')}`;
         
-        sheet.getRange(1, 11).setValue(currentTimeStr);
-        sheet.getRange(1, 11).setNumberFormat('@');
-        sheet.getRange(1, 11).setFontWeight('bold').setFontSize(12);
+        // 書式設定を先に行い、その後に値を設定
+        const currentCell = sheet.getRange(1, 11);
+        currentCell.setNumberFormat('@');
+        currentCell.setValue(currentTimeStr);
+        currentCell.setFontWeight('bold').setFontSize(12);
         sheet.getRange(2, 11).setValue(userData.currentMonthRecords.length + '日');
         sheet.getRange(1, 13).setValue(currentMonthRemoteDays + '日');
         sheet.getRange(2, 13).setValue(currentMonthOfficeDays + '日');
@@ -1782,9 +1788,11 @@ function rebuildAllSheets() {
         // 常に「XX:XX」形式で統一
         const lastTimeStr = `${lastHours}:${lastMinutes.toString().padStart(2, '0')}`;
         
-        sheet.getRange(1, 16).setValue(lastTimeStr);
-        sheet.getRange(1, 16).setNumberFormat('@');
-        sheet.getRange(1, 16).setFontWeight('bold').setFontSize(12);
+        // 書式設定を先に行い、その後に値を設定
+        const lastCell = sheet.getRange(1, 16);
+        lastCell.setNumberFormat('@');
+        lastCell.setValue(lastTimeStr);
+        lastCell.setFontWeight('bold').setFontSize(12);
         sheet.getRange(2, 16).setValue(lastMonthDays + '日');
         sheet.getRange(1, 18).setValue(lastMonthRemoteDays + '日');
         sheet.getRange(2, 18).setValue(lastMonthOfficeDays + '日');
