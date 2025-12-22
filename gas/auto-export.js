@@ -202,6 +202,7 @@ function updateHeaderSummary(sheet, records, currentYear, currentMonth) {
 
 /**
  * 今月の全勤怠データを取得（修正含む）
+ * ※ 出勤・退勤時間から実働時間を計算（DBの値が不正な場合のため）
  */
 function fetchMonthlyAttendanceDataFull() {
   const todayDateStr = getTodayDate();
@@ -235,6 +236,20 @@ function fetchMonthlyAttendanceDataFull() {
   
   return data.map(record => {
     const user = record.users;
+    
+    // 実働時間を出勤・退勤時間から計算（DBの値が不正な場合のため）
+    let workMinutes = 0;
+    if (record.clock_in && record.clock_out) {
+      const clockIn = new Date(record.clock_in);
+      const clockOut = new Date(record.clock_out);
+      const diffMinutes = Math.floor((clockOut - clockIn) / 60000);
+      const breakMinutes = record.break_minutes_used || 0;
+      workMinutes = Math.max(0, diffMinutes - breakMinutes);
+    } else if (record.clock_in && !record.clock_out) {
+      // まだ退勤していない場合は0（または現在時刻まで計算したい場合は別途対応）
+      workMinutes = 0;
+    }
+    
     return {
       user_id: record.user_id,
       user_name: user.name,
@@ -244,7 +259,7 @@ function fetchMonthlyAttendanceDataFull() {
       clock_out: record.clock_out,
       break_sessions: record.break_sessions || [],
       break_minutes: record.break_minutes_used || 0,
-      work_minutes: record.total_work_minutes || 0,
+      work_minutes: workMinutes,
       work_type: record.work_type || '',
       notes: record.notes || ''
     };
@@ -1034,7 +1049,8 @@ function createDashboardHeader(sheet) {
 }
 
 /**
- * 今月の全勤怠データを取得
+ * 今月の全勤怠データを取得（ダッシュボード用）
+ * ※ 出勤・退勤時間から実働時間を計算（DBの値が不正な場合のため）
  */
 function fetchMonthlyAttendanceData() {
   // 3:00am基準で今月の開始日を取得
@@ -1064,11 +1080,16 @@ function fetchMonthlyAttendanceData() {
   return data.map(record => {
     const user = record.users;
     
-    // 勤務時間を計算
-    let workMinutes = record.total_work_minutes || 0;
-    
-    // 勤務中（まだ退勤していない）場合は、出勤時刻から現在までの時間を計算
-    if (record.clock_in && !record.clock_out && record.status === 'working') {
+    // 実働時間を出勤・退勤時間から計算（DBの値が不正な場合のため）
+    let workMinutes = 0;
+    if (record.clock_in && record.clock_out) {
+      const clockIn = new Date(record.clock_in);
+      const clockOut = new Date(record.clock_out);
+      const diffMinutes = Math.floor((clockOut - clockIn) / 60000);
+      const breakMinutes = record.break_minutes_used || 0;
+      workMinutes = Math.max(0, diffMinutes - breakMinutes);
+    } else if (record.clock_in && !record.clock_out && record.status === 'working') {
+      // 勤務中（まだ退勤していない）場合は、出勤時刻から現在までの時間を計算
       const clockIn = new Date(record.clock_in);
       const now = new Date();
       const diffMinutes = Math.floor((now - clockIn) / 60000);
@@ -1858,6 +1879,7 @@ function writeAttendanceRowSimple(sheet, row, attendance) {
 
 /**
  * 全期間の勤怠データを取得
+ * ※ 出勤・退勤時間から実働時間を計算（DBの値が不正な場合のため）
  */
 function fetchAllAttendanceData() {
   // clock_inが存在するすべてのデータを取得（管理者ダッシュボードと同じ条件）
@@ -1884,6 +1906,17 @@ function fetchAllAttendanceData() {
   
   return data.map(record => {
     const user = record.users;
+    
+    // 実働時間を出勤・退勤時間から計算（DBの値が不正な場合のため）
+    let workMinutes = 0;
+    if (record.clock_in && record.clock_out) {
+      const clockIn = new Date(record.clock_in);
+      const clockOut = new Date(record.clock_out);
+      const diffMinutes = Math.floor((clockOut - clockIn) / 60000);
+      const breakMinutes = record.break_minutes_used || 0;
+      workMinutes = Math.max(0, diffMinutes - breakMinutes);
+    }
+    
     return {
       user_id: record.user_id,
       user_name: user.name,
@@ -1893,7 +1926,7 @@ function fetchAllAttendanceData() {
       clock_out: record.clock_out,
       status: record.status || '',
       break_minutes: record.break_minutes_used || 0,
-      work_minutes: record.total_work_minutes || 0,
+      work_minutes: workMinutes,
       work_type: record.work_type || '',
       notes: record.notes || '',
       break_sessions: record.break_sessions || []
