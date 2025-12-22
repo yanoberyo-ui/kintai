@@ -447,16 +447,20 @@ function ReservationModal({ user, isDark, room, date, timeSlot, onClose, onSave 
         const actualParentId = reservation.parent_reservation_id || reservation.id
         
         // 子予約を削除
-        await supabase
+        const { error: childError } = await supabase
           .from('reservations')
           .delete()
           .eq('parent_reservation_id', actualParentId)
         
+        if (childError) throw childError
+        
         // 親予約を削除
-        await supabase
+        const { error: parentError } = await supabase
           .from('reservations')
           .delete()
           .eq('id', actualParentId)
+        
+        if (parentError) throw parentError
       } else {
         // 単発削除
         const { error } = await supabase

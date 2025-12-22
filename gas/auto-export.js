@@ -163,13 +163,15 @@ function syncCurrentMonthData() {
 }
 
 /**
- * 今月セクション（4-32行）をクリア
+ * 今月セクション（4-35行）をクリア
+ * ※ 31日の月 + ヘッダー行 = 最大32行必要（行4〜35）
  */
 function clearCurrentMonthSection(sheet) {
-  const PAST_DATA_START_ROW = 33;
-  // 4行目から32行目までをクリア
-  sheet.getRange(4, 1, PAST_DATA_START_ROW - 4, 9).clearContent();
-  sheet.getRange(4, 1, PAST_DATA_START_ROW - 4, 9).clearFormat();
+  // 行4: 月ヘッダー（「12月」など）
+  // 行5-35: 最大31日分のデータ
+  const CURRENT_MONTH_ROWS = 32; // 1ヘッダー + 31日分
+  sheet.getRange(4, 1, CURRENT_MONTH_ROWS, 9).clearContent();
+  sheet.getRange(4, 1, CURRENT_MONTH_ROWS, 9).clearFormat();
 }
 
 /**
@@ -377,7 +379,7 @@ function writeToUserSheet(attendance) {
   
   // データ行を追加（今月のデータは今月セクションに、過去のデータは過去セクションに）
   let lastRow;
-  const PAST_DATA_START_ROW = 33; // 過去のデータ開始行
+  const PAST_DATA_START_ROW = 36; // 過去のデータ開始行（行4-35が今月用：ヘッダー1行+最大31日分）
   
   if (isCurrentMonth) {
     // 今月のデータ: 今月セクション（4行目〜32行目）の最終行を探す
@@ -648,7 +650,7 @@ function updateMonthlySummaryFixed(sheet) {
   // まず既存の集計行を削除
   clearSummaryRows(sheet);
   
-  const PAST_DATA_START_ROW = 33; // 過去のデータ開始行
+  const PAST_DATA_START_ROW = 36; // 過去のデータ開始行（行4-35が今月用：ヘッダー1行+最大31日分）
   
   // 今月セクション（4行目〜32行目）の最終データ行を取得
   const lastDataRowCurrentMonth = findLastDataRowInCurrentMonthSection(sheet, PAST_DATA_START_ROW);
@@ -1119,7 +1121,7 @@ function clearPastAttendanceData() {
     Logger.log('=== 過去の勤怠データセクションから今月のデータを削除開始 ===');
     
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const PAST_DATA_START_ROW = 33; // 過去のデータ開始行
+    const PAST_DATA_START_ROW = 36; // 過去のデータ開始行（行4-35が今月用：ヘッダー1行+最大31日分）
     
     // 3:00am基準で現在の年月を取得
     const todayDateStr = getTodayDate(); // 3:00am基準の今日の日付文字列（YYYY-MM-DD）
@@ -1533,7 +1535,7 @@ function rebuildAllSheets() {
     Logger.log('=== 全シート一括更新を開始 ===');
     
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const PAST_DATA_START_ROW = 33; // 先月より前のデータ開始行
+    const PAST_DATA_START_ROW = 36; // 先月より前のデータ開始行（行4-35が今月用：ヘッダー1行+最大31日分）
     
     // 全勤怠データを取得（期間指定なし、completedのみ）
     const allAttendances = fetchAllAttendanceData();
