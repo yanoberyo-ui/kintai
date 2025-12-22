@@ -310,11 +310,14 @@ function ReservationModal({ user, isDark, room, date, timeSlot, onClose, onSave 
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   
-  // 繰り返し予約用の状態
-  const [isRecurring, setIsRecurring] = useState(false)
-  const [recurrenceRule, setRecurrenceRule] = useState('weekly') // 'daily' or 'weekly'
+  // 繰り返し予約用の状態（既存の予約データから初期化）
+  const [isRecurring, setIsRecurring] = useState(reservation?.is_recurring || false)
+  const [recurrenceRule, setRecurrenceRule] = useState(reservation?.recurrence_rule || 'weekly') // 'daily' or 'weekly'
   const [recurrenceEndDate, setRecurrenceEndDate] = useState(() => {
-    // デフォルトは1ヶ月後
+    // 既存の予約に終了日がある場合はそれを使用、なければデフォルトは1ヶ月後
+    if (reservation?.recurrence_end_date) {
+      return reservation.recurrence_end_date.split('T')[0]
+    }
     const endDate = new Date(date)
     endDate.setMonth(endDate.getMonth() + 1)
     return endDate.toISOString().split('T')[0]
