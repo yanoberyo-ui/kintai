@@ -52,34 +52,14 @@ function exportDailyAttendance() {
   try {
     Logger.log('勤怠データの自動出力を開始します');
 
-    // 3:00amに日付が切り替わる「昨日」の日付を取得
-    const dateString = getYesterdayDate();
-
-    Logger.log('対象日: ' + dateString);
-
-    // Supabaseから全ユーザーの勤怠データを取得
-    const attendances = fetchAttendanceData(dateString);
-
-    if (!attendances || attendances.length === 0) {
-      Logger.log('出力対象のデータがありません');
-      return;
-    }
-
-    Logger.log(attendances.length + '件のデータを取得しました');
-
-    // 各ユーザーのスプレッドシートに書き込み
-    attendances.forEach(attendance => {
-      try {
-        writeToUserSheet(attendance);
-      } catch (error) {
-        Logger.log('ユーザー ' + attendance.user_name + ' のデータ書き込みに失敗: ' + error.message);
-      }
-    });
+    // 今月の全データを同期（修正されたデータも反映）
+    syncCurrentMonthData();
 
     // ダッシュボードシートを更新
     updateDashboard();
 
     // TODO達成率シートを更新
+    const dateString = getYesterdayDate();
     updateTodoAchievementSheet(dateString);
 
     // ユニット達成率を同期
@@ -87,13 +67,188 @@ function exportDailyAttendance() {
 
     Logger.log('勤怠データの自動出力が完了しました');
 
-    // Slack通知（オプション）
-    // sendSlackNotification('勤怠データの自動出力が完了しました (' + attendances.length + '件)');
-
   } catch (error) {
     Logger.log('エラーが発生しました: ' + error.message);
-    // エラー通知をSlackに送信することも可能
   }
+}
+
+/**
+ * 今月の勤怠データを全ユーザーシートに同期
+ * - 修正されたデータも反映
+ * - ダッシュボードの合計と一致するようにする
+ */
+function syncCurrentMonthData() {
+  try {
+    Logger.log('=== 今月データの同期を開始 ===');
+    
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    
+    // 今月の全データを取得（clock_inが存在するもの）
+    const allAttendances = fetchMonthlyAttendanceDataFull();
+    
+    if (!allAttendances || allAttendances.length === 0) {
+      Logger.log('今月のデータがありません');
+      return;
+    }
+    
+    Logger.log('今月のデータ件数: ' + allAttendances.length);
+    
+    // 3:00am基準で現在の年月を取得
+    const todayDateStr = getTodayDate();
+    const todayDate = new Date(todayDateStr + 'T00:00:00+09:00');
+    const currentYear = parseInt(Utilities.formatDate(todayDate, 'Asia/Tokyo', 'yyyy'));
+    const currentMonth = parseInt(Utilities.formatDate(todayDate, 'Asia/Tokyo', 'MM'));
+    const currentMonthLabel = currentMonth + '月';
+    
+    // ユーザーごとにグループ化
+    const userAttendances = {};
+    allAttendances.forEach(record => {
+      if (!userAttendances[record.user_name]) {
+        userAttendances[record.user_name] = {
+          employee_id: record.employee_id,
+          records: []
+        };
+      }
+      userAttendances[record.user_name].records.push(record);
+    });
+    
+    Logger.log('ユーザー数: ' + Object.keys(userAttendances).length);
+    
+    // 各ユーザーのシートを更新
+    Object.keys(userAttendances).forEach(userName => {
+      try {
+        const userData = userAttendances[userName];
+        let sheet = spreadsheet.getSheetByName(userName);
+        
+        if (!sheet) {
+          // シートが存在しない場合は新規作成
+          sheet = spreadsheet.insertSheet(userName);
+          createSheetHeader(sheet, userName, userData.employee_id);
+        }
+        
+        // 今月セクション（4-32行）をクリア
+        clearCurrentMonthSection(sheet);
+        
+        // 日付昇順でソート
+        userData.records.sort((a, b) => a.date.localeCompare(b.date));
+        
+        // 今月ヘッダーを書き込み
+        let row = 4;
+        if (userData.records.length > 0) {
+          sheet.getRange(row, 1).setValue(currentMonthLabel);
+          sheet.getRange(row, 1).setFontWeight('bold').setBackground('#e8f5e9');
+          row++;
+        }
+        
+        // データを書き込み
+        userData.records.forEach(record => {
+          writeAttendanceRowSimple(sheet, row, record);
+          row++;
+        });
+        
+        // ヘッダーの合計を更新
+        updateHeaderSummary(sheet, userData.records, currentYear, currentMonth);
+        
+      } catch (error) {
+        Logger.log('ユーザー ' + userName + ' の同期に失敗: ' + error.message);
+      }
+    });
+    
+    Logger.log('=== 今月データの同期が完了 ===');
+    
+  } catch (error) {
+    Logger.log('syncCurrentMonthData エラー: ' + error.message);
+    throw error;
+  }
+}
+
+/**
+ * 今月セクション（4-32行）をクリア
+ */
+function clearCurrentMonthSection(sheet) {
+  const PAST_DATA_START_ROW = 33;
+  // 4行目から32行目までをクリア
+  sheet.getRange(4, 1, PAST_DATA_START_ROW - 4, 9).clearContent();
+  sheet.getRange(4, 1, PAST_DATA_START_ROW - 4, 9).clearFormat();
+}
+
+/**
+ * ヘッダーの今月合計を更新
+ */
+function updateHeaderSummary(sheet, records, currentYear, currentMonth) {
+  // 今月の集計
+  let totalMinutes = 0;
+  let remoteDays = 0;
+  let officeDays = 0;
+  
+  records.forEach(record => {
+    totalMinutes += record.work_minutes || 0;
+    if (record.work_type === 'remote') remoteDays++;
+    if (record.work_type === 'office') officeDays++;
+  });
+  
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  const timeStr = `${hours}:${minutes.toString().padStart(2, '0')}`;
+  
+  // 今月合計を書き込み
+  sheet.getRange(1, 11).setValue(timeStr);
+  sheet.getRange(1, 11).setNumberFormat('@');
+  sheet.getRange(1, 11).setFontWeight('bold').setFontSize(12);
+  sheet.getRange(2, 11).setValue(records.length + '日');
+  sheet.getRange(1, 13).setValue(remoteDays + '日');
+  sheet.getRange(2, 13).setValue(officeDays + '日');
+}
+
+/**
+ * 今月の全勤怠データを取得（修正含む）
+ */
+function fetchMonthlyAttendanceDataFull() {
+  const todayDateStr = getTodayDate();
+  const todayDate = new Date(todayDateStr + 'T00:00:00+09:00');
+  const currentYear = todayDate.getFullYear();
+  const currentMonth = todayDate.getMonth();
+  const firstDay = new Date(currentYear, currentMonth, 1);
+  const firstDayStr = Utilities.formatDate(firstDay, 'Asia/Tokyo', 'yyyy-MM-dd');
+  
+  // clock_inが存在する今月のデータを全取得
+  const url = `${SUPABASE_URL}/rest/v1/attendances?date=gte.${firstDayStr}&clock_in=not.is.null&select=*,users(*)&order=date.asc`;
+  
+  const options = {
+    method: 'get',
+    headers: {
+      'apikey': SUPABASE_SERVICE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_SERVICE_KEY,
+      'Content-Type': 'application/json'
+    },
+    muteHttpExceptions: true
+  };
+  
+  const response = UrlFetchApp.fetch(url, options);
+  const statusCode = response.getResponseCode();
+  
+  if (statusCode !== 200) {
+    throw new Error('Supabaseからのデータ取得に失敗: ' + statusCode);
+  }
+  
+  const data = JSON.parse(response.getContentText());
+  
+  return data.map(record => {
+    const user = record.users;
+    return {
+      user_id: record.user_id,
+      user_name: user.name,
+      employee_id: user.employee_id,
+      date: record.date,
+      clock_in: record.clock_in,
+      clock_out: record.clock_out,
+      break_sessions: record.break_sessions || [],
+      break_minutes: record.break_minutes_used || 0,
+      work_minutes: record.total_work_minutes || 0,
+      work_type: record.work_type || '',
+      notes: record.notes || ''
+    };
+  });
 }
 
 /**
