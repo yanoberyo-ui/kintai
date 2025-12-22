@@ -236,36 +236,38 @@ function fetchMonthlyAttendanceDataFull() {
   
   const data = JSON.parse(response.getContentText());
   
-  return data.map(record => {
-    const user = record.users;
-    
-    // 実働時間を出勤・退勤時間から計算（DBの値が不正な場合のため）
-    let workMinutes = 0;
-    if (record.clock_in && record.clock_out) {
-      const clockIn = new Date(record.clock_in);
-      const clockOut = new Date(record.clock_out);
-      const diffMinutes = Math.floor((clockOut - clockIn) / 60000);
-      const breakMinutes = record.break_minutes_used || 0;
-      workMinutes = Math.max(0, diffMinutes - breakMinutes);
-    } else if (record.clock_in && !record.clock_out) {
-      // まだ退勤していない場合は0（または現在時刻まで計算したい場合は別途対応）
-      workMinutes = 0;
-    }
-    
-    return {
-      user_id: record.user_id,
-      user_name: user.name,
-      employee_id: user.employee_id,
-      date: record.date,
-      clock_in: record.clock_in,
-      clock_out: record.clock_out,
-      break_sessions: record.break_sessions || [],
-      break_minutes: record.break_minutes_used || 0,
-      work_minutes: workMinutes,
-      work_type: record.work_type || '',
-      notes: record.notes || ''
-    };
-  });
+  return data
+    .filter(record => record.users) // ユーザー情報がないレコードはスキップ
+    .map(record => {
+      const user = record.users;
+      
+      // 実働時間を出勤・退勤時間から計算（DBの値が不正な場合のため）
+      let workMinutes = 0;
+      if (record.clock_in && record.clock_out) {
+        const clockIn = new Date(record.clock_in);
+        const clockOut = new Date(record.clock_out);
+        const diffMinutes = Math.floor((clockOut - clockIn) / 60000);
+        const breakMinutes = record.break_minutes_used || 0;
+        workMinutes = Math.max(0, diffMinutes - breakMinutes);
+      } else if (record.clock_in && !record.clock_out) {
+        // まだ退勤していない場合は0（または現在時刻まで計算したい場合は別途対応）
+        workMinutes = 0;
+      }
+      
+      return {
+        user_id: record.user_id,
+        user_name: user.name,
+        employee_id: user.employee_id,
+        date: record.date,
+        clock_in: record.clock_in,
+        clock_out: record.clock_out,
+        break_sessions: record.break_sessions || [],
+        break_minutes: record.break_minutes_used || 0,
+        work_minutes: workMinutes,
+        work_type: record.work_type || '',
+        notes: record.notes || ''
+      };
+    });
 }
 
 /**
@@ -298,26 +300,28 @@ function fetchAttendanceData(date) {
   const data = JSON.parse(response.getContentText());
 
   // データの整形
-  return data.map(record => {
-    const user = record.users;
-    
-    // 勤務時間を取得（データベースの値をそのまま使用）
-    let workMinutes = record.total_work_minutes || 0;
-    
-    return {
-      user_id: record.user_id,
-      user_name: user.name,
-      employee_id: user.employee_id,
-      date: record.date,
-      clock_in: record.clock_in,
-      clock_out: record.clock_out,
-      break_sessions: record.break_sessions || [],
-      break_minutes: record.break_minutes_used || 0,
-      work_minutes: workMinutes,
-      work_type: record.work_type || '',
-      notes: record.notes || ''
-    };
-  });
+  return data
+    .filter(record => record.users) // ユーザー情報がないレコードはスキップ
+    .map(record => {
+      const user = record.users;
+      
+      // 勤務時間を取得（データベースの値をそのまま使用）
+      let workMinutes = record.total_work_minutes || 0;
+      
+      return {
+        user_id: record.user_id,
+        user_name: user.name,
+        employee_id: user.employee_id,
+        date: record.date,
+        clock_in: record.clock_in,
+        clock_out: record.clock_out,
+        break_sessions: record.break_sessions || [],
+        break_minutes: record.break_minutes_used || 0,
+        work_minutes: workMinutes,
+        work_type: record.work_type || '',
+        notes: record.notes || ''
+      };
+    });
 }
 
 /**
@@ -1079,37 +1083,39 @@ function fetchMonthlyAttendanceData() {
   const response = UrlFetchApp.fetch(url, options);
   const data = JSON.parse(response.getContentText());
 
-  return data.map(record => {
-    const user = record.users;
-    
-    // 実働時間を出勤・退勤時間から計算（DBの値が不正な場合のため）
-    let workMinutes = 0;
-    if (record.clock_in && record.clock_out) {
-      const clockIn = new Date(record.clock_in);
-      const clockOut = new Date(record.clock_out);
-      const diffMinutes = Math.floor((clockOut - clockIn) / 60000);
-      const breakMinutes = record.break_minutes_used || 0;
-      workMinutes = Math.max(0, diffMinutes - breakMinutes);
-    } else if (record.clock_in && !record.clock_out && record.status === 'working') {
-      // 勤務中（まだ退勤していない）場合は、出勤時刻から現在までの時間を計算
-      const clockIn = new Date(record.clock_in);
-      const now = new Date();
-      const diffMinutes = Math.floor((now - clockIn) / 60000);
-      const breakMinutes = record.break_minutes_used || 0;
-      workMinutes = Math.max(0, diffMinutes - breakMinutes);
-    }
-    
-    return {
-      user_id: record.user_id,
-      user_name: user.name,
-      department: user.department,
-      date: record.date,
-      clock_in: record.clock_in,
-      clock_out: record.clock_out,
-      work_minutes: workMinutes,
-      work_type: record.work_type || ''
-    };
-  });
+  return data
+    .filter(record => record.users) // ユーザー情報がないレコードはスキップ
+    .map(record => {
+      const user = record.users;
+      
+      // 実働時間を出勤・退勤時間から計算（DBの値が不正な場合のため）
+      let workMinutes = 0;
+      if (record.clock_in && record.clock_out) {
+        const clockIn = new Date(record.clock_in);
+        const clockOut = new Date(record.clock_out);
+        const diffMinutes = Math.floor((clockOut - clockIn) / 60000);
+        const breakMinutes = record.break_minutes_used || 0;
+        workMinutes = Math.max(0, diffMinutes - breakMinutes);
+      } else if (record.clock_in && !record.clock_out && record.status === 'working') {
+        // 勤務中（まだ退勤していない）場合は、出勤時刻から現在までの時間を計算
+        const clockIn = new Date(record.clock_in);
+        const now = new Date();
+        const diffMinutes = Math.floor((now - clockIn) / 60000);
+        const breakMinutes = record.break_minutes_used || 0;
+        workMinutes = Math.max(0, diffMinutes - breakMinutes);
+      }
+      
+      return {
+        user_id: record.user_id,
+        user_name: user.name,
+        department: user.department,
+        date: record.date,
+        clock_in: record.clock_in,
+        clock_out: record.clock_out,
+        work_minutes: workMinutes,
+        work_type: record.work_type || ''
+      };
+    });
 }
 
 /**
@@ -1906,34 +1912,36 @@ function fetchAllAttendanceData() {
   
   const data = JSON.parse(response.getContentText());
   
-  return data.map(record => {
-    const user = record.users;
-    
-    // 実働時間を出勤・退勤時間から計算（DBの値が不正な場合のため）
-    let workMinutes = 0;
-    if (record.clock_in && record.clock_out) {
-      const clockIn = new Date(record.clock_in);
-      const clockOut = new Date(record.clock_out);
-      const diffMinutes = Math.floor((clockOut - clockIn) / 60000);
-      const breakMinutes = record.break_minutes_used || 0;
-      workMinutes = Math.max(0, diffMinutes - breakMinutes);
-    }
-    
-    return {
-      user_id: record.user_id,
-      user_name: user.name,
-      employee_id: user.employee_id,
-      date: record.date,
-      clock_in: record.clock_in,
-      clock_out: record.clock_out,
-      status: record.status || '',
-      break_minutes: record.break_minutes_used || 0,
-      work_minutes: workMinutes,
-      work_type: record.work_type || '',
-      notes: record.notes || '',
-      break_sessions: record.break_sessions || []
-    };
-  });
+  return data
+    .filter(record => record.users) // ユーザー情報がないレコードはスキップ
+    .map(record => {
+      const user = record.users;
+      
+      // 実働時間を出勤・退勤時間から計算（DBの値が不正な場合のため）
+      let workMinutes = 0;
+      if (record.clock_in && record.clock_out) {
+        const clockIn = new Date(record.clock_in);
+        const clockOut = new Date(record.clock_out);
+        const diffMinutes = Math.floor((clockOut - clockIn) / 60000);
+        const breakMinutes = record.break_minutes_used || 0;
+        workMinutes = Math.max(0, diffMinutes - breakMinutes);
+      }
+      
+      return {
+        user_id: record.user_id,
+        user_name: user.name,
+        employee_id: user.employee_id,
+        date: record.date,
+        clock_in: record.clock_in,
+        clock_out: record.clock_out,
+        status: record.status || '',
+        break_minutes: record.break_minutes_used || 0,
+        work_minutes: workMinutes,
+        work_type: record.work_type || '',
+        notes: record.notes || '',
+        break_sessions: record.break_sessions || []
+      };
+    });
 }
 
 /**
