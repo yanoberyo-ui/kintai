@@ -1093,6 +1093,7 @@ function fetchMonthlyAttendanceData() {
       const user = record.users;
       
       // 実働時間を出勤・退勤時間から計算（DBの値が不正な場合のため）
+      // ※ 勤務中（clock_outなし）の場合は0分として扱う（個別シートと統一）
       let workMinutes = 0;
       if (record.clock_in && record.clock_out) {
         const clockIn = new Date(record.clock_in);
@@ -1100,14 +1101,8 @@ function fetchMonthlyAttendanceData() {
         const diffMinutes = Math.floor((clockOut - clockIn) / 60000);
         const breakMinutes = record.break_minutes_used || 0;
         workMinutes = Math.max(0, diffMinutes - breakMinutes);
-      } else if (record.clock_in && !record.clock_out && record.status === 'working') {
-        // 勤務中（まだ退勤していない）場合は、出勤時刻から現在までの時間を計算
-        const clockIn = new Date(record.clock_in);
-        const now = new Date();
-        const diffMinutes = Math.floor((now - clockIn) / 60000);
-        const breakMinutes = record.break_minutes_used || 0;
-        workMinutes = Math.max(0, diffMinutes - breakMinutes);
       }
+      // 勤務中（clock_outなし）の場合は0分のまま
       
       return {
         user_id: record.user_id,
@@ -1722,17 +1717,9 @@ function rebuildAllSheets() {
         let currentMonthRemoteDays = 0;
         let currentMonthOfficeDays = 0;
         userData.currentMonthRecords.forEach(record => {
-          // 勤務時間を計算（管理者ダッシュボードと同じロジック）
-          let workMinutes = record.work_minutes || 0;
-          
-          // 勤務中（status === 'working' かつ clock_outがない）の場合のみ、現在時刻までの時間を計算
-          if (record.clock_in && !record.clock_out && record.status === 'working') {
-            const clockIn = new Date(record.clock_in);
-            const now = new Date();
-            const diffMinutes = Math.floor((now - clockIn) / 60000);
-            const breakMinutes = record.break_minutes || 0;
-            workMinutes = Math.max(0, diffMinutes - breakMinutes);
-          }
+          // 勤務時間はfetchAllAttendanceDataで計算済みの値を使用
+          // ※ 勤務中（clock_outなし）の場合は0分として扱う（全シート統一）
+          const workMinutes = record.work_minutes || 0;
           
           currentMonthTotalMinutes += workMinutes;
           if (record.work_type === 'remote') currentMonthRemoteDays++;
