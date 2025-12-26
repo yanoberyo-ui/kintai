@@ -156,13 +156,29 @@ export async function clockOut(userId, additionalBreakMinutes = 0) {
 
   // 最後の勤務セッションの時間を計算
   let lastWorkStart;
-  if (breakSessions.length > 0) {
-    // 最後の中抜け終了時刻から
+  
+  // 再出勤後の場合は last_clock_out を基準にする
+  if (attendance.last_clock_out) {
+    const lastClockOut = new Date(attendance.last_clock_out);
+    
+    // 再出勤後に新たな中抜けがあるかチェック
+    const breakAfterReClockIn = breakSessions.filter(session => {
+      const sessionStart = new Date(session.start);
+      return sessionStart > lastClockOut;
+    });
+    
+    if (breakAfterReClockIn.length > 0) {
+      // 再出勤後の最後の中抜け終了時刻から
+      const lastSession = breakAfterReClockIn[breakAfterReClockIn.length - 1];
+      lastWorkStart = new Date(lastSession.end);
+    } else {
+      // 再出勤後に中抜けがない場合は再出勤時刻から
+      lastWorkStart = lastClockOut;
+    }
+  } else if (breakSessions.length > 0) {
+    // 再出勤なし、中抜けありの場合
     const lastSession = breakSessions[breakSessions.length - 1];
     lastWorkStart = new Date(lastSession.end);
-  } else if (attendance.last_clock_out) {
-    // 再出勤後の場合
-    lastWorkStart = new Date(attendance.last_clock_out);
   } else {
     // 最初の出勤時刻から
     lastWorkStart = new Date(attendance.clock_in);
