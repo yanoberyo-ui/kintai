@@ -1095,12 +1095,12 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
             </h3>
             <p className={`text-sm mb-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
               中抜け時間は自動的に計算されます。<br />
-              追加で休憩時間がある場合は入力してください。
+              休憩時間を入力してください（必須）。
             </p>
 
             <div className="mb-6">
               <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                追加休憩時間（分）
+                休憩時間（分）<span className="text-red-500 ml-1">※必須</span>
               </label>
               <input
                 type="text"
@@ -1108,7 +1108,7 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
                 pattern="[0-9]*"
                 value={additionalBreakMinutes}
                 onChange={(e) => {
-                  // 数字のみ許可し、先頭の0を除去
+                  // 数字のみ許可し、先頭の0を除去（ただし「0」単体は許可）
                   const value = e.target.value.replace(/[^0-9]/g, '')
                   const numValue = value === '' ? '' : String(parseInt(value, 10))
                   setAdditionalBreakMinutes(numValue)
@@ -1118,17 +1118,24 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
                     ? 'bg-gray-700 border-gray-600 text-white focus:border-blue-500'
                     : 'bg-gray-50 border-gray-300 text-gray-900 focus:border-blue-500'
                 } focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
-                placeholder="0"
+                placeholder="休憩なしの場合は 0 を入力"
               />
-              <p className={`text-xs mt-2 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                例: 昼休憩60分、その他の休憩時間など
-              </p>
+              {additionalBreakMinutes === '' && (
+                <p className="text-xs mt-2 text-red-500">
+                  休憩時間を入力してください（休憩なしの場合は 0 を入力）
+                </p>
+              )}
+              {additionalBreakMinutes !== '' && (
+                <p className={`text-xs mt-2 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                  例: 昼休憩60分、その他の休憩時間など
+                </p>
+              )}
             </div>
 
             <div className="space-y-3">
               <button
                 onClick={handleClockOutConfirm}
-                disabled={loading}
+                disabled={loading || additionalBreakMinutes === ''}
                 className={`w-full font-medium py-4 rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg ${
                   isDark
                     ? 'bg-orange-600 text-white hover:bg-orange-700 shadow-orange-600/20'
