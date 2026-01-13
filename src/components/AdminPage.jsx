@@ -54,6 +54,9 @@ export default function AdminPage({ isDark }) {
   const [healthPeriods, setHealthPeriods] = useState([])
   const [selectedHealthPeriod, setSelectedHealthPeriod] = useState('')
   const [loadingHealth, setLoadingHealth] = useState(false)
+  const [showQuestionEditor, setShowQuestionEditor] = useState(false)
+  const [editingQuestion, setEditingQuestion] = useState(null)
+  const [newQuestion, setNewQuestion] = useState({ category: '', question_text: '', question_type: 'scale' })
 
   useEffect(() => {
     loadCurrentUser()
@@ -579,6 +582,75 @@ export default function AdminPage({ isDark }) {
       
     } catch (error) {
       console.error('Error loading health period data:', error)
+    }
+  }
+
+  // 質問を追加
+  const handleAddQuestion = async () => {
+    if (!newQuestion.category || !newQuestion.question_text) {
+      alert('カテゴリと質問文を入力してください')
+      return
+    }
+    
+    try {
+      const maxOrder = healthSurvey.questions?.length > 0 
+        ? Math.max(...healthSurvey.questions.map(q => q.order_index)) + 1 
+        : 1
+      
+      const { error } = await supabase
+        .from('health_survey_questions')
+        .insert({
+          survey_id: healthSurvey.id,
+          category: newQuestion.category,
+          question_text: newQuestion.question_text,
+          question_type: newQuestion.question_type,
+          order_index: maxOrder
+        })
+      
+      if (error) throw error
+      
+      setNewQuestion({ category: '', question_text: '', question_type: 'scale' })
+      await loadHealthSurveyData()
+    } catch (error) {
+      console.error('Error adding question:', error)
+      alert('質問の追加に失敗しました')
+    }
+  }
+
+  // 質問を更新
+  const handleUpdateQuestion = async (questionId, updates) => {
+    try {
+      const { error } = await supabase
+        .from('health_survey_questions')
+        .update(updates)
+        .eq('id', questionId)
+      
+      if (error) throw error
+      
+      setEditingQuestion(null)
+      await loadHealthSurveyData()
+    } catch (error) {
+      console.error('Error updating question:', error)
+      alert('質問の更新に失敗しました')
+    }
+  }
+
+  // 質問を削除
+  const handleDeleteQuestion = async (questionId) => {
+    if (!confirm('この質問を削除しますか？関連する回答データも削除されます。')) return
+    
+    try {
+      const { error } = await supabase
+        .from('health_survey_questions')
+        .delete()
+        .eq('id', questionId)
+      
+      if (error) throw error
+      
+      await loadHealthSurveyData()
+    } catch (error) {
+      console.error('Error deleting question:', error)
+      alert('質問の削除に失敗しました')
     }
   }
 
@@ -2001,6 +2073,16 @@ export default function AdminPage({ isDark }) {
                         ))
                       )}
                     </select>
+                    <button
+                      onClick={() => setShowQuestionEditor(true)}
+                      className={`px-4 py-2 text-sm font-medium rounded-xl transition-colors flex items-center gap-2 ${
+                        isDark
+                          ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                          : 'bg-emerald-500 text-white hover:bg-emerald-600'
+                      }`}
+                    >
+                      ✏️ 質問を編集
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2227,6 +2309,222 @@ export default function AdminPage({ isDark }) {
                 </div>
               )}
             </>
+          )}
+
+          {/* 質問編集モーダル */}
+          {showQuestionEditor && healthSurvey && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div 
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                onClick={() => setShowQuestionEditor(false)}
+              />
+              <div className={`relative w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl shadow-2xl ${
+                isDark ? 'bg-gray-900' : 'bg-white'
+              }`}>
+                {/* ヘッダー */}
+                <div className={`px-6 py-4 border-b flex items-center justify-between ${
+                  isDark ? 'border-gray-800' : 'border-gray-200'
+                }`}>
+                  <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    ✏️ 質問を編集
+                  </h3>
+                  <button
+                    onClick={() => setShowQuestionEditor(false)}
+                    className={`p-2 rounded-lg transition-colors ${
+                      isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+                    }`}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* 質問リスト */}
+                <div className="p-6 overflow-y-auto max-h-[60vh]">
+                  <div className="space-y-3">
+                    {healthSurvey.questions?.map((question, index) => (
+                      <div 
+                        key={question.id}
+                        className={`p-4 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}
+                      >
+                        {editingQuestion === question.id ? (
+                          /* 編集モード */
+                          <div className="space-y-3">
+                            <div className="flex gap-3">
+                              <select
+                                defaultValue={question.category}
+                                id={`edit-category-${question.id}`}
+                                className={`px-3 py-2 text-sm rounded-lg ${
+                                  isDark
+                                    ? 'bg-gray-700 text-white border border-gray-600'
+                                    : 'bg-white text-gray-900 border border-gray-300'
+                                }`}
+                              >
+                                <option value="仕事">仕事</option>
+                                <option value="人間関係">人間関係</option>
+                                <option value="健康">健康</option>
+                                <option value="成長">成長</option>
+                                <option value="承認">承認</option>
+                                <option value="支援">支援</option>
+                                <option value="フリー">フリー</option>
+                              </select>
+                              <select
+                                defaultValue={question.question_type}
+                                id={`edit-type-${question.id}`}
+                                className={`px-3 py-2 text-sm rounded-lg ${
+                                  isDark
+                                    ? 'bg-gray-700 text-white border border-gray-600'
+                                    : 'bg-white text-gray-900 border border-gray-300'
+                                }`}
+                              >
+                                <option value="scale">5段階評価</option>
+                                <option value="text">自由記述</option>
+                              </select>
+                            </div>
+                            <textarea
+                              defaultValue={question.question_text}
+                              id={`edit-text-${question.id}`}
+                              rows={2}
+                              className={`w-full px-3 py-2 text-sm rounded-lg ${
+                                isDark
+                                  ? 'bg-gray-700 text-white border border-gray-600'
+                                  : 'bg-white text-gray-900 border border-gray-300'
+                              }`}
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  const category = document.getElementById(`edit-category-${question.id}`).value
+                                  const type = document.getElementById(`edit-type-${question.id}`).value
+                                  const text = document.getElementById(`edit-text-${question.id}`).value
+                                  handleUpdateQuestion(question.id, {
+                                    category,
+                                    question_type: type,
+                                    question_text: text
+                                  })
+                                }}
+                                className="px-3 py-1.5 text-sm font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600"
+                              >
+                                保存
+                              </button>
+                              <button
+                                onClick={() => setEditingQuestion(null)}
+                                className={`px-3 py-1.5 text-sm font-medium rounded-lg ${
+                                  isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'
+                                }`}
+                              >
+                                キャンセル
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          /* 表示モード */
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                  isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'
+                                }`}>
+                                  {question.category}
+                                </span>
+                                <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                  {question.question_type === 'scale' ? '5段階評価' : '自由記述'}
+                                </span>
+                              </div>
+                              <p className={`text-sm ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
+                                {index + 1}. {question.question_text}
+                              </p>
+                            </div>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => setEditingQuestion(question.id)}
+                                className={`p-1.5 rounded-lg transition-colors ${
+                                  isDark ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'
+                                }`}
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                onClick={() => handleDeleteQuestion(question.id)}
+                                className={`p-1.5 rounded-lg transition-colors ${
+                                  isDark ? 'hover:bg-red-900/30 text-red-400' : 'hover:bg-red-100 text-red-500'
+                                }`}
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 新規質問追加 */}
+                <div className={`px-6 py-4 border-t ${isDark ? 'border-gray-800 bg-gray-800/50' : 'border-gray-200 bg-gray-50'}`}>
+                  <h4 className={`text-sm font-medium mb-3 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    ➕ 新しい質問を追加
+                  </h4>
+                  <div className="space-y-3">
+                    <div className="flex gap-3">
+                      <select
+                        value={newQuestion.category}
+                        onChange={(e) => setNewQuestion({ ...newQuestion, category: e.target.value })}
+                        className={`px-3 py-2 text-sm rounded-lg ${
+                          isDark
+                            ? 'bg-gray-700 text-white border border-gray-600'
+                            : 'bg-white text-gray-900 border border-gray-300'
+                        }`}
+                      >
+                        <option value="">カテゴリを選択</option>
+                        <option value="仕事">仕事</option>
+                        <option value="人間関係">人間関係</option>
+                        <option value="健康">健康</option>
+                        <option value="成長">成長</option>
+                        <option value="承認">承認</option>
+                        <option value="支援">支援</option>
+                        <option value="フリー">フリー</option>
+                      </select>
+                      <select
+                        value={newQuestion.question_type}
+                        onChange={(e) => setNewQuestion({ ...newQuestion, question_type: e.target.value })}
+                        className={`px-3 py-2 text-sm rounded-lg ${
+                          isDark
+                            ? 'bg-gray-700 text-white border border-gray-600'
+                            : 'bg-white text-gray-900 border border-gray-300'
+                        }`}
+                      >
+                        <option value="scale">5段階評価</option>
+                        <option value="text">自由記述</option>
+                      </select>
+                    </div>
+                    <div className="flex gap-3">
+                      <input
+                        type="text"
+                        value={newQuestion.question_text}
+                        onChange={(e) => setNewQuestion({ ...newQuestion, question_text: e.target.value })}
+                        placeholder="質問文を入力..."
+                        className={`flex-1 px-3 py-2 text-sm rounded-lg ${
+                          isDark
+                            ? 'bg-gray-700 text-white border border-gray-600 placeholder-gray-500'
+                            : 'bg-white text-gray-900 border border-gray-300 placeholder-gray-400'
+                        }`}
+                      />
+                      <button
+                        onClick={handleAddQuestion}
+                        disabled={!newQuestion.category || !newQuestion.question_text}
+                        className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                          !newQuestion.category || !newQuestion.question_text
+                            ? 'bg-gray-400 text-white cursor-not-allowed'
+                            : 'bg-emerald-500 text-white hover:bg-emerald-600'
+                        }`}
+                      >
+                        追加
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       )}
