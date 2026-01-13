@@ -2326,7 +2326,7 @@ export default function AdminPage({ isDark }) {
                   isDark ? 'border-gray-800' : 'border-gray-200'
                 }`}>
                   <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                    ✏️ 質問を編集
+                    ✏️ サーベイ設定
                   </h3>
                   <button
                     onClick={() => setShowQuestionEditor(false)}
@@ -2336,6 +2336,53 @@ export default function AdminPage({ isDark }) {
                   >
                     ✕
                   </button>
+                </div>
+
+                {/* 配信スケジュール設定 */}
+                <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
+                  <h4 className={`text-sm font-medium mb-3 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    📅 配信スケジュール
+                  </h4>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                      サーベイを表示する頻度：
+                    </span>
+                    <select
+                      value={healthSurvey.frequency}
+                      onChange={async (e) => {
+                        try {
+                          const { error } = await supabase
+                            .from('health_surveys')
+                            .update({ frequency: e.target.value })
+                            .eq('id', healthSurvey.id)
+                          if (error) throw error
+                          await loadHealthSurveyData()
+                        } catch (error) {
+                          console.error('Error updating frequency:', error)
+                          alert('頻度の更新に失敗しました')
+                        }
+                      }}
+                      className={`px-4 py-2 text-sm font-medium rounded-xl ${
+                        isDark
+                          ? 'bg-gray-800 text-white border border-gray-700'
+                          : 'bg-white text-gray-900 border border-gray-300'
+                      }`}
+                    >
+                      <option value="weekly">毎週（週1回）</option>
+                      <option value="biweekly">隔週（月2回）</option>
+                      <option value="monthly">毎月（月1回）</option>
+                    </select>
+                    <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                      ※ 出勤時に表示されます
+                    </span>
+                  </div>
+                  <div className={`mt-3 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                    現在の設定: {
+                      healthSurvey.frequency === 'weekly' ? '毎週月曜日の初回出勤時' :
+                      healthSurvey.frequency === 'biweekly' ? '毎月1日と16日以降の初回出勤時' :
+                      '毎月初回の出勤時'
+                    }
+                  </div>
                 </div>
 
                 {/* 質問リスト */}
