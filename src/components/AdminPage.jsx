@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../utils/supabase'
 import { getTodayDate } from '../utils/date'
+import { 
+  getActiveSurvey, 
+  getSurveyResults, 
+  calculateCategoryScores, 
+  calculateDepartmentScores, 
+  getScoreTrend, 
+  getResponseRate, 
+  getFreeComments,
+  getAvailablePeriods,
+  getCurrentResponsePeriod
+} from '../utils/healthSurvey'
 
 export default function AdminPage({ isDark }) {
   const [currentUser, setCurrentUser] = useState(null)
@@ -31,6 +42,18 @@ export default function AdminPage({ isDark }) {
     break_minutes_used: 60,
     work_type: 'office'
   })
+  
+  // ヘルスケアサーベイ関連state
+  const [healthSurvey, setHealthSurvey] = useState(null)
+  const [healthResults, setHealthResults] = useState([])
+  const [healthCategoryScores, setHealthCategoryScores] = useState({})
+  const [healthDeptScores, setHealthDeptScores] = useState({})
+  const [healthTrend, setHealthTrend] = useState([])
+  const [healthResponseRate, setHealthResponseRate] = useState({ totalUsers: 0, completedUsers: 0, rate: 0 })
+  const [healthComments, setHealthComments] = useState([])
+  const [healthPeriods, setHealthPeriods] = useState([])
+  const [selectedHealthPeriod, setSelectedHealthPeriod] = useState('')
+  const [loadingHealth, setLoadingHealth] = useState(false)
 
   useEffect(() => {
     loadCurrentUser()
@@ -58,9 +81,18 @@ export default function AdminPage({ isDark }) {
         loadSalaries()
       } else if (activeTab === 'todo_achievement') {
         loadTodoAchievement()
+      } else if (activeTab === 'health') {
+        loadHealthSurveyData()
       }
     }
   }, [currentUser, activeTab, selectedYear, selectedMonth, attendanceViewMode])
+  
+  // ヘルスケア期間変更時にデータ再読み込み
+  useEffect(() => {
+    if (activeTab === 'health' && selectedHealthPeriod && healthSurvey) {
+      loadHealthPeriodData(selectedHealthPeriod)
+    }
+  }, [selectedHealthPeriod])
 
   const loadCurrentUser = async () => {
     try {
@@ -481,6 +513,72 @@ export default function AdminPage({ isDark }) {
       setTodoAchievementData(achievementData)
     } catch (error) {
       console.error('Error loading todo achievement:', error)
+    }
+  }
+
+  // ヘルスケアサーベイデータの読み込み
+  const loadHealthSurveyData = async () => {
+    try {
+      setLoadingHealth(true)
+      
+      // アクティブなサーベイを取得
+      const survey = await getActiveSurvey()
+      if (!survey) {
+        setHealthSurvey(null)
+        return
+      }
+      setHealthSurvey(survey)
+      
+      // 利用可能な期間を取得
+      const periods = await getAvailablePeriods(survey.id)
+      setHealthPeriods(periods)
+      
+      // デフォルトで最新期間を選択
+      const currentPeriod = periods.length > 0 ? periods[0] : getCurrentResponsePeriod(survey.frequency)
+      setSelectedHealthPeriod(currentPeriod)
+      
+      // 期間データを読み込み
+      await loadHealthPeriodData(currentPeriod, survey.id)
+      
+    } catch (error) {
+      console.error('Error loading health survey data:', error)
+    } finally {
+      setLoadingHealth(false)
+    }
+  }
+  
+  // 特定期間のヘルスケアデータを読み込み
+  const loadHealthPeriodData = async (period, surveyId = null) => {
+    try {
+      const sid = surveyId || healthSurvey?.id
+      if (!sid) return
+      
+      // 結果データを取得
+      const results = await getSurveyResults(sid, period)
+      setHealthResults(results)
+      
+      // カテゴリ別スコアを計算
+      const categoryScores = calculateCategoryScores(results)
+      setHealthCategoryScores(categoryScores)
+      
+      // 部署別スコアを計算
+      const deptScores = calculateDepartmentScores(results)
+      setHealthDeptScores(deptScores)
+      
+      // 回答率を取得
+      const responseRate = await getResponseRate(sid, period)
+      setHealthResponseRate(responseRate)
+      
+      // フリーコメントを取得
+      const comments = await getFreeComments(sid, period)
+      setHealthComments(comments)
+      
+      // スコア推移を取得
+      const trend = await getScoreTrend(sid, 6)
+      setHealthTrend(trend)
+      
+    } catch (error) {
+      console.error('Error loading health period data:', error)
     }
   }
 
@@ -934,6 +1032,7 @@ export default function AdminPage({ isDark }) {
             { value: 'attendance', label: '出勤管理', icon: '📊', shortLabel: '出勤' },
             { value: 'salary', label: '給料管理', icon: '💰', shortLabel: '給料' },
             { value: 'todo_achievement', label: 'TODO', icon: '✅', shortLabel: 'TODO' },
+            { value: 'health', label: 'ヘルスケア', icon: '💚', shortLabel: 'ヘルス' },
             { value: 'users', label: 'ユーザー', icon: '👥', shortLabel: 'ユーザー' }
           ].map(({ value, label, icon, shortLabel }) => (
             <button
@@ -1853,6 +1952,284 @@ export default function AdminPage({ isDark }) {
         </div>
       )}
 
+      {/* ヘルスケアサーベイタブ */}
+      {activeTab === 'health' && (
+        <div className="space-y-6">
+          {loadingHealth ? (
+            <div className={`text-center py-12 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              読み込み中...
+            </div>
+          ) : !healthSurvey ? (
+            <div className={`rounded-2xl border p-12 text-center ${
+              isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'
+            }`}>
+              <div className="text-6xl mb-4">📊</div>
+              <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>
+                アクティブなサーベイがありません
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* ヘッダー情報 */}
+              <div className={`rounded-2xl border p-6 ${
+                isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'
+              }`}>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      💚 {healthSurvey.title}
+                    </h2>
+                    <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {healthSurvey.description}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <select
+                      value={selectedHealthPeriod}
+                      onChange={(e) => setSelectedHealthPeriod(e.target.value)}
+                      className={`px-3 py-2 text-sm rounded-xl transition-colors ${
+                        isDark
+                          ? 'bg-gray-800 text-white border border-gray-700'
+                          : 'bg-white text-gray-900 border border-gray-300'
+                      } focus:outline-none`}
+                    >
+                      {healthPeriods.length === 0 ? (
+                        <option value="">回答データなし</option>
+                      ) : (
+                        healthPeriods.map(period => (
+                          <option key={period} value={period}>{period}</option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* 統計カード */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {/* 回答率 */}
+                <div className={`rounded-2xl border p-5 ${
+                  isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'
+                }`}>
+                  <div className={`text-sm font-medium mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    回答率
+                  </div>
+                  <div className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    {healthResponseRate.rate}%
+                  </div>
+                  <div className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                    {healthResponseRate.completedUsers} / {healthResponseRate.totalUsers}人
+                  </div>
+                </div>
+
+                {/* 総合スコア */}
+                <div className={`rounded-2xl border p-5 ${
+                  isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'
+                }`}>
+                  <div className={`text-sm font-medium mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    総合スコア
+                  </div>
+                  <div className={`text-3xl font-bold ${
+                    Object.values(healthCategoryScores).length > 0
+                      ? (Object.values(healthCategoryScores).reduce((a, b) => a + b, 0) / Object.values(healthCategoryScores).length) >= 4
+                        ? 'text-green-500'
+                        : (Object.values(healthCategoryScores).reduce((a, b) => a + b, 0) / Object.values(healthCategoryScores).length) >= 3
+                          ? 'text-yellow-500'
+                          : 'text-red-500'
+                      : isDark ? 'text-gray-400' : 'text-gray-500'
+                  }`}>
+                    {Object.values(healthCategoryScores).length > 0
+                      ? (Object.values(healthCategoryScores).reduce((a, b) => a + b, 0) / Object.values(healthCategoryScores).length).toFixed(1)
+                      : '-'}
+                  </div>
+                  <div className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                    5点満点
+                  </div>
+                </div>
+
+                {/* 回答数 */}
+                <div className={`rounded-2xl border p-5 ${
+                  isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'
+                }`}>
+                  <div className={`text-sm font-medium mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    回答数
+                  </div>
+                  <div className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    {healthResults.length}
+                  </div>
+                  <div className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                    質問×回答者
+                  </div>
+                </div>
+
+                {/* コメント数 */}
+                <div className={`rounded-2xl border p-5 ${
+                  isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'
+                }`}>
+                  <div className={`text-sm font-medium mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    コメント数
+                  </div>
+                  <div className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    {healthComments.length}
+                  </div>
+                  <div className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                    フリーコメント
+                  </div>
+                </div>
+              </div>
+
+              {/* カテゴリ別スコア */}
+              <div className={`rounded-2xl border p-6 ${
+                isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'
+              }`}>
+                <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  📊 カテゴリ別スコア
+                </h3>
+                {Object.keys(healthCategoryScores).length === 0 ? (
+                  <p className={`text-center py-8 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                    データがありません
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {Object.entries(healthCategoryScores)
+                      .filter(([category]) => category !== 'フリー')
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([category, score]) => (
+                        <div key={category} className="flex items-center gap-4">
+                          <div className={`w-24 text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                            {category}
+                          </div>
+                          <div className="flex-1">
+                            <div className={`h-4 rounded-full overflow-hidden ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                              <div 
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                  score >= 4 ? 'bg-gradient-to-r from-green-400 to-emerald-500' :
+                                  score >= 3 ? 'bg-gradient-to-r from-yellow-400 to-orange-400' :
+                                  'bg-gradient-to-r from-red-400 to-red-500'
+                                }`}
+                                style={{ width: `${(score / 5) * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className={`w-12 text-right font-bold ${
+                            score >= 4 ? 'text-green-500' :
+                            score >= 3 ? 'text-yellow-500' :
+                            'text-red-500'
+                          }`}>
+                            {score.toFixed(1)}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 部署別スコア */}
+              {Object.keys(healthDeptScores).length > 0 && (
+                <div className={`rounded-2xl border p-6 ${
+                  isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'
+                }`}>
+                  <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    🏢 部署別スコア
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {Object.entries(healthDeptScores)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([dept, score]) => (
+                        <div 
+                          key={dept}
+                          className={`p-4 rounded-xl ${
+                            isDark ? 'bg-gray-800' : 'bg-gray-50'
+                          }`}
+                        >
+                          <div className={`text-sm font-medium mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                            {dept || '未設定'}
+                          </div>
+                          <div className={`text-2xl font-bold ${
+                            score >= 4 ? 'text-green-500' :
+                            score >= 3 ? 'text-yellow-500' :
+                            'text-red-500'
+                          }`}>
+                            {score.toFixed(1)}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* スコア推移 */}
+              {healthTrend.length > 0 && (
+                <div className={`rounded-2xl border p-6 ${
+                  isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'
+                }`}>
+                  <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    📈 スコア推移
+                  </h3>
+                  <div className="flex items-end justify-between gap-2 h-40">
+                    {healthTrend.map((item, index) => {
+                      const height = (item.averageScore / 5) * 100
+                      return (
+                        <div key={index} className="flex-1 flex flex-col items-center">
+                          <div className={`text-xs font-medium mb-1 ${
+                            item.averageScore >= 4 ? 'text-green-500' :
+                            item.averageScore >= 3 ? 'text-yellow-500' :
+                            'text-red-500'
+                          }`}>
+                            {item.averageScore.toFixed(1)}
+                          </div>
+                          <div 
+                            className={`w-full max-w-[40px] rounded-t-lg transition-all duration-500 ${
+                              item.averageScore >= 4 ? 'bg-gradient-to-t from-green-500 to-emerald-400' :
+                              item.averageScore >= 3 ? 'bg-gradient-to-t from-yellow-500 to-orange-400' :
+                              'bg-gradient-to-t from-red-500 to-red-400'
+                            }`}
+                            style={{ height: `${height}%` }}
+                          />
+                          <div className={`text-xs mt-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {item.period.slice(-2)}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* フリーコメント */}
+              {healthComments.length > 0 && (
+                <div className={`rounded-2xl border p-6 ${
+                  isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'
+                }`}>
+                  <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    💬 フリーコメント（匿名）
+                  </h3>
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {healthComments.map((comment, index) => (
+                      <div 
+                        key={index}
+                        className={`p-4 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}
+                      >
+                        <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                          {comment.free_text}
+                        </p>
+                        <div className={`flex items-center gap-2 mt-2 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                          {comment.department && (
+                            <span className={`px-2 py-0.5 rounded-full ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                              {comment.department}
+                            </span>
+                          )}
+                          <span>{new Date(comment.created_at).toLocaleDateString('ja-JP')}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {activeTab === 'users' && (
         <div className={`rounded-2xl border overflow-hidden ${

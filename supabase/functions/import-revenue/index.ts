@@ -80,26 +80,21 @@ serve(async (req) => {
     const tokenData = await tokenResponse.json()
     const accessToken = tokenData.access_token
 
-    // Fetch data from Google Sheets
-    const SPREADSHEET_ID = '1nBNo7bSQKPmNb_1g6VRFl6Ise8TAMqo48kaJMfHCY18'
-    const SHEET_NAME = '報告/MG粗利11月'
+    // Fetch data from Google Sheets（粗利用スプレッドシート）
+    const SPREADSHEET_ID = '1TwgzF9GYllrKDXg1Lkyo6ZCPB3jGRnwZzEpGpz5Q8PQ'
+    
+    // シート名を動的に生成（報告/MG粗利○月 形式で検索、なければ最初のシート）
+    const SHEET_NAME = `報告/MG粗利${month}月`
 
+    // 新しいセル位置（全体、CATS、SAL）
     const cellRanges = [
-      { name: '全体', grossProfitCell: 'I5', achievementRateCell: null },
-      { name: '第1ユニット', grossProfitCell: 'I12', achievementRateCell: 'L17' },
-      { name: '第2ユニット', grossProfitCell: 'I20', achievementRateCell: 'L21' },
-      { name: '第3ユニット', grossProfitCell: 'I28', achievementRateCell: 'L29' },
-      { name: '第5ユニット', grossProfitCell: 'I36', achievementRateCell: 'L37' }
+      { name: '全体', grossProfitCell: 'D5' },
+      { name: 'CATS', grossProfitCell: 'D12' },
+      { name: 'SAL', grossProfitCell: 'D20' }
     ]
 
-    // 粗利と達成率のセルを両方取得
-    const ranges: string[] = []
-    cellRanges.forEach(r => {
-      ranges.push(`${SHEET_NAME}!${r.grossProfitCell}`)
-      if (r.achievementRateCell) {
-        ranges.push(`${SHEET_NAME}!${r.achievementRateCell}`)
-      }
-    })
+    // 粗利セルを取得
+    const ranges: string[] = cellRanges.map(r => `${SHEET_NAME}!${r.grossProfitCell}`)
     const encodedRanges = ranges.map(r => encodeURIComponent(r))
     const rangesParam = encodedRanges.join('&ranges=')
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values:batchGet?ranges=${rangesParam}`
@@ -119,49 +114,32 @@ serve(async (req) => {
 
     // Prepare data for Supabase
     const revenueData = []
-    let rangeIndex = 0
 
     for (let i = 0; i < cellRanges.length; i++) {
       const unit = cellRanges[i]
 
       // 粗利を取得
-      const grossProfitValue = data.valueRanges[rangeIndex]?.values?.[0]?.[0]
-      rangeIndex++
+      const grossProfitValue = data.valueRanges[i]?.values?.[0]?.[0]
 
       let gross_profit = 0
       if (grossProfitValue) {
-        gross_profit = parseFloat(String(grossProfitValue).replace(/,/g, '').replace(/¥/g, ''))
-      }
-
-      // 達成率を取得（全体以外）
-      let achievement_rate = null
-      if (unit.achievementRateCell) {
-        const achievementValue = data.valueRanges[rangeIndex]?.values?.[0]?.[0]
-        rangeIndex++
-
-        if (achievementValue) {
-          // パーセンテージ形式の処理
-          if (typeof achievementValue === 'string') {
-            if (achievementValue.includes('%')) {
-              achievement_rate = parseFloat(achievementValue.replace('%', ''))
-            } else {
-              const num = parseFloat(achievementValue)
-              achievement_rate = num > 1 ? num : num * 100
-            }
-          } else if (typeof achievementValue === 'number') {
-            achievement_rate = achievementValue > 1 ? achievementValue : achievementValue * 100
-          }
+        // カンマ、円マーク、パーセント記号を除去して数値化
+        const cleanValue = String(grossProfitValue).replace(/,/g, '').replace(/¥/g, '').replace(/%/g, '')
+        gross_profit = parseFloat(cleanValue)
+        // パーセンテージ形式の場合（0〜1の小数）は100倍
+        if (gross_profit > 0 && gross_profit < 1) {
+          gross_profit = gross_profit * 100
         }
       }
 
-      console.log(`${unit.name}: gross_profit=${gross_profit}, achievement_rate=${achievement_rate}`)
+      console.log(`${unit.name}: gross_profit=${gross_profit}`)
 
       revenueData.push({
         year,
         month,
         department: unit.name,
         gross_profit,
-        achievement_rate: achievement_rate ? Math.round(achievement_rate) : null
+        achievement_rate: null
       })
     }
 

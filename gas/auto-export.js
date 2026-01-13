@@ -15,6 +15,8 @@
 
 // スプレッドシートIDを取得（スクリプトプロパティから）
 const SPREADSHEET_ID = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+// 粗利データ用スプレッドシートID（別スプレッドシート）
+const ARARI_SPREADSHEET_ID = PropertiesService.getScriptProperties().getProperty('ARARI_SPREADSHEET_ID');
 const SUPABASE_URL = PropertiesService.getScriptProperties().getProperty('SUPABASE_URL');
 const SUPABASE_ANON_KEY = PropertiesService.getScriptProperties().getProperty('SUPABASE_ANON_KEY');
 const SUPABASE_SERVICE_KEY = PropertiesService.getScriptProperties().getProperty('SUPABASE_SERVICE_ROLE_KEY');
@@ -52,15 +54,26 @@ function exportDailyAttendance() {
   try {
     Logger.log('勤怠データの自動出力を開始します');
 
-    // 今月の全データを同期（修正されたデータも反映）
-    syncCurrentMonthData();
+    // 3:00am基準で今日の日付を取得
+    const todayDateStr = getTodayDate();
+    const todayDate = new Date(todayDateStr + 'T00:00:00+09:00');
+    const dayOfMonth = parseInt(Utilities.formatDate(todayDate, 'Asia/Tokyo', 'd'));
+    
+    // 月初（1日〜3日）は全データを再構築（前月のデータを過去セクションに移動）
+    if (dayOfMonth <= 3) {
+      Logger.log('月初のため、全シートを再構築します（前月データを過去セクションに移動）');
+      rebuildAllSheets();
+    } else {
+      // それ以外の日は今月の全データを同期（修正されたデータも反映）
+      syncCurrentMonthData();
+      
+      // ダッシュボードシートを更新
+      updateDashboard();
 
-    // ダッシュボードシートを更新
-    updateDashboard();
-
-    // TODO達成率シートを更新
-    const dateString = getYesterdayDate();
-    updateTodoAchievementSheet(dateString);
+      // TODO達成率シートを更新
+      const dateString = getYesterdayDate();
+      updateTodoAchievementSheet(dateString);
+    }
 
     // ユニット達成率を同期
     syncUnitAchievementRates();
@@ -205,7 +218,7 @@ function updateHeaderSummary(sheet, records, currentYear, currentMonth) {
 
 /**
  * 今月の全勤怠データを取得（修正含む）
- * ※ 出勤・退勤時間から実働時間を計算（DBの値が不正な場合のため）
+ * ※ データベースのtotal_work_minutesを使用（アプリのダッシュボードと統一）
  */
 function fetchMonthlyAttendanceDataFull() {
   const todayDateStr = getTodayDate();
@@ -214,10 +227,10 @@ function fetchMonthlyAttendanceDataFull() {
   const currentMonth = todayDate.getMonth();
   const firstDay = new Date(currentYear, currentMonth, 1);
   const firstDayStr = Utilities.formatDate(firstDay, 'Asia/Tokyo', 'yyyy-MM-dd');
-  
+
   // clock_inが存在する今月のデータを全取得
   const url = `${SUPABASE_URL}/rest/v1/attendances?date=gte.${firstDayStr}&clock_in=not.is.null&select=*,users(*)&order=date.asc`;
-  
+
   const options = {
     method: 'get',
     headers: {
@@ -227,34 +240,25 @@ function fetchMonthlyAttendanceDataFull() {
     },
     muteHttpExceptions: true
   };
-  
+
   const response = UrlFetchApp.fetch(url, options);
   const statusCode = response.getResponseCode();
-  
+
   if (statusCode !== 200) {
     throw new Error('Supabaseからのデータ取得に失敗: ' + statusCode);
   }
-  
+
   const data = JSON.parse(response.getContentText());
-  
+
   return data
     .filter(record => record.users) // ユーザー情報がないレコードはスキップ
     .map(record => {
       const user = record.users;
-      
-      // 実働時間を出勤・退勤時間から計算（DBの値が不正な場合のため）
-      let workMinutes = 0;
-      if (record.clock_in && record.clock_out) {
-        const clockIn = new Date(record.clock_in);
-        const clockOut = new Date(record.clock_out);
-        const diffMinutes = Math.floor((clockOut - clockIn) / 60000);
-        const breakMinutes = record.break_minutes_used || 0;
-        workMinutes = Math.max(0, diffMinutes - breakMinutes);
-      } else if (record.clock_in && !record.clock_out) {
-        // まだ退勤していない場合は0（または現在時刻まで計算したい場合は別途対応）
-        workMinutes = 0;
-      }
-      
+
+      // データベースのtotal_work_minutesを使用（アプリのダッシュボードと統一）
+      // ※ 勤務中（clock_outなし）の場合は0分として扱う
+      const workMinutes = record.total_work_minutes || 0;
+
       return {
         user_id: record.user_id,
         user_name: user.name,
@@ -1091,19 +1095,11 @@ function fetchMonthlyAttendanceData() {
     .filter(record => record.users) // ユーザー情報がないレコードはスキップ
     .map(record => {
       const user = record.users;
-      
-      // 実働時間を出勤・退勤時間から計算（DBの値が不正な場合のため）
-      // ※ 勤務中（clock_outなし）の場合は0分として扱う（個別シートと統一）
-      let workMinutes = 0;
-      if (record.clock_in && record.clock_out) {
-        const clockIn = new Date(record.clock_in);
-        const clockOut = new Date(record.clock_out);
-        const diffMinutes = Math.floor((clockOut - clockIn) / 60000);
-        const breakMinutes = record.break_minutes_used || 0;
-        workMinutes = Math.max(0, diffMinutes - breakMinutes);
-      }
-      // 勤務中（clock_outなし）の場合は0分のまま
-      
+
+      // データベースのtotal_work_minutesを使用（アプリのダッシュボードと統一）
+      // ※ 勤務中（clock_outなし）の場合は0分として扱う
+      const workMinutes = record.total_work_minutes || 0;
+
       return {
         user_id: record.user_id,
         user_name: user.name,
@@ -1882,12 +1878,12 @@ function writeAttendanceRowSimple(sheet, row, attendance) {
 
 /**
  * 全期間の勤怠データを取得
- * ※ 出勤・退勤時間から実働時間を計算（DBの値が不正な場合のため）
+ * ※ データベースのtotal_work_minutesを使用（アプリのダッシュボードと統一）
  */
 function fetchAllAttendanceData() {
   // clock_inが存在するすべてのデータを取得（管理者ダッシュボードと同じ条件）
   const url = `${SUPABASE_URL}/rest/v1/attendances?clock_in=not.is.null&select=*,users(*)&order=date.asc`;
-  
+
   const options = {
     method: 'get',
     headers: {
@@ -1897,31 +1893,25 @@ function fetchAllAttendanceData() {
     },
     muteHttpExceptions: true
   };
-  
+
   const response = UrlFetchApp.fetch(url, options);
   const statusCode = response.getResponseCode();
-  
+
   if (statusCode !== 200) {
     throw new Error('Supabaseからのデータ取得に失敗: ' + statusCode);
   }
-  
+
   const data = JSON.parse(response.getContentText());
-  
+
   return data
     .filter(record => record.users) // ユーザー情報がないレコードはスキップ
     .map(record => {
       const user = record.users;
-      
-      // 実働時間を出勤・退勤時間から計算（DBの値が不正な場合のため）
-      let workMinutes = 0;
-      if (record.clock_in && record.clock_out) {
-        const clockIn = new Date(record.clock_in);
-        const clockOut = new Date(record.clock_out);
-        const diffMinutes = Math.floor((clockOut - clockIn) / 60000);
-        const breakMinutes = record.break_minutes_used || 0;
-        workMinutes = Math.max(0, diffMinutes - breakMinutes);
-      }
-      
+
+      // データベースのtotal_work_minutesを使用（アプリのダッシュボードと統一）
+      // ※ 勤務中（clock_outなし）の場合は0分として扱う
+      const workMinutes = record.total_work_minutes || 0;
+
       return {
         user_id: record.user_id,
         user_name: user.name,
@@ -2171,22 +2161,27 @@ function testExportSpecificDate() {
 }
 
 /**
- * スプレッドシートから各ユニットの達成率を取得してSupabaseに保存
+ * 粗利スプレッドシートから各部門の達成率を取得してSupabaseに保存
  */
 function syncUnitAchievementRates() {
   try {
-    Logger.log('ユニット達成率の同期を開始します');
+    Logger.log('粗利達成率の同期を開始します');
 
-    // スプレッドシートを開く
-    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    // 粗利用スプレッドシートを開く
+    if (!ARARI_SPREADSHEET_ID) {
+      Logger.log('ARARI_SPREADSHEET_IDが設定されていません');
+      return;
+    }
+    const spreadsheet = SpreadsheetApp.openById(ARARI_SPREADSHEET_ID);
     
     // 現在の月に応じてシート名を動的に生成
     const now = new Date();
     const currentMonth = now.getMonth() + 1; // 1-12
+    const currentYear = now.getFullYear();
     const sheetName = `報告/MG粗利${currentMonth}月`;
     
     Logger.log(`シート名を検索: ${sheetName}`);
-    const sheet = spreadsheet.getSheetByName(sheetName);
+    let sheet = spreadsheet.getSheetByName(sheetName);
 
     if (!sheet) {
       Logger.log(`シート「${sheetName}」が見つかりません`);
@@ -2195,10 +2190,11 @@ function syncUnitAchievementRates() {
       const matchingSheet = allSheets.find(s => s.getName().indexOf('報告/MG粗利') !== -1);
       if (matchingSheet) {
         Logger.log(`代替シート「${matchingSheet.getName()}」を使用します`);
-        return syncUnitAchievementRatesFromSheet(matchingSheet, currentMonth, currentYear);
+        sheet = matchingSheet;
       } else {
-        Logger.log('「報告/MG粗利」を含むシートが見つかりません');
-        return;
+        // それでも見つからない場合は最初のシートを使用
+        Logger.log('最初のシートを使用します');
+        sheet = spreadsheet.getSheets()[0];
       }
     }
     
@@ -2210,16 +2206,15 @@ function syncUnitAchievementRates() {
 }
 
 /**
- * シートからユニット達成率を同期
+ * シートから粗利達成率を同期
  */
 function syncUnitAchievementRatesFromSheet(sheet, month, year) {
   try {
-    // 各ユニットの達成率を取得
+    // 各部門の粗利達成率を取得
     const units = [
-      { name: '第1ユニット', cell: 'L17' },
-      { name: '第2ユニット', cell: 'L21' },
-      { name: '第3ユニット', cell: 'L29' },
-      { name: '第5ユニット', cell: 'L37' }
+      { name: '全体', cell: 'D5' },
+      { name: 'CATS', cell: 'D12' },
+      { name: 'SAL', cell: 'D20' }
     ];
 
     const achievementRates = [];

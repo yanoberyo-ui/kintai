@@ -6,6 +6,8 @@ import { supabase } from '../utils/supabase'
 import { getAIFeedback } from '../utils/ranking'
 import { getStreaks } from '../utils/streaks'
 import { getTodayDate } from '../utils/date'
+import { shouldShowSurvey } from '../utils/healthSurvey'
+import SurveyModal, { SurveyCompleteScreen } from './SurveyModal'
 
 export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
   const [attendance, setAttendance] = useState(null)
@@ -27,6 +29,9 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
   const [showReClockInWorkTypeModal, setShowReClockInWorkTypeModal] = useState(false)
   const [showBreakMinutesModal, setShowBreakMinutesModal] = useState(false)
   const [additionalBreakMinutes, setAdditionalBreakMinutes] = useState('')
+  const [showSurveyModal, setShowSurveyModal] = useState(false)
+  const [showSurveyComplete, setShowSurveyComplete] = useState(false)
+  const [currentSurvey, setCurrentSurvey] = useState(null)
 
   useEffect(() => {
     loadAttendance()
@@ -163,6 +168,18 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
 
       // 誕生日チェック
       await checkBirthdays()
+
+      // ヘルスケアサーベイのチェック（出勤時に表示）
+      try {
+        const surveyCheck = await shouldShowSurvey(user.id)
+        if (surveyCheck.shouldShow && surveyCheck.survey) {
+          setCurrentSurvey(surveyCheck.survey)
+          setShowSurveyModal(true)
+        }
+      } catch (surveyError) {
+        console.error('Survey check error:', surveyError)
+        // サーベイエラーは出勤処理に影響させない
+      }
 
       // ストリーク通知を表示
       const streaks = await getStreaks(user.id)
@@ -1159,6 +1176,34 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ヘルスケアサーベイモーダル */}
+      {showSurveyModal && currentSurvey && (
+        <SurveyModal
+          survey={currentSurvey}
+          user={userProfile || user}
+          isDark={isDark}
+          onClose={() => {
+            setShowSurveyModal(false)
+            setCurrentSurvey(null)
+          }}
+          onComplete={() => {
+            setShowSurveyModal(false)
+            setShowSurveyComplete(true)
+          }}
+        />
+      )}
+
+      {/* サーベイ完了画面 */}
+      {showSurveyComplete && (
+        <SurveyCompleteScreen
+          isDark={isDark}
+          onClose={() => {
+            setShowSurveyComplete(false)
+            setCurrentSurvey(null)
+          }}
+        />
       )}
 
     </div>

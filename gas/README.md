@@ -20,7 +20,8 @@
 |------------|-----|
 | `SUPABASE_URL` | `https://thwfendgywwxbdjofbdt.supabase.co` |
 | `SUPABASE_ANON_KEY` | Supabaseの匿名キー |
-| `SPREADSHEET_ID` | スプレッドシートのID（URLから取得） |
+| `SPREADSHEET_ID` | 勤怠データ出力先スプレッドシートのID（URLから取得） |
+| `ARARI_SPREADSHEET_ID` | 粗利データ用スプレッドシートのID |
 | `SLACK_WEBHOOK_URL` | Slack Webhook URL（オプション） |
 
 ### スプレッドシートIDの取得方法
