@@ -2383,6 +2383,48 @@ export default function AdminPage({ isDark }) {
                       '毎月初回の出勤時'
                     }
                   </div>
+
+                  {/* 今すぐ配信ボタン */}
+                  <div className={`mt-4 pt-4 border-t ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                          🚀 今すぐ配信
+                        </div>
+                        <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                          全員の次回出勤時にサーベイを表示します
+                        </div>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (!confirm('全員に対して次回出勤時にサーベイを配信しますか？\n（現在の期間の回答済み状態がリセットされます）')) return
+                          try {
+                            // 現在の期間の回答済み状態を削除
+                            const { error } = await supabase
+                              .from('health_survey_completions')
+                              .delete()
+                              .eq('survey_id', healthSurvey.id)
+                              .eq('response_period', selectedHealthPeriod || getCurrentResponsePeriod(healthSurvey.frequency))
+                            
+                            if (error) throw error
+                            
+                            alert('配信設定が完了しました！\n全員の次回出勤時にサーベイが表示されます。')
+                            await loadHealthSurveyData()
+                          } catch (error) {
+                            console.error('Error resetting completions:', error)
+                            alert('配信設定に失敗しました')
+                          }
+                        }}
+                        className={`px-4 py-2 text-sm font-medium rounded-xl transition-colors flex items-center gap-2 ${
+                          isDark
+                            ? 'bg-orange-600 text-white hover:bg-orange-700'
+                            : 'bg-orange-500 text-white hover:bg-orange-600'
+                        }`}
+                      >
+                        🚀 今すぐ全員に配信
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* 質問リスト */}
