@@ -2252,7 +2252,7 @@ export default function AdminPage({ isDark }) {
                     {/* Y軸ラベルとグリッド */}
                     <div className="flex">
                       {/* Y軸 */}
-                      <div className="flex flex-col justify-between h-48 pr-3 text-right">
+                      <div className="flex flex-col justify-between h-48 pr-3 text-right w-8">
                         {[5, 4, 3, 2, 1].map(val => (
                           <span key={val} className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                             {val}.0
@@ -2261,7 +2261,7 @@ export default function AdminPage({ isDark }) {
                       </div>
                       
                       {/* グラフエリア */}
-                      <div className="flex-1 relative">
+                      <div className="flex-1 relative h-48">
                         {/* グリッド線 */}
                         <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
                           {[5, 4, 3, 2, 1].map(val => (
@@ -2272,102 +2272,85 @@ export default function AdminPage({ isDark }) {
                           ))}
                         </div>
                         
-                        {/* 折れ線グラフ */}
-                        <svg className="w-full h-48" viewBox={`0 0 ${Math.max(healthTrend.length * 100, 200)} 200`} preserveAspectRatio="none">
-                          {/* エリア塗りつぶし */}
+                        {/* 折れ線グラフ（SVG） */}
+                        <svg className="absolute inset-0 w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
                           <defs>
                             <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#22c55e" stopOpacity="0.3"/>
-                              <stop offset="100%" stopColor="#22c55e" stopOpacity="0.05"/>
+                              <stop offset="0%" stopColor="#22c55e" stopOpacity="0.2"/>
+                              <stop offset="100%" stopColor="#22c55e" stopOpacity="0.02"/>
                             </linearGradient>
                           </defs>
-                          
-                          {healthTrend.length > 1 ? (
+                          {healthTrend.length > 1 && (
                             <>
-                              {/* エリア */}
+                              {/* エリア塗りつぶし */}
                               <path
                                 d={`M ${healthTrend.map((item, i) => {
-                                  const x = (i / (healthTrend.length - 1)) * (Math.max(healthTrend.length * 100, 200) - 40) + 20
-                                  const y = 200 - ((item.averageScore - 1) / 4) * 180 - 10
+                                  const x = (i / (healthTrend.length - 1)) * 100
+                                  const y = 100 - ((item.averageScore - 1) / 4) * 100
                                   return `${x},${y}`
-                                }).join(' L ')} L ${(Math.max(healthTrend.length * 100, 200) - 40) + 20},190 L 20,190 Z`}
+                                }).join(' L ')} L 100,100 L 0,100 Z`}
                                 fill="url(#areaGradient)"
                               />
                               {/* 折れ線 */}
-                              <path
-                                d={`M ${healthTrend.map((item, i) => {
-                                  const x = (i / (healthTrend.length - 1)) * (Math.max(healthTrend.length * 100, 200) - 40) + 20
-                                  const y = 200 - ((item.averageScore - 1) / 4) * 180 - 10
+                              <polyline
+                                points={healthTrend.map((item, i) => {
+                                  const x = (i / (healthTrend.length - 1)) * 100
+                                  const y = 100 - ((item.averageScore - 1) / 4) * 100
                                   return `${x},${y}`
-                                }).join(' L ')}`}
+                                }).join(' ')}
                                 stroke="#22c55e"
-                                strokeWidth="3"
+                                strokeWidth="0.5"
                                 fill="none"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </>
-                          ) : (
-                            <>
-                              {/* 1点の場合は水平線 */}
-                              <line 
-                                x1="20" 
-                                y1={200 - ((healthTrend[0].averageScore - 1) / 4) * 180 - 10}
-                                x2={Math.max(healthTrend.length * 100, 200) - 20}
-                                y2={200 - ((healthTrend[0].averageScore - 1) / 4) * 180 - 10}
-                                stroke="#22c55e"
-                                strokeWidth="2"
-                                strokeDasharray="5,5"
-                                opacity="0.5"
                               />
                             </>
                           )}
-                          
-                          {/* データポイント */}
-                          {healthTrend.map((item, i) => {
-                            const x = healthTrend.length > 1 
-                              ? (i / (healthTrend.length - 1)) * (Math.max(healthTrend.length * 100, 200) - 40) + 20
-                              : Math.max(healthTrend.length * 100, 200) / 2
-                            const y = 200 - ((item.averageScore - 1) / 4) * 180 - 10
-                            return (
-                              <g key={i}>
-                                <circle
-                                  cx={x}
-                                  cy={y}
-                                  r="8"
-                                  fill={isDark ? '#1f2937' : 'white'}
-                                  stroke="#22c55e"
-                                  strokeWidth="3"
-                                />
-                                <circle
-                                  cx={x}
-                                  cy={y}
-                                  r="4"
-                                  fill="#22c55e"
-                                />
-                              </g>
-                            )
-                          })}
                         </svg>
                         
-                        {/* X軸ラベル */}
-                        <div className="flex justify-between mt-2 px-2">
-                          {healthTrend.map((item, index) => (
-                            <div key={index} className="flex flex-col items-center">
-                              <span className={`text-sm font-bold ${
-                                item.averageScore >= 4 ? 'text-green-500' :
-                                item.averageScore >= 3 ? 'text-yellow-500' :
-                                'text-red-500'
-                              }`}>
-                                {item.averageScore.toFixed(1)}
-                              </span>
-                              <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                {item.period}
-                              </span>
-                            </div>
-                          ))}
+                        {/* データポイント（CSS配置 - SVGの上に） */}
+                        <div className="absolute inset-0 z-10">
+                          {healthTrend.map((item, i) => {
+                            // Y位置: スコア1=下(100%), スコア5=上(0%)
+                            const yPercent = 100 - ((item.averageScore - 1) / 4) * 100
+                            // X位置: 1点なら中央、複数なら均等配置
+                            const xPercent = healthTrend.length > 1 
+                              ? (i / (healthTrend.length - 1)) * 100
+                              : 50
+                            return (
+                              <div 
+                                key={i}
+                                className="absolute transform -translate-x-1/2 -translate-y-1/2"
+                                style={{ 
+                                  left: `${xPercent}%`, 
+                                  top: `${yPercent}%` 
+                                }}
+                              >
+                                <div className={`w-4 h-4 rounded-full border-[3px] border-green-500 ${isDark ? 'bg-gray-900' : 'bg-white'}`} />
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
+                    </div>
+                    
+                    {/* X軸ラベル */}
+                    <div className="flex justify-between mt-3 ml-8">
+                      {healthTrend.map((item, index) => (
+                        <div 
+                          key={index} 
+                          className="flex flex-col items-center"
+                        >
+                          <span className={`text-sm font-bold ${
+                            item.averageScore >= 4 ? 'text-green-500' :
+                            item.averageScore >= 3 ? 'text-yellow-500' :
+                            'text-red-500'
+                          }`}>
+                            {item.averageScore.toFixed(1)}
+                          </span>
+                          <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {item.period}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
