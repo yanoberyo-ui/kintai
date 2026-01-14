@@ -2248,32 +2248,127 @@ export default function AdminPage({ isDark }) {
                   <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
                     📈 スコア推移
                   </h3>
-                  <div className="flex items-end justify-between gap-2 h-40">
-                    {healthTrend.map((item, index) => {
-                      const height = (item.averageScore / 5) * 100
-                      return (
-                        <div key={index} className="flex-1 flex flex-col items-center">
-                          <div className={`text-xs font-medium mb-1 ${
-                            item.averageScore >= 4 ? 'text-green-500' :
-                            item.averageScore >= 3 ? 'text-yellow-500' :
-                            'text-red-500'
-                          }`}>
-                            {item.averageScore.toFixed(1)}
-                          </div>
-                          <div 
-                            className={`w-full max-w-[40px] rounded-t-lg transition-all duration-500 ${
-                              item.averageScore >= 4 ? 'bg-gradient-to-t from-green-500 to-emerald-400' :
-                              item.averageScore >= 3 ? 'bg-gradient-to-t from-yellow-500 to-orange-400' :
-                              'bg-gradient-to-t from-red-500 to-red-400'
-                            }`}
-                            style={{ height: `${height}%` }}
-                          />
-                          <div className={`text-xs mt-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                            {item.period.slice(-2)}
-                          </div>
+                  <div className="relative">
+                    {/* Y軸ラベルとグリッド */}
+                    <div className="flex">
+                      {/* Y軸 */}
+                      <div className="flex flex-col justify-between h-48 pr-3 text-right">
+                        {[5, 4, 3, 2, 1].map(val => (
+                          <span key={val} className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {val}.0
+                          </span>
+                        ))}
+                      </div>
+                      
+                      {/* グラフエリア */}
+                      <div className="flex-1 relative">
+                        {/* グリッド線 */}
+                        <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+                          {[5, 4, 3, 2, 1].map(val => (
+                            <div 
+                              key={val} 
+                              className={`border-t ${isDark ? 'border-gray-800' : 'border-gray-100'} ${val === 3 ? (isDark ? 'border-gray-700' : 'border-gray-200') : ''}`}
+                            />
+                          ))}
                         </div>
-                      )
-                    })}
+                        
+                        {/* 折れ線グラフ */}
+                        <svg className="w-full h-48" viewBox={`0 0 ${Math.max(healthTrend.length * 100, 200)} 200`} preserveAspectRatio="none">
+                          {/* エリア塗りつぶし */}
+                          <defs>
+                            <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#22c55e" stopOpacity="0.3"/>
+                              <stop offset="100%" stopColor="#22c55e" stopOpacity="0.05"/>
+                            </linearGradient>
+                          </defs>
+                          
+                          {healthTrend.length > 1 ? (
+                            <>
+                              {/* エリア */}
+                              <path
+                                d={`M ${healthTrend.map((item, i) => {
+                                  const x = (i / (healthTrend.length - 1)) * (Math.max(healthTrend.length * 100, 200) - 40) + 20
+                                  const y = 200 - ((item.averageScore - 1) / 4) * 180 - 10
+                                  return `${x},${y}`
+                                }).join(' L ')} L ${(Math.max(healthTrend.length * 100, 200) - 40) + 20},190 L 20,190 Z`}
+                                fill="url(#areaGradient)"
+                              />
+                              {/* 折れ線 */}
+                              <path
+                                d={`M ${healthTrend.map((item, i) => {
+                                  const x = (i / (healthTrend.length - 1)) * (Math.max(healthTrend.length * 100, 200) - 40) + 20
+                                  const y = 200 - ((item.averageScore - 1) / 4) * 180 - 10
+                                  return `${x},${y}`
+                                }).join(' L ')}`}
+                                stroke="#22c55e"
+                                strokeWidth="3"
+                                fill="none"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </>
+                          ) : (
+                            <>
+                              {/* 1点の場合は水平線 */}
+                              <line 
+                                x1="20" 
+                                y1={200 - ((healthTrend[0].averageScore - 1) / 4) * 180 - 10}
+                                x2={Math.max(healthTrend.length * 100, 200) - 20}
+                                y2={200 - ((healthTrend[0].averageScore - 1) / 4) * 180 - 10}
+                                stroke="#22c55e"
+                                strokeWidth="2"
+                                strokeDasharray="5,5"
+                                opacity="0.5"
+                              />
+                            </>
+                          )}
+                          
+                          {/* データポイント */}
+                          {healthTrend.map((item, i) => {
+                            const x = healthTrend.length > 1 
+                              ? (i / (healthTrend.length - 1)) * (Math.max(healthTrend.length * 100, 200) - 40) + 20
+                              : Math.max(healthTrend.length * 100, 200) / 2
+                            const y = 200 - ((item.averageScore - 1) / 4) * 180 - 10
+                            return (
+                              <g key={i}>
+                                <circle
+                                  cx={x}
+                                  cy={y}
+                                  r="8"
+                                  fill={isDark ? '#1f2937' : 'white'}
+                                  stroke="#22c55e"
+                                  strokeWidth="3"
+                                />
+                                <circle
+                                  cx={x}
+                                  cy={y}
+                                  r="4"
+                                  fill="#22c55e"
+                                />
+                              </g>
+                            )
+                          })}
+                        </svg>
+                        
+                        {/* X軸ラベル */}
+                        <div className="flex justify-between mt-2 px-2">
+                          {healthTrend.map((item, index) => (
+                            <div key={index} className="flex flex-col items-center">
+                              <span className={`text-sm font-bold ${
+                                item.averageScore >= 4 ? 'text-green-500' :
+                                item.averageScore >= 3 ? 'text-yellow-500' :
+                                'text-red-500'
+                              }`}>
+                                {item.averageScore.toFixed(1)}
+                              </span>
+                              <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                {item.period}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
