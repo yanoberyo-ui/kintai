@@ -30,52 +30,65 @@ export const getCurrentResponsePeriod = (frequency = 'monthly') => {
  * アクティブなサーベイを取得
  */
 export const getActiveSurvey = async () => {
-  const { data, error } = await supabase
-    .from('health_surveys')
-    .select(`
-      *,
-      questions:health_survey_questions(*)
-    `)
-    .eq('is_active', true)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single()
-  
-  if (error) {
-    if (error.code === 'PGRST116') {
-      // データなし
-      return null
+  try {
+    const { data, error } = await supabase
+      .from('health_surveys')
+      .select(`
+        *,
+        questions:health_survey_questions(*)
+      `)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+    
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // データなし
+        console.log('No active survey found')
+        return null
+      }
+      console.error('Error fetching survey:', error)
+      return null // エラー時もnullを返す（出勤処理を止めない）
     }
-    throw error
+    
+    // 質問を順番にソート
+    if (data?.questions) {
+      data.questions.sort((a, b) => a.order_index - b.order_index)
+    }
+    
+    return data
+  } catch (error) {
+    console.error('Unexpected error in getActiveSurvey:', error)
+    return null
   }
-  
-  // 質問を順番にソート
-  if (data?.questions) {
-    data.questions.sort((a, b) => a.order_index - b.order_index)
-  }
-  
-  return data
 }
 
 /**
  * ユーザーがサーベイに回答済みかチェック
  */
 export const hasCompletedSurvey = async (userId, surveyId, frequency = 'monthly') => {
-  const period = getCurrentResponsePeriod(frequency)
-  
-  const { data, error } = await supabase
-    .from('health_survey_completions')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('survey_id', surveyId)
-    .eq('response_period', period)
-    .single()
-  
-  if (error && error.code !== 'PGRST116') {
-    throw error
+  try {
+    const period = getCurrentResponsePeriod(frequency)
+    
+    const { data, error } = await supabase
+      .from('health_survey_completions')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('survey_id', surveyId)
+      .eq('response_period', period)
+      .single()
+    
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error checking completion:', error)
+      return true // エラー時は回答済み扱い（サーベイ表示をスキップ）
+    }
+    
+    return !!data
+  } catch (error) {
+    console.error('Unexpected error in hasCompletedSurvey:', error)
+    return true // エラー時は回答済み扱い
   }
-  
-  return !!data
 }
 
 /**

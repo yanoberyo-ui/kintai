@@ -114,6 +114,11 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
     try {
       setLoading(true)
       setShowWorkTypeModal(false)
+      // サーベイ関連の状態をリセット
+      setShowSurveyModal(false)
+      setShowSurveyComplete(false)
+      setCurrentSurvey(null)
+      
       const result = await clockIn(user.id, workType)
       await loadAttendance()
 

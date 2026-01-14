@@ -102,8 +102,8 @@ export default function SurveyModal({ survey, user, isDark, onClose, onComplete 
   }
 
   const handleSkip = () => {
-    // スキップして完了扱い
-    onComplete?.()
+    // スキップ時は単に閉じる（完了扱いにしない）
+    onClose?.()
   }
 
   // 必須質問（scale）がすべて回答されているか
