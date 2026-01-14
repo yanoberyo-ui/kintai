@@ -268,19 +268,32 @@ export const getResponseRate = async (surveyId, period) => {
   
   if (userError) throw userError
   
-  // 回答済みユーザー数を取得
-  const { count: completedUsers, error: completionError } = await supabase
-    .from('health_survey_completions')
+  // 質問数を取得
+  const { count: questionCount, error: questionError } = await supabase
+    .from('health_survey_questions')
+    .select('id', { count: 'exact', head: true })
+    .eq('survey_id', surveyId)
+    .eq('question_type', 'scale') // scaleタイプのみカウント
+  
+  if (questionError) throw questionError
+  
+  // 回答数から推定回答者数を計算（より正確）
+  const { count: responseCount, error: responseError } = await supabase
+    .from('health_survey_responses')
     .select('id', { count: 'exact', head: true })
     .eq('survey_id', surveyId)
     .eq('response_period', period)
+    .not('score', 'is', null)
   
-  if (completionError) throw completionError
+  if (responseError) throw responseError
+  
+  // 回答数 ÷ 質問数 = 推定回答者数
+  const estimatedRespondents = questionCount > 0 ? Math.round(responseCount / questionCount) : 0
   
   return {
     totalUsers: totalUsers || 0,
-    completedUsers: completedUsers || 0,
-    rate: totalUsers > 0 ? Math.round((completedUsers / totalUsers) * 100) : 0
+    completedUsers: estimatedRespondents,
+    rate: totalUsers > 0 ? Math.round((estimatedRespondents / totalUsers) * 100) : 0
   }
 }
 

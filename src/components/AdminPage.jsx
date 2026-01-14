@@ -2129,18 +2129,18 @@ export default function AdminPage({ isDark }) {
                   </div>
                 </div>
 
-                {/* 回答数 */}
+                {/* 回答者数 */}
                 <div className={`rounded-2xl border p-5 ${
                   isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'
                 }`}>
                   <div className={`text-sm font-medium mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    回答数
+                    回答者数
                   </div>
                   <div className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                    {healthResults.length}
+                    {healthResponseRate.completedUsers}人
                   </div>
                   <div className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                    質問×回答者
+                    {healthResults.length}回答
                   </div>
                 </div>
 
