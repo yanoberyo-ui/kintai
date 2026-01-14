@@ -2241,120 +2241,138 @@ export default function AdminPage({ isDark }) {
               )}
 
               {/* スコア推移 */}
-              {healthTrend.length > 0 && (
-                <div className={`rounded-2xl border p-6 ${
-                  isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'
-                }`}>
-                  <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                    📈 スコア推移
-                  </h3>
-                  <div className="relative">
-                    {/* Y軸ラベルとグリッド */}
-                    <div className="flex">
-                      {/* Y軸 */}
-                      <div className="flex flex-col justify-between h-48 pr-3 text-right w-8">
+              <div className={`rounded-2xl border p-6 ${
+                isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'
+              }`}>
+                <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  📈 スコア推移
+                </h3>
+                <div className="relative">
+                  {/* Y軸ラベルとグリッド */}
+                  <div className="flex">
+                    {/* Y軸 */}
+                    <div className="flex flex-col justify-between h-48 pr-3 text-right w-8">
+                      {[5, 4, 3, 2, 1].map(val => (
+                        <span key={val} className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                          {val}.0
+                        </span>
+                      ))}
+                    </div>
+                    
+                    {/* グラフエリア */}
+                    <div className="flex-1 relative h-48">
+                      {/* グリッド線 */}
+                      <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
                         {[5, 4, 3, 2, 1].map(val => (
-                          <span key={val} className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                            {val}.0
-                          </span>
+                          <div 
+                            key={val} 
+                            className={`border-t ${isDark ? 'border-gray-800' : 'border-gray-100'} ${val === 3 ? (isDark ? 'border-gray-700' : 'border-gray-200') : ''}`}
+                          />
                         ))}
                       </div>
                       
-                      {/* グラフエリア */}
-                      <div className="flex-1 relative h-48">
-                        {/* グリッド線 */}
-                        <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
-                          {[5, 4, 3, 2, 1].map(val => (
-                            <div 
-                              key={val} 
-                              className={`border-t ${isDark ? 'border-gray-800' : 'border-gray-100'} ${val === 3 ? (isDark ? 'border-gray-700' : 'border-gray-200') : ''}`}
-                            />
-                          ))}
-                        </div>
+                      {/* 折れ線グラフ（SVG） - データを月順にソートして描画 */}
+                      {(() => {
+                        // healthTrendを月順にマッピング（1-12月）
+                        const monthlyData = Array(12).fill(null).map((_, i) => {
+                          const month = String(i + 1).padStart(2, '0')
+                          const found = healthTrend.find(t => t.period.endsWith(`-${month}`))
+                          return found ? { ...found, monthIndex: i } : null
+                        }).filter(Boolean)
                         
-                        {/* 折れ線グラフ（SVG） */}
-                        <svg className="absolute inset-0 w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-                          <defs>
-                            <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#22c55e" stopOpacity="0.2"/>
-                              <stop offset="100%" stopColor="#22c55e" stopOpacity="0.02"/>
-                            </linearGradient>
-                          </defs>
-                          {healthTrend.length > 1 && (
-                            <>
-                              {/* エリア塗りつぶし */}
-                              <path
-                                d={`M ${healthTrend.map((item, i) => {
-                                  const x = (i / (healthTrend.length - 1)) * 100
-                                  const y = 100 - ((item.averageScore - 1) / 4) * 100
-                                  return `${x},${y}`
-                                }).join(' L ')} L 100,100 L 0,100 Z`}
-                                fill="url(#areaGradient)"
-                              />
-                              {/* 折れ線 */}
-                              <polyline
-                                points={healthTrend.map((item, i) => {
-                                  const x = (i / (healthTrend.length - 1)) * 100
-                                  const y = 100 - ((item.averageScore - 1) / 4) * 100
-                                  return `${x},${y}`
-                                }).join(' ')}
-                                stroke="#22c55e"
-                                strokeWidth="0.5"
-                                fill="none"
-                              />
-                            </>
-                          )}
-                        </svg>
+                        if (monthlyData.length === 0) return null
                         
-                        {/* データポイント（CSS配置 - SVGの上に） */}
-                        <div className="absolute inset-0 z-10">
-                          {healthTrend.map((item, i) => {
-                            // Y位置: スコア1=下(100%), スコア5=上(0%)
-                            const yPercent = 100 - ((item.averageScore - 1) / 4) * 100
-                            // X位置: 1点なら中央、複数なら均等配置
-                            const xPercent = healthTrend.length > 1 
-                              ? (i / (healthTrend.length - 1)) * 100
-                              : 50
-                            return (
-                              <div 
-                                key={i}
-                                className="absolute transform -translate-x-1/2 -translate-y-1/2"
-                                style={{ 
-                                  left: `${xPercent}%`, 
-                                  top: `${yPercent}%` 
-                                }}
-                              >
-                                <div className={`w-4 h-4 rounded-full border-[3px] border-green-500 ${isDark ? 'bg-gray-900' : 'bg-white'}`} />
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* X軸ラベル */}
-                    <div className="flex justify-between mt-3 ml-8">
-                      {healthTrend.map((item, index) => (
-                        <div 
-                          key={index} 
-                          className="flex flex-col items-center"
-                        >
-                          <span className={`text-sm font-bold ${
-                            item.averageScore >= 4 ? 'text-green-500' :
-                            item.averageScore >= 3 ? 'text-yellow-500' :
-                            'text-red-500'
-                          }`}>
-                            {item.averageScore.toFixed(1)}
-                          </span>
-                          <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                            {item.period}
-                          </span>
-                        </div>
-                      ))}
+                        return (
+                          <>
+                            <svg className="absolute inset-0 w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+                              <defs>
+                                <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor="#22c55e" stopOpacity="0.2"/>
+                                  <stop offset="100%" stopColor="#22c55e" stopOpacity="0.02"/>
+                                </linearGradient>
+                              </defs>
+                              {monthlyData.length > 1 && (
+                                <>
+                                  {/* エリア塗りつぶし */}
+                                  <path
+                                    d={`M ${monthlyData.map((item) => {
+                                      const x = (item.monthIndex / 11) * 100
+                                      const y = 100 - ((item.averageScore - 1) / 4) * 100
+                                      return `${x},${y}`
+                                    }).join(' L ')} L ${(monthlyData[monthlyData.length - 1].monthIndex / 11) * 100},100 L ${(monthlyData[0].monthIndex / 11) * 100},100 Z`}
+                                    fill="url(#areaGradient)"
+                                  />
+                                  {/* 折れ線 */}
+                                  <polyline
+                                    points={monthlyData.map((item) => {
+                                      const x = (item.monthIndex / 11) * 100
+                                      const y = 100 - ((item.averageScore - 1) / 4) * 100
+                                      return `${x},${y}`
+                                    }).join(' ')}
+                                    stroke="#22c55e"
+                                    strokeWidth="0.5"
+                                    fill="none"
+                                  />
+                                </>
+                              )}
+                            </svg>
+                            
+                            {/* データポイント（CSS配置 - SVGの上に） */}
+                            <div className="absolute inset-0 z-10">
+                              {monthlyData.map((item, i) => {
+                                const yPercent = 100 - ((item.averageScore - 1) / 4) * 100
+                                const xPercent = (item.monthIndex / 11) * 100
+                                return (
+                                  <div 
+                                    key={i}
+                                    className="absolute transform -translate-x-1/2 -translate-y-1/2 group"
+                                    style={{ 
+                                      left: `${xPercent}%`, 
+                                      top: `${yPercent}%` 
+                                    }}
+                                  >
+                                    <div className={`w-4 h-4 rounded-full border-[3px] border-green-500 ${isDark ? 'bg-gray-900' : 'bg-white'}`} />
+                                    {/* スコア表示（ホバー時） */}
+                                    <div className={`absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 rounded text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity ${
+                                      isDark ? 'bg-gray-800 text-green-400' : 'bg-white text-green-600 shadow-lg'
+                                    }`}>
+                                      {item.averageScore.toFixed(1)}
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </>
+                        )
+                      })()}
                     </div>
                   </div>
+                  
+                  {/* X軸ラベル（1〜12月固定） */}
+                  <div className="flex justify-between mt-3 ml-8">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(month => {
+                      const monthStr = String(month).padStart(2, '0')
+                      const data = healthTrend.find(t => t.period.endsWith(`-${monthStr}`))
+                      return (
+                        <div key={month} className="flex flex-col items-center w-8">
+                          {data && (
+                            <span className={`text-xs font-bold ${
+                              data.averageScore >= 4 ? 'text-green-500' :
+                              data.averageScore >= 3 ? 'text-yellow-500' :
+                              'text-red-500'
+                            }`}>
+                              {data.averageScore.toFixed(1)}
+                            </span>
+                          )}
+                          <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {month}月
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
-              )}
+              </div>
 
               {/* フリーコメント */}
               {healthComments.length > 0 && (
