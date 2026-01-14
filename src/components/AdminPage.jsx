@@ -1104,7 +1104,7 @@ export default function AdminPage({ isDark }) {
             { value: 'attendance', label: '出勤管理', icon: '📊', shortLabel: '出勤' },
             { value: 'salary', label: '給料管理', icon: '💰', shortLabel: '給料' },
             { value: 'todo_achievement', label: 'TODO', icon: '✅', shortLabel: 'TODO' },
-            { value: 'health', label: 'ヘルスケア', icon: '💚', shortLabel: 'ヘルス' },
+            { value: 'health', label: 'ヘルスチェック', icon: '💚', shortLabel: 'ヘルス' },
             { value: 'users', label: 'ユーザー', icon: '👥', shortLabel: 'ユーザー' }
           ].map(({ value, label, icon, shortLabel }) => (
             <button
