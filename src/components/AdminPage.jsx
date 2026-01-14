@@ -2318,25 +2318,25 @@ export default function AdminPage({ isDark }) {
                             </svg>
                             
                             {/* データポイント（CSS配置 - SVGの上に） */}
-                            <div className="absolute inset-0 z-10">
-                              {monthlyData.map((item, i) => {
+                            <div className="absolute inset-0 z-10 flex justify-between">
+                              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(monthIndex => {
+                                const item = monthlyData.find(d => d.monthIndex === monthIndex)
+                                if (!item) return <div key={monthIndex} className="w-4" />
+                                
                                 const yPercent = 100 - ((item.averageScore - 1) / 4) * 100
-                                const xPercent = (item.monthIndex / 11) * 100
                                 return (
-                                  <div 
-                                    key={i}
-                                    className="absolute transform -translate-x-1/2 -translate-y-1/2 group"
-                                    style={{ 
-                                      left: `${xPercent}%`, 
-                                      top: `${yPercent}%` 
-                                    }}
-                                  >
-                                    <div className={`w-4 h-4 rounded-full border-[3px] border-green-500 ${isDark ? 'bg-gray-900' : 'bg-white'}`} />
-                                    {/* スコア表示（ホバー時） */}
-                                    <div className={`absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 rounded text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity ${
-                                      isDark ? 'bg-gray-800 text-green-400' : 'bg-white text-green-600 shadow-lg'
-                                    }`}>
-                                      {item.averageScore.toFixed(1)}
+                                  <div key={monthIndex} className="relative w-4">
+                                    <div 
+                                      className="absolute left-1/2 transform -translate-x-1/2 -translate-y-1/2 group"
+                                      style={{ top: `${yPercent}%` }}
+                                    >
+                                      <div className={`w-4 h-4 rounded-full border-[3px] border-green-500 ${isDark ? 'bg-gray-900' : 'bg-white'}`} />
+                                      {/* スコア表示（ホバー時） */}
+                                      <div className={`absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 rounded text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity ${
+                                        isDark ? 'bg-gray-800 text-green-400' : 'bg-white text-green-600 shadow-lg'
+                                      }`}>
+                                        {item.averageScore.toFixed(1)}
+                                      </div>
                                     </div>
                                   </div>
                                 )
