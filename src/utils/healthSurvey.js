@@ -224,6 +224,42 @@ export const calculateDepartmentScores = (responses) => {
 }
 
 /**
+ * 質問別スコアを計算
+ */
+export const calculateQuestionScores = (responses) => {
+  const questionScores = {}
+  
+  responses.forEach(response => {
+    if (response.score && response.question) {
+      const questionId = response.question.id
+      if (!questionScores[questionId]) {
+        questionScores[questionId] = { 
+          total: 0, 
+          count: 0,
+          category: response.question.category,
+          questionText: response.question.question_text,
+          orderIndex: response.question.order_index
+        }
+      }
+      questionScores[questionId].total += response.score
+      questionScores[questionId].count += 1
+    }
+  })
+  
+  // 平均を計算して配列として返す（ソート用）
+  const result = Object.entries(questionScores).map(([id, data]) => ({
+    id,
+    category: data.category,
+    questionText: data.questionText,
+    orderIndex: data.orderIndex,
+    score: data.count > 0 ? Math.round((data.total / data.count) * 10) / 10 : 0,
+    responseCount: data.count
+  }))
+  
+  return result
+}
+
+/**
  * 期間別スコア推移を取得
  */
 export const getScoreTrend = async (surveyId, periods = 6) => {

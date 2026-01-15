@@ -5,7 +5,8 @@ import {
   getActiveSurvey, 
   getSurveyResults, 
   calculateCategoryScores, 
-  calculateDepartmentScores, 
+  calculateDepartmentScores,
+  calculateQuestionScores,
   getScoreTrend, 
   getResponseRate, 
   getFreeComments,
@@ -48,6 +49,7 @@ export default function AdminPage({ isDark }) {
   const [healthResults, setHealthResults] = useState([])
   const [healthCategoryScores, setHealthCategoryScores] = useState({})
   const [healthDeptScores, setHealthDeptScores] = useState({})
+  const [healthQuestionScores, setHealthQuestionScores] = useState([])
   const [healthTrend, setHealthTrend] = useState([])
   const [healthResponseRate, setHealthResponseRate] = useState({ totalUsers: 0, completedUsers: 0, rate: 0 })
   const [healthComments, setHealthComments] = useState([])
@@ -567,6 +569,10 @@ export default function AdminPage({ isDark }) {
       // 部署別スコアを計算
       const deptScores = calculateDepartmentScores(results)
       setHealthDeptScores(deptScores)
+      
+      // 質問別スコアを計算
+      const questionScores = calculateQuestionScores(results)
+      setHealthQuestionScores(questionScores)
       
       // 回答率を取得
       const responseRate = await getResponseRate(sid, period)
@@ -2239,6 +2245,79 @@ export default function AdminPage({ isDark }) {
                   </div>
                 </div>
               )}
+
+              {/* 質問別スコア */}
+              <div className={`rounded-2xl border p-6 ${
+                isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'
+              }`}>
+                <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  📝 質問別スコア
+                </h3>
+                {healthQuestionScores.length === 0 ? (
+                  <p className={`text-center py-8 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                    データがありません
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {/* スコアが低い順にソート（問題のある質問を上に） */}
+                    {[...healthQuestionScores]
+                      .sort((a, b) => a.score - b.score)
+                      .map((question, index) => (
+                        <div 
+                          key={question.id}
+                          className={`p-4 rounded-xl ${
+                            isDark ? 'bg-gray-800/50' : 'bg-gray-50'
+                          } ${question.score < 3 ? (isDark ? 'border border-red-500/30' : 'border border-red-200') : ''}`}
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                  isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'
+                                }`}>
+                                  {question.category}
+                                </span>
+                                {question.score < 3 && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-500">
+                                    ⚠️ 要注意
+                                  </span>
+                                )}
+                              </div>
+                              <p className={`text-sm ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
+                                {question.questionText}
+                              </p>
+                            </div>
+                            <div className="flex flex-col items-end shrink-0">
+                              <div className={`text-2xl font-bold ${
+                                question.score >= 4 ? 'text-green-500' :
+                                question.score >= 3 ? 'text-yellow-500' :
+                                'text-red-500'
+                              }`}>
+                                {question.score.toFixed(1)}
+                              </div>
+                              <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                {question.responseCount}回答
+                              </div>
+                            </div>
+                          </div>
+                          {/* プログレスバー */}
+                          <div className="mt-2">
+                            <div className={`h-2 rounded-full overflow-hidden ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                              <div 
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                  question.score >= 4 ? 'bg-gradient-to-r from-green-400 to-emerald-500' :
+                                  question.score >= 3 ? 'bg-gradient-to-r from-yellow-400 to-orange-400' :
+                                  'bg-gradient-to-r from-red-400 to-red-500'
+                                }`}
+                                style={{ width: `${(question.score / 5) * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
 
               {/* スコア推移 */}
               <div className={`rounded-2xl border p-6 ${
