@@ -1,20 +1,20 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './utils/supabase'
-import TodoList from './components/TodoList'
-import AttendanceCard from './components/AttendanceCard'
-import CalendarPage from './components/CalendarPage'
-import DailyCalendarPage from './components/DailyCalendarPage'
-import SettingsPage from './components/SettingsPage'
-import MembersPage from './components/MembersPage'
-import PomodoroPage from './components/PomodoroPage'
-import ReservationsPage from './components/ReservationsPage'
-import AnnouncementsPage from './components/AnnouncementsPage'
-import AdminPage from './components/AdminPage'
-import RankingPage from './components/RankingPage'
-import AttendanceHistoryPage from './components/AttendanceHistoryPage'
-import Avatar from './components/Avatar'
-import WeeklyTasksSection from './components/WeeklyTasksSection'
-import { getStreaks } from './utils/streaks'
+import TodoList from './features/todo/components/TodoList'
+import AttendanceCard from './features/attendance/components/AttendanceCard'
+import CalendarPage from './features/calendar/components/CalendarPage'
+import DailyCalendarPage from './features/calendar/components/DailyCalendarPage'
+import SettingsPage from './features/admin/components/SettingsPage'
+import MembersPage from './features/admin/components/MembersPage'
+import PomodoroPage from './features/pomodoro/components/PomodoroPage'
+import ReservationsPage from './features/reservations/components/ReservationsPage'
+import AnnouncementsPage from './features/announcements/components/AnnouncementsPage'
+import AdminPage from './features/admin/components/AdminPage'
+import RankingPage from './features/ranking/components/RankingPage'
+import AttendanceHistoryPage from './features/attendance/components/AttendanceHistoryPage'
+import Avatar from './features/common/components/Avatar'
+import WeeklyTasksSection from './features/todo/components/WeeklyTasksSection'
+import { getStreaks } from './features/pomodoro/utils/streaks'
 import { getHeatmapData } from './utils/heatmap'
 import { getRootsUserByEmail } from './utils/rootsApi'
 
@@ -1087,27 +1087,6 @@ function App() {
               </div>
             </button>
 
-            {/* PC専用: ランキングボタン */}
-            <button
-              onClick={() => setCurrentPage('ranking')}
-              className={`hidden md:block md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
-                currentPage === 'ranking'
-                  ? isDark
-                    ? 'bg-white text-gray-900'
-                    : 'bg-gray-900 text-white'
-                  : isDark
-                  ? 'text-gray-400 hover:text-white hover:bg-gray-800/50'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/50'
-              }`}
-            >
-              <div className="flex md:flex-row flex-col items-center md:gap-3 gap-1">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                </svg>
-                <span className="md:inline text-xs md:text-base">ランキング</span>
-              </div>
-            </button>
-
             {/* PC専用: 出勤履歴ボタン */}
             <button
               onClick={() => setCurrentPage('attendance-history')}
@@ -1133,7 +1112,7 @@ function App() {
             <button
               onClick={() => setUserMenuOpen(!userMenuOpen)}
               className={`md:hidden md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 relative ${
-                userMenuOpen || ['admin', 'pomodoro', 'reservations', 'ranking', 'attendance-history', 'settings'].includes(currentPage)
+                userMenuOpen || ['admin', 'pomodoro', 'reservations', 'attendance-history', 'settings'].includes(currentPage)
                   ? isDark
                     ? 'bg-white text-gray-900'
                     : 'bg-gray-900 text-white'
@@ -1348,27 +1327,6 @@ function App() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
                 <span>予約</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setCurrentPage('ranking')
-                  setUserMenuOpen(false)
-                }}
-                className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 ${
-                  currentPage === 'ranking'
-                    ? isDark
-                      ? 'bg-white/10 text-white'
-                      : 'bg-gray-900/10 text-gray-900'
-                    : isDark
-                    ? 'text-gray-300 hover:bg-gray-800/50 hover:text-white'
-                    : 'text-gray-600 hover:bg-gray-100/50 hover:text-gray-900'
-                }`}
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                </svg>
-                <span>ランキング</span>
               </button>
 
               <button
