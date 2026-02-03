@@ -12,7 +12,7 @@ import AnnouncementsPage from './features/announcements/components/Announcements
 import AdminPage from './features/admin/components/AdminPage'
 import RankingPage from './features/ranking/components/RankingPage'
 import AttendanceHistoryPage from './features/attendance/components/AttendanceHistoryPage'
-import MinigameAdmin from './features/minigame/components/admin/MinigameAdmin'
+import MinigamePage from './features/minigame/components/MinigamePage'
 import Avatar from './features/common/components/Avatar'
 import WeeklyTasksSection from './features/todo/components/WeeklyTasksSection'
 import { getStreaks } from './features/pomodoro/utils/streaks'
@@ -1046,29 +1046,27 @@ function App() {
               </button>
             )}
 
-            {/* PC専用: ミニゲーム管理ボタン */}
-            {user?.is_minigame_admin && (
-              <button
-                onClick={() => setCurrentPage('minigame-admin')}
-                className={`hidden md:block md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
-                  currentPage === 'minigame-admin'
-                    ? isDark
-                      ? 'bg-white text-gray-900'
-                      : 'bg-gray-900 text-white'
-                    : isDark
-                    ? 'text-gray-400 hover:text-white hover:bg-gray-800/50'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/50'
-                }`}
-              >
-                <div className="flex md:flex-row flex-col items-center md:gap-3 gap-1">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span className="md:inline text-xs md:text-base">ゲーム</span>
-                </div>
-              </button>
-            )}
+            {/* PC専用: ゲームボタン（全員表示） */}
+            <button
+              onClick={() => setCurrentPage('minigame')}
+              className={`hidden md:block md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+                currentPage === 'minigame'
+                  ? isDark
+                    ? 'bg-white text-gray-900'
+                    : 'bg-gray-900 text-white'
+                  : isDark
+                  ? 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/50'
+              }`}
+            >
+              <div className="flex md:flex-row flex-col items-center md:gap-3 gap-1">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="md:inline text-xs md:text-base">ゲーム</span>
+              </div>
+            </button>
 
             {/* PC専用: 集中ボタン */}
             <button
@@ -1238,8 +1236,8 @@ function App() {
           <AnnouncementsPage user={user} isDark={isDark} onUnreadCountChange={setAnnouncementsUnreadCount} />
         ) : currentPage === 'admin' ? (
           <AdminPage isDark={isDark} />
-        ) : currentPage === 'minigame-admin' ? (
-          <MinigameAdmin isDark={isDark} />
+        ) : currentPage === 'minigame' ? (
+          <MinigamePage user={user} isDark={isDark} />
         ) : currentPage === 'pomodoro' ? (
           <PomodoroPage user={user} isDark={isDark} />
         ) : currentPage === 'reservations' ? (

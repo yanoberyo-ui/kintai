@@ -99,3 +99,26 @@ export async function getParticipantCount(eventId) {
   if (error) throw error
   return count || 0
 }
+
+/**
+ * ログインユーザーで参加登録
+ * session_idにuser_idを使用して既存ロジックを再利用
+ * @param {string} eventId - イベントID
+ * @param {string} userId - ユーザーID
+ * @param {string} name - 参加者名
+ * @returns {Promise<Object>} 登録された参加者
+ */
+export async function checkInWithUser(eventId, userId, name) {
+  // user_idをsession_idとして使用
+  return checkIn(eventId, name, `user_${userId}`)
+}
+
+/**
+ * ユーザーIDから参加者取得
+ * @param {string} eventId - イベントID
+ * @param {string} userId - ユーザーID
+ * @returns {Promise<Object|null>} 参加者またはnull
+ */
+export async function getParticipantByUserId(eventId, userId) {
+  return getParticipantBySession(eventId, `user_${userId}`)
+}
