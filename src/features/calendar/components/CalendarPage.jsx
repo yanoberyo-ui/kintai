@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../../utils/supabase'
+import { usePullToRefresh, PullToRefreshIndicator } from '../../../hooks/usePullToRefresh.jsx'
 import {
   addTodoItem,
   toggleTodoItem,
@@ -244,8 +245,27 @@ export default function CalendarPage({ user, isDark }) {
   const completedCount = allItems.filter(item => item.is_completed).length
   const progress = allItems.length > 0 ? Math.round((completedCount / allItems.length) * 100) : 0
 
+  // Pull-to-refresh
+  const handleRefresh = useCallback(async () => {
+    await Promise.all([
+      loadTodoListForDate(selectedDate),
+      loadRoutineTodos(),
+      loadRoutineCompletionsForDate(selectedDate)
+    ])
+  }, [selectedDate])
+
+  const { containerRef, pullDistance, isRefreshing } = usePullToRefresh(handleRefresh)
+
   return (
-    <div className="max-w-7xl mx-auto p-8 space-y-6">
+    <div
+      ref={containerRef}
+      className="max-w-7xl mx-auto p-8 space-y-6 h-full overflow-y-auto relative"
+      style={{
+        transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
+        transition: pullDistance === 0 ? 'transform 0.2s ease-out' : undefined
+      }}
+    >
+      <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} />
       {/* カレンダー */}
       <div className={`backdrop-blur-xl rounded-3xl shadow-lg border overflow-hidden transition-colors duration-500 ${
         isDark

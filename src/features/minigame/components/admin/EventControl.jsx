@@ -236,10 +236,10 @@ export default function EventControl({ eventId, isDark, onBack }) {
       </div>
 
       {/* 操作パネル */}
-      <div className={`backdrop-blur-xl rounded-2xl shadow-lg border p-6 mb-6 ${
+      <div className={`backdrop-blur-xl rounded-2xl shadow-lg border p-5 md:p-6 mb-6 ${
         isDark ? 'bg-gray-900/80 border-gray-800/50' : 'bg-white/80 border-gray-200/50'
       }`}>
-        <h2 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+        <h2 className={`text-xl md:text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
           操作
         </h2>
 
@@ -247,7 +247,7 @@ export default function EventControl({ eventId, isDark, onBack }) {
           <button
             onClick={handleStart}
             disabled={actionLoading || participants.length < 2}
-            className={`w-full py-4 rounded-xl font-bold text-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+            className={`w-full py-5 md:py-4 rounded-xl font-bold text-xl md:text-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
               isDark
                 ? 'bg-green-600 text-white hover:bg-green-500'
                 : 'bg-green-600 text-white hover:bg-green-700'
@@ -258,34 +258,34 @@ export default function EventControl({ eventId, isDark, onBack }) {
         )}
 
         {event.status === 'active' && (
-          <div className="space-y-4">
+          <div className="space-y-5 md:space-y-4">
             {/* タイマー */}
-            <div className={`p-4 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
-              <div className={`text-4xl font-bold text-center mb-4 ${
+            <div className={`p-5 md:p-4 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
+              <div className={`text-6xl md:text-4xl font-bold text-center mb-5 md:mb-4 tabular-nums ${
                 remainingSeconds <= 60
                   ? 'text-red-500'
                   : isDark ? 'text-white' : 'text-gray-900'
               }`}>
                 {formatTime(remainingSeconds)}
               </div>
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center justify-center gap-3 mb-4 md:mb-3">
                 <input
                   type="number"
                   value={timerDuration}
                   onChange={(e) => setTimerDuration(Math.max(1, parseInt(e.target.value) || 1))}
                   min="1"
-                  className={`w-20 px-3 py-2 rounded-lg border text-center ${
+                  className={`w-24 md:w-20 px-4 md:px-3 py-3 md:py-2 rounded-lg border text-center text-lg md:text-base ${
                     isDark
                       ? 'bg-gray-900 border-gray-700 text-white'
                       : 'bg-white border-gray-300 text-gray-900'
                   }`}
                 />
-                <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>分</span>
+                <span className={`text-lg md:text-base ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>分</span>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-3 md:gap-2">
                 <button
                   onClick={handleTimerStart}
-                  className={`flex-1 py-2 rounded-lg font-medium ${
+                  className={`flex-1 py-4 md:py-2 rounded-lg font-medium text-lg md:text-base ${
                     isDark
                       ? 'bg-blue-600 text-white hover:bg-blue-500'
                       : 'bg-blue-600 text-white hover:bg-blue-700'
@@ -295,7 +295,7 @@ export default function EventControl({ eventId, isDark, onBack }) {
                 </button>
                 <button
                   onClick={handleTimerToggle}
-                  className={`flex-1 py-2 rounded-lg font-medium ${
+                  className={`flex-1 py-4 md:py-2 rounded-lg font-medium text-lg md:text-base ${
                     isDark
                       ? 'bg-gray-700 text-white hover:bg-gray-600'
                       : 'bg-gray-300 text-gray-900 hover:bg-gray-400'
@@ -305,7 +305,7 @@ export default function EventControl({ eventId, isDark, onBack }) {
                 </button>
                 <button
                   onClick={handleTimerReset}
-                  className={`flex-1 py-2 rounded-lg font-medium ${
+                  className={`flex-1 py-4 md:py-2 rounded-lg font-medium text-lg md:text-base ${
                     isDark
                       ? 'bg-gray-700 text-white hover:bg-gray-600'
                       : 'bg-gray-300 text-gray-900 hover:bg-gray-400'
@@ -320,7 +320,7 @@ export default function EventControl({ eventId, isDark, onBack }) {
             <button
               onClick={handleShuffle}
               disabled={actionLoading}
-              className={`w-full py-3 rounded-xl font-medium transition-all duration-200 disabled:opacity-50 ${
+              className={`w-full py-4 md:py-3 rounded-xl font-medium text-lg md:text-base transition-all duration-200 disabled:opacity-50 ${
                 isDark
                   ? 'bg-purple-600 text-white hover:bg-purple-500'
                   : 'bg-purple-600 text-white hover:bg-purple-700'
@@ -333,7 +333,7 @@ export default function EventControl({ eventId, isDark, onBack }) {
             <button
               onClick={handleFinish}
               disabled={actionLoading}
-              className={`w-full py-3 rounded-xl font-medium transition-all duration-200 disabled:opacity-50 ${
+              className={`w-full py-4 md:py-3 rounded-xl font-medium text-lg md:text-base transition-all duration-200 disabled:opacity-50 ${
                 isDark
                   ? 'bg-red-600 text-white hover:bg-red-500'
                   : 'bg-red-600 text-white hover:bg-red-700'
@@ -352,22 +352,22 @@ export default function EventControl({ eventId, isDark, onBack }) {
       </div>
 
       {/* 参加者一覧 */}
-      <div className={`backdrop-blur-xl rounded-2xl shadow-lg border p-6 mb-6 ${
+      <div className={`backdrop-blur-xl rounded-2xl shadow-lg border p-5 md:p-6 mb-6 ${
         isDark ? 'bg-gray-900/80 border-gray-800/50' : 'bg-white/80 border-gray-200/50'
       }`}>
-        <h2 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+        <h2 className={`text-xl md:text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
           参加者 ({participants.length}人)
         </h2>
         {participants.length === 0 ? (
-          <div className={`text-center py-4 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+          <div className={`text-center py-6 md:py-4 text-lg md:text-base ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
             まだ参加者がいません
           </div>
         ) : (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-3 md:gap-2">
             {participants.map((p) => (
               <span
                 key={p.id}
-                className={`px-3 py-1.5 rounded-full text-sm ${
+                className={`px-4 md:px-3 py-2 md:py-1.5 rounded-full text-base md:text-sm ${
                   isDark
                     ? 'bg-gray-800 text-gray-300'
                     : 'bg-gray-100 text-gray-700'
@@ -382,28 +382,28 @@ export default function EventControl({ eventId, isDark, onBack }) {
 
       {/* 席配置（ゲーム中のみ） */}
       {event.status === 'active' && seating.length > 0 && (
-        <div className={`backdrop-blur-xl rounded-2xl shadow-lg border p-6 ${
+        <div className={`backdrop-blur-xl rounded-2xl shadow-lg border p-5 md:p-6 ${
           isDark ? 'bg-gray-900/80 border-gray-800/50' : 'bg-white/80 border-gray-200/50'
         }`}>
-          <h2 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+          <h2 className={`text-xl md:text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
             現在の席配置（ラウンド{currentRound}）
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {seating.map((table) => (
               <div
                 key={table.table.id}
-                className={`p-4 rounded-xl ${
+                className={`p-5 md:p-4 rounded-xl ${
                   isDark ? 'bg-gray-800' : 'bg-gray-100'
                 }`}
               >
-                <div className={`font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                <div className={`text-lg md:text-base font-bold mb-3 md:mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
                   テーブル {table.table.table_number}
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-2 md:space-y-1">
                   {table.participants.map((p) => (
                     <div
                       key={p.id}
-                      className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}
+                      className={`text-base md:text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}
                     >
                       {p.name}
                     </div>
