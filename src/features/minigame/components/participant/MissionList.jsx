@@ -51,8 +51,8 @@ export default function MissionList({ eventId, participantId }) {
 
   if (loading) {
     return (
-      <div className="bg-gray-800 rounded-2xl p-4">
-        <div className="text-gray-500 text-center animate-pulse">
+      <div className="bg-gray-800 rounded-2xl p-5">
+        <div className="text-gray-500 text-center text-base animate-pulse">
           ミッション読み込み中...
         </div>
       </div>
@@ -61,8 +61,8 @@ export default function MissionList({ eventId, participantId }) {
 
   if (missions.length === 0) {
     return (
-      <div className="bg-gray-800 rounded-2xl p-4">
-        <div className="text-gray-500 text-center">
+      <div className="bg-gray-800 rounded-2xl p-5">
+        <div className="text-gray-500 text-center text-base">
           ミッションがありません
         </div>
       </div>
@@ -72,43 +72,43 @@ export default function MissionList({ eventId, participantId }) {
   const completedCount = missions.filter(m => m.completed).length
 
   return (
-    <div className="bg-gray-800 rounded-2xl p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="text-gray-400 text-sm font-medium">
+    <div className="bg-gray-800 rounded-2xl p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-gray-400 text-base font-medium">
           🎯 ミッション
         </div>
-        <div className="text-xs text-gray-500">
+        <div className="text-sm text-gray-500 bg-gray-700 px-3 py-1 rounded-full">
           {completedCount}/{missions.length} 完了
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         {missions.map((mission) => (
           <button
             key={mission.id}
             onClick={() => handleToggle(mission)}
             disabled={updating === mission.id}
-            className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${
+            className={`w-full flex items-center gap-4 p-4 min-h-[56px] rounded-xl transition-all duration-200 active:scale-[0.98] ${
               mission.completed
                 ? 'bg-green-900/30 text-green-300'
                 : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
             } ${updating === mission.id ? 'opacity-50' : ''}`}
           >
-            {/* チェックボックス */}
-            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+            {/* チェックボックス（タップしやすいサイズ） */}
+            <div className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
               mission.completed
                 ? 'border-green-400 bg-green-400'
                 : 'border-gray-500'
             }`}>
               {mission.completed && (
-                <svg className="w-3 h-3 text-gray-900" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-4 h-4 text-gray-900" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
               )}
             </div>
 
             {/* ミッション内容 */}
-            <span className={`text-sm text-left ${mission.completed ? 'line-through opacity-70' : ''}`}>
+            <span className={`text-base text-left flex-1 ${mission.completed ? 'line-through opacity-70' : ''}`}>
               {mission.mission?.content}
             </span>
           </button>

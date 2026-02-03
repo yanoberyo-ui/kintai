@@ -53,7 +53,7 @@ export default function TopicCard({ eventId, tableId, roundNumber }) {
   if (loading) {
     return (
       <div className="bg-gray-800 rounded-2xl p-6">
-        <div className="text-gray-500 text-center animate-pulse">
+        <div className="text-gray-500 text-center text-base animate-pulse">
           読み込み中...
         </div>
       </div>
@@ -61,18 +61,18 @@ export default function TopicCard({ eventId, tableId, roundNumber }) {
   }
 
   return (
-    <div className="bg-gray-800 rounded-2xl p-4">
-      <div className="text-gray-400 text-sm font-medium mb-3">
+    <div className="bg-gray-800 rounded-2xl p-5">
+      <div className="text-gray-400 text-base font-medium mb-4">
         🃏 お題カード
       </div>
 
       {/* カード */}
       <div
-        className={`relative h-40 perspective-1000 ${isFlipping ? 'animate-flip' : ''}`}
+        className={`relative h-44 ${isFlipping ? 'animate-flip' : ''}`}
         style={{ perspective: '1000px' }}
       >
         <div
-          className={`absolute inset-0 rounded-xl transition-transform duration-500 transform-style-preserve-3d ${
+          className={`absolute inset-0 rounded-2xl transition-transform duration-500 ${
             isFlipping ? 'rotate-y-180' : ''
           }`}
           style={{ transformStyle: 'preserve-3d' }}
@@ -80,28 +80,28 @@ export default function TopicCard({ eventId, tableId, roundNumber }) {
           {/* カード表面（お題がある場合） */}
           {currentTopic ? (
             <div
-              className="absolute inset-0 rounded-xl bg-gradient-to-br from-purple-600 to-blue-600 p-4 flex items-center justify-center backface-hidden"
+              className="absolute inset-0 rounded-2xl bg-gradient-to-br from-purple-600 to-blue-600 p-5 flex items-center justify-center shadow-lg shadow-purple-500/20"
               style={{ backfaceVisibility: 'hidden' }}
             >
               <div className="text-center">
                 {currentTopic.topic?.category && (
-                  <div className="text-purple-200 text-xs mb-2">
+                  <div className="text-purple-200 text-sm mb-3 bg-purple-500/30 px-3 py-1 rounded-full inline-block">
                     {currentTopic.topic.category}
                   </div>
                 )}
-                <div className="text-white text-lg font-bold">
+                <div className="text-white text-xl font-bold leading-relaxed">
                   {currentTopic.topic?.content}
                 </div>
               </div>
             </div>
           ) : (
             <div
-              className="absolute inset-0 rounded-xl bg-gradient-to-br from-gray-700 to-gray-600 p-4 flex items-center justify-center backface-hidden"
+              className="absolute inset-0 rounded-2xl bg-gradient-to-br from-gray-700 to-gray-600 p-5 flex items-center justify-center"
               style={{ backfaceVisibility: 'hidden' }}
             >
               <div className="text-center">
-                <div className="text-4xl mb-2">🎴</div>
-                <div className="text-gray-400 text-sm">
+                <div className="text-5xl mb-3">🎴</div>
+                <div className="text-gray-400 text-base">
                   お題を引いてください
                 </div>
               </div>
@@ -110,14 +110,14 @@ export default function TopicCard({ eventId, tableId, roundNumber }) {
         </div>
       </div>
 
-      {/* ボタン */}
+      {/* ボタン（タップしやすいサイズ） */}
       <button
         onClick={handleDraw}
         disabled={drawing}
-        className={`w-full mt-4 py-3 rounded-xl font-medium transition-all duration-200 ${
+        className={`w-full mt-5 py-4 min-h-[56px] rounded-xl font-bold text-lg transition-all duration-200 active:scale-[0.98] ${
           drawing
             ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-            : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-500 hover:to-blue-500'
+            : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-500 hover:to-blue-500 shadow-lg shadow-purple-500/20'
         }`}
       >
         {drawing ? 'めくり中...' : currentTopic ? '次のお題を引く' : 'お題を引く'}
@@ -125,7 +125,7 @@ export default function TopicCard({ eventId, tableId, roundNumber }) {
 
       {/* 引いた枚数 */}
       {currentTopic && (
-        <div className="text-center mt-2 text-xs text-gray-500">
+        <div className="text-center mt-3 text-sm text-gray-500">
           このラウンドで引いたお題
         </div>
       )}
