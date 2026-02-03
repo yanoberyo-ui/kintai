@@ -1212,7 +1212,7 @@ function App() {
       </aside>
 
       {/* メインコンテンツ */}
-      <main className={`pt-24 md:pb-8 pb-32 px-8 transition-all duration-300 ${
+      <main className={`pt-24 md:pb-8 pb-32 px-8 transition-all duration-300 h-dvh overflow-hidden ${
         sidebarOpen ? 'md:ml-64' : 'md:ml-0'
       } ml-0`}>
         {currentPage === 'home' ? (
