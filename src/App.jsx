@@ -1046,10 +1046,10 @@ function App() {
               </button>
             )}
 
-            {/* ゲームボタン（全員表示） */}
+            {/* PC専用: ゲームボタン（全員表示） */}
             <button
               onClick={() => setCurrentPage('minigame')}
-              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+              className={`hidden md:block md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
                 currentPage === 'minigame'
                   ? isDark
                     ? 'bg-white text-gray-900'
@@ -1059,12 +1059,12 @@ function App() {
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/50'
               }`}
             >
-              <div className="flex md:flex-row flex-col items-center md:gap-3 gap-0.5">
-                <svg className="w-6 h-6 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="flex md:flex-row flex-col items-center md:gap-3 gap-1">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span className="hidden md:inline text-xs md:text-base">ゲーム</span>
+                <span className="md:inline text-xs md:text-base">ゲーム</span>
               </div>
             </button>
 
@@ -1311,6 +1311,29 @@ function App() {
                   <span>管理者</span>
                 </button>
               )}
+
+              {/* ゲームボタン（全員表示） */}
+              <button
+                onClick={() => {
+                  setCurrentPage('minigame')
+                  setUserMenuOpen(false)
+                }}
+                className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 ${
+                  currentPage === 'minigame'
+                    ? isDark
+                      ? 'bg-white/10 text-white'
+                      : 'bg-gray-900/10 text-gray-900'
+                    : isDark
+                    ? 'text-gray-300 hover:bg-gray-800/50 hover:text-white'
+                    : 'text-gray-600 hover:bg-gray-100/50 hover:text-gray-900'
+                }`}
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>ゲーム</span>
+              </button>
 
               <button
                 onClick={() => {
