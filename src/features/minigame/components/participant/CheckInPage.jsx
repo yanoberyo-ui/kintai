@@ -1,0 +1,70 @@
+import React, { useState } from 'react'
+import { checkIn } from '../../utils/participant'
+
+export default function CheckInPage({ eventId, eventName, sessionId, onCheckInComplete }) {
+  const [name, setName] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!name.trim()) {
+      setError('名前を入力してください')
+      return
+    }
+
+    try {
+      setLoading(true)
+      setError('')
+      const participant = await checkIn(eventId, name.trim(), sessionId)
+      onCheckInComplete(participant)
+    } catch (err) {
+      console.error('Error checking in:', err)
+      setError('チェックインに失敗しました。もう一度お試しください。')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+      <div className="w-full max-w-sm">
+        {/* ヘッダー */}
+        <div className="text-center mb-8">
+          <div className="text-5xl mb-4">🎮</div>
+          <h1 className="text-2xl font-bold text-white mb-2">{eventName}</h1>
+          <p className="text-gray-400">参加するには名前を入力してください</p>
+        </div>
+
+        {/* フォーム */}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="あなたの名前"
+              className="w-full px-6 py-4 rounded-2xl bg-gray-800 border-2 border-gray-700 text-white text-lg placeholder:text-gray-500 focus:border-white focus:outline-none transition-colors"
+              autoFocus
+              autoComplete="off"
+            />
+          </div>
+
+          {error && (
+            <div className="text-red-400 text-sm text-center">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading || !name.trim()}
+            className="w-full py-4 rounded-2xl bg-white text-gray-900 font-bold text-lg transition-all duration-200 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? '参加中...' : '参加する'}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
