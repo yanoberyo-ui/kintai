@@ -105,7 +105,7 @@ export default function MinigamePage({ user, isDark }) {
   return (
     <div
       ref={containerRef}
-      className="max-w-4xl mx-auto h-full overflow-y-auto relative"
+      className="max-w-4xl mx-auto h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)] overflow-y-auto relative"
       style={{
         transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
         transition: pullDistance === 0 ? 'transform 0.2s ease-out' : undefined
@@ -389,7 +389,7 @@ function ParticipantView({ eventId, user, isDark, onBack }) {
     return (
       <div
         ref={containerRef}
-        className="max-w-md mx-auto h-full overflow-y-auto relative"
+        className="max-w-md mx-auto h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)] overflow-y-auto relative"
         style={{
           transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
           transition: pullDistance === 0 ? 'transform 0.2s ease-out' : undefined
@@ -425,7 +425,7 @@ function ParticipantView({ eventId, user, isDark, onBack }) {
     return (
       <div
         ref={containerRef}
-        className="h-full overflow-y-auto relative"
+        className="h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)] overflow-y-auto relative"
         style={{
           transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
           transition: pullDistance === 0 ? 'transform 0.2s ease-out' : undefined
