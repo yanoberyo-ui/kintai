@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { getEvents } from '../utils/event'
 import { getParticipantCount, checkInWithUser, getParticipantByUserId } from '../utils/participant'
 import EventCreate from './admin/EventCreate'
@@ -6,6 +6,7 @@ import EventControl from './admin/EventControl'
 import GameRound from './participant/GameRound'
 import WaitingRoom from './participant/WaitingRoom'
 import { useEventRealtime } from '../hooks/useEventRealtime'
+import { usePullToRefresh, PullToRefreshIndicator } from '../hooks/usePullToRefresh.jsx'
 
 export default function MinigamePage({ user, isDark }) {
   const [events, setEvents] = useState([])
@@ -19,11 +20,7 @@ export default function MinigamePage({ user, isDark }) {
 
   const isAdmin = user?.is_minigame_admin
 
-  useEffect(() => {
-    loadEvents()
-  }, [])
-
-  const loadEvents = async () => {
+  const loadEvents = useCallback(async () => {
     try {
       setLoading(true)
       const data = await getEvents()
@@ -40,7 +37,14 @@ export default function MinigamePage({ user, isDark }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    loadEvents()
+  }, [loadEvents])
+
+  // Pull-to-refresh for event list
+  const { containerRef, pullDistance, isRefreshing } = usePullToRefresh(loadEvents)
 
   // イベント参加
   const handleJoin = async (eventId) => {
@@ -99,7 +103,20 @@ export default function MinigamePage({ user, isDark }) {
 
   // イベント一覧
   return (
-    <div className="max-w-4xl mx-auto">
+    <div
+      ref={containerRef}
+      className="max-w-4xl mx-auto h-full overflow-y-auto relative"
+      style={{
+        transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
+        transition: pullDistance === 0 ? 'transform 0.2s ease-out' : undefined
+      }}
+    >
+      {/* Pull-to-refresh indicator */}
+      <PullToRefreshIndicator
+        pullDistance={pullDistance}
+        isRefreshing={isRefreshing}
+      />
+
       {/* ヘッダー */}
       <div className="mb-6 flex items-center justify-between">
         <div>
@@ -256,17 +273,44 @@ function EventCard({ event, participantCount, isAdmin, isDark, onJoin, onManage 
   )
 }
 
+// 接続状態インジケーター
+function ConnectionStatusIndicator({ status, isDark }) {
+  if (status === 'connected') return null
+
+  const statusConfig = {
+    connecting: { text: '接続中...', color: 'text-yellow-500', icon: '🔄' },
+    disconnected: { text: 'オフライン', color: 'text-orange-500', icon: '📡' },
+    error: { text: '接続エラー', color: 'text-red-500', icon: '⚠️' }
+  }
+
+  const config = statusConfig[status] || statusConfig.error
+
+  return (
+    <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full shadow-lg ${
+      isDark ? 'bg-gray-800' : 'bg-white'
+    }`}>
+      <span className={`text-sm font-medium ${config.color}`}>
+        {config.icon} {config.text}
+      </span>
+    </div>
+  )
+}
+
 // 参加者ビューコンポーネント
 function ParticipantView({ eventId, user, isDark, onBack }) {
-  const { event, participants, seating, currentRound, loading, refetch } = useEventRealtime(eventId)
+  const { event, participants, seating, currentRound, loading, connectionStatus, refetch } = useEventRealtime(eventId)
   const [participant, setParticipant] = useState(null)
   const [checkingParticipant, setCheckingParticipant] = useState(true)
 
-  useEffect(() => {
-    checkParticipant()
-  }, [eventId, user.id])
+  // Pull-to-refresh
+  const handleRefresh = useCallback(async () => {
+    await refetch()
+    await checkParticipant()
+  }, [refetch])
 
-  const checkParticipant = async () => {
+  const { containerRef, pullDistance, isRefreshing } = usePullToRefresh(handleRefresh)
+
+  const checkParticipant = useCallback(async () => {
     try {
       const p = await getParticipantByUserId(eventId, user.id)
       setParticipant(p)
@@ -275,7 +319,11 @@ function ParticipantView({ eventId, user, isDark, onBack }) {
     } finally {
       setCheckingParticipant(false)
     }
-  }
+  }, [eventId, user.id])
+
+  useEffect(() => {
+    checkParticipant()
+  }, [checkParticipant])
 
   // participants更新時に自分の情報も更新
   useEffect(() => {
@@ -339,7 +387,17 @@ function ParticipantView({ eventId, user, isDark, onBack }) {
   // 待機中
   if (event.status === 'waiting') {
     return (
-      <div className="max-w-md mx-auto">
+      <div
+        ref={containerRef}
+        className="max-w-md mx-auto h-full overflow-y-auto relative"
+        style={{
+          transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
+          transition: pullDistance === 0 ? 'transform 0.2s ease-out' : undefined
+        }}
+      >
+        <ConnectionStatusIndicator status={connectionStatus} isDark={isDark} />
+        <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} />
+
         <button
           onClick={onBack}
           className={`flex items-center gap-2 mb-4 px-4 py-2 rounded-xl transition-colors ${
@@ -365,7 +423,17 @@ function ParticipantView({ eventId, user, isDark, onBack }) {
   // ゲーム中
   if (event.status === 'active') {
     return (
-      <div>
+      <div
+        ref={containerRef}
+        className="h-full overflow-y-auto relative"
+        style={{
+          transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
+          transition: pullDistance === 0 ? 'transform 0.2s ease-out' : undefined
+        }}
+      >
+        <ConnectionStatusIndicator status={connectionStatus} isDark={isDark} />
+        <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} />
+
         <button
           onClick={onBack}
           className={`flex items-center gap-2 mb-4 px-4 py-2 rounded-xl transition-colors ${

@@ -1,15 +1,46 @@
 import React, { useState, useCallback } from 'react'
 import { useEventRealtime } from '../../hooks/useEventRealtime'
 import { useTimerRealtime } from '../../hooks/useTimerRealtime'
+import { usePullToRefresh, PullToRefreshIndicator } from '../../hooks/usePullToRefresh.jsx'
 import { updateEventStatus } from '../../utils/event'
 import { assignSeating, getLatestRoundNumber } from '../../utils/seating'
 import { startTimer, pauseTimer, resumeTimer, resetTimer } from '../../utils/timer'
 
+// 接続状態インジケーター
+function ConnectionStatusIndicator({ status, isDark }) {
+  if (status === 'connected') return null
+
+  const statusConfig = {
+    connecting: { text: '接続中...', color: 'text-yellow-500', icon: '🔄' },
+    disconnected: { text: 'オフライン', color: 'text-orange-500', icon: '📡' },
+    error: { text: '接続エラー', color: 'text-red-500', icon: '⚠️' }
+  }
+
+  const config = statusConfig[status] || statusConfig.error
+
+  return (
+    <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full shadow-lg ${
+      isDark ? 'bg-gray-800' : 'bg-white'
+    }`}>
+      <span className={`text-sm font-medium ${config.color}`}>
+        {config.icon} {config.text}
+      </span>
+    </div>
+  )
+}
+
 export default function EventControl({ eventId, isDark, onBack }) {
-  const { event, participants, seating, currentRound, loading, refetch } = useEventRealtime(eventId)
-  const { remainingSeconds, isRunning } = useTimerRealtime(eventId)
+  const { event, participants, seating, currentRound, loading, connectionStatus, refetch } = useEventRealtime(eventId)
+  const { remainingSeconds, isRunning, connectionStatus: timerConnectionStatus, refetch: timerRefetch } = useTimerRealtime(eventId)
   const [actionLoading, setActionLoading] = useState(false)
   const [timerDuration, setTimerDuration] = useState(5) // 分
+
+  // Pull-to-refresh
+  const handleRefresh = useCallback(async () => {
+    await Promise.all([refetch(), timerRefetch()])
+  }, [refetch, timerRefetch])
+
+  const { containerRef, pullDistance, isRefreshing } = usePullToRefresh(handleRefresh)
 
   // 参加用URL
   const participantUrl = `${window.location.origin}/minigame/${eventId}`
@@ -108,6 +139,9 @@ export default function EventControl({ eventId, isDark, onBack }) {
     return `${m}:${s.toString().padStart(2, '0')}`
   }
 
+  // 接続状態を統合（どちらかが切断状態なら表示）
+  const overallConnectionStatus = connectionStatus !== 'connected' ? connectionStatus : timerConnectionStatus
+
   if (loading) {
     return (
       <div className={`animate-pulse ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
@@ -125,7 +159,20 @@ export default function EventControl({ eventId, isDark, onBack }) {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div
+      ref={containerRef}
+      className="max-w-4xl mx-auto h-full overflow-y-auto relative"
+      style={{
+        transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
+        transition: pullDistance === 0 ? 'transform 0.2s ease-out' : undefined
+      }}
+    >
+      {/* 接続状態インジケーター */}
+      <ConnectionStatusIndicator status={overallConnectionStatus} isDark={isDark} />
+
+      {/* Pull-to-refresh indicator */}
+      <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} />
+
       {/* ヘッダー */}
       <div className="mb-6">
         <button
