@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react'
 import Timer from './Timer'
+import MissionList from './MissionList'
+import TopicCard from './TopicCard'
 
 export default function GameRound({ eventId, event, participant, seating, currentRound }) {
   // 自分のテーブルを探す
@@ -8,6 +10,7 @@ export default function GameRound({ eventId, event, participant, seating, curren
       const found = table.participants.find(p => p.id === participant.id)
       if (found) {
         return {
+          tableId: table.table.id,
           tableNumber: table.table.table_number,
           members: table.participants
         }
@@ -80,14 +83,14 @@ export default function GameRound({ eventId, event, participant, seating, curren
           </div>
         </div>
 
-        {/* ミッションエリア（MG-005で実装予定） */}
+        {/* ミッション */}
         <div className="w-full max-w-sm mt-6">
-          <div className="bg-gray-800/50 border-2 border-dashed border-gray-700 rounded-2xl p-6 text-center">
-            <div className="text-3xl mb-2">🎯</div>
-            <div className="text-gray-500 text-sm">
-              ミッション機能は後日追加予定
-            </div>
-          </div>
+          <MissionList eventId={eventId} participantId={participant.id} />
+        </div>
+
+        {/* お題カード */}
+        <div className="w-full max-w-sm mt-4">
+          <TopicCard eventId={eventId} tableId={myTable.tableId} roundNumber={currentRound} />
         </div>
       </div>
 
