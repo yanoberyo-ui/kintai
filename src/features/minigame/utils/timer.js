@@ -1,0 +1,182 @@
+import { supabase } from '../../../utils/supabase'
+
+/**
+ * タイマー開始
+ * @param {string} eventId - イベントID
+ * @param {number} durationSeconds - タイマー時間（秒）
+ * @returns {Promise<Object>} タイマー状態
+ */
+export async function startTimer(eventId, durationSeconds = 180) {
+  // 既存タイマーを確認
+  const existing = await getTimerState(eventId)
+
+  if (existing) {
+    // 既存タイマーを更新
+    const { data, error } = await supabase
+      .from('minigame_timer')
+      .update({
+        started_at: new Date().toISOString(),
+        duration_seconds: durationSeconds,
+        is_running: true
+      })
+      .eq('event_id', eventId)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  } else {
+    // 新規タイマー作成
+    const { data, error } = await supabase
+      .from('minigame_timer')
+      .insert({
+        event_id: eventId,
+        started_at: new Date().toISOString(),
+        duration_seconds: durationSeconds,
+        is_running: true
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  }
+}
+
+/**
+ * タイマー一時停止
+ * 経過時間を計算してduration_secondsを更新
+ * @param {string} eventId - イベントID
+ * @returns {Promise<Object>} タイマー状態
+ */
+export async function pauseTimer(eventId) {
+  const current = await getTimerState(eventId)
+  if (!current || !current.is_running) {
+    throw new Error('Timer is not running')
+  }
+
+  // 残り時間を計算
+  const elapsed = Math.floor((Date.now() - new Date(current.started_at).getTime()) / 1000)
+  const remaining = Math.max(0, current.duration_seconds - elapsed)
+
+  const { data, error } = await supabase
+    .from('minigame_timer')
+    .update({
+      is_running: false,
+      duration_seconds: remaining,
+      started_at: null
+    })
+    .eq('event_id', eventId)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+/**
+ * タイマー再開
+ * @param {string} eventId - イベントID
+ * @returns {Promise<Object>} タイマー状態
+ */
+export async function resumeTimer(eventId) {
+  const current = await getTimerState(eventId)
+  if (!current) {
+    throw new Error('Timer not found')
+  }
+  if (current.is_running) {
+    throw new Error('Timer is already running')
+  }
+
+  const { data, error } = await supabase
+    .from('minigame_timer')
+    .update({
+      started_at: new Date().toISOString(),
+      is_running: true
+    })
+    .eq('event_id', eventId)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+/**
+ * タイマーリセット
+ * @param {string} eventId - イベントID
+ * @param {number} durationSeconds - リセット後の時間（秒）
+ * @returns {Promise<Object>} タイマー状態
+ */
+export async function resetTimer(eventId, durationSeconds = 180) {
+  const existing = await getTimerState(eventId)
+
+  if (existing) {
+    const { data, error } = await supabase
+      .from('minigame_timer')
+      .update({
+        started_at: null,
+        duration_seconds: durationSeconds,
+        is_running: false
+      })
+      .eq('event_id', eventId)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  } else {
+    const { data, error } = await supabase
+      .from('minigame_timer')
+      .insert({
+        event_id: eventId,
+        started_at: null,
+        duration_seconds: durationSeconds,
+        is_running: false
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  }
+}
+
+/**
+ * タイマー状態取得
+ * @param {string} eventId - イベントID
+ * @returns {Promise<Object|null>} タイマー状態
+ */
+export async function getTimerState(eventId) {
+  const { data, error } = await supabase
+    .from('minigame_timer')
+    .select('*')
+    .eq('event_id', eventId)
+    .single()
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return null
+    }
+    throw error
+  }
+  return data
+}
+
+/**
+ * 残り時間を計算
+ * @param {Object} timerState - タイマー状態
+ * @returns {number} 残り秒数
+ */
+export function calculateRemainingSeconds(timerState) {
+  if (!timerState) return 0
+
+  if (!timerState.is_running) {
+    // 停止中は保存されているduration_secondsがそのまま残り時間
+    return timerState.duration_seconds
+  }
+
+  // 実行中は経過時間を引く
+  const elapsed = Math.floor((Date.now() - new Date(timerState.started_at).getTime()) / 1000)
+  return Math.max(0, timerState.duration_seconds - elapsed)
+}
