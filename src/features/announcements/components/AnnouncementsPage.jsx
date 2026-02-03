@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../../utils/supabase'
+import { usePullToRefresh, PullToRefreshIndicator } from '../../../hooks/usePullToRefresh.jsx'
 
 // 画像URL最適化関数（Supabase画像変換を使用）
 const getOptimizedAvatarUrl = (url, size = 100) => {
@@ -1074,6 +1075,13 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
     return a.category === filter
   })
 
+  // Pull-to-refresh
+  const handleRefresh = useCallback(async () => {
+    await loadAnnouncements()
+  }, [])
+
+  const { containerRef, pullDistance, isRefreshing } = usePullToRefresh(handleRefresh)
+
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto">
@@ -1085,7 +1093,15 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
   }
 
   return (
-    <div className="max-w-2xl mx-auto pb-20">
+    <div
+      ref={containerRef}
+      className="max-w-2xl mx-auto pb-20 h-full overflow-y-auto relative"
+      style={{
+        transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
+        transition: pullDistance === 0 ? 'transform 0.2s ease-out' : undefined
+      }}
+    >
+      <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} />
       {/* ヘッダー */}
       <div className="mb-6 flex items-center justify-between">
         <div>

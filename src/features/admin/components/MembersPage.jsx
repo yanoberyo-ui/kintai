@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../../utils/supabase'
+import { usePullToRefresh, PullToRefreshIndicator } from '../../../hooks/usePullToRefresh.jsx'
 import { calculateProgress } from '../../../features/todo/utils/todo'
 import TodoList from '../../../features/todo/components/TodoList'
 import { getTodayDate } from '../../../utils/date'
@@ -288,6 +289,18 @@ export default function MembersPage({ user, isDark }) {
     )
   }
 
+  // Pull-to-refresh
+  const handleRefresh = useCallback(async () => {
+    await Promise.all([
+      loadMembers(),
+      loadAttendanceStatus(),
+      loadAllTaskProgress(),
+      loadDailyRankings()
+    ])
+  }, [])
+
+  const { containerRef, pullDistance, isRefreshing } = usePullToRefresh(handleRefresh)
+
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto">
@@ -361,8 +374,16 @@ export default function MembersPage({ user, isDark }) {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto">
-      {/* ページタイトルと部署フィルタ */}
+      <div
+        ref={containerRef}
+        className="max-w-7xl mx-auto h-full overflow-y-auto relative"
+        style={{
+          transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
+          transition: pullDistance === 0 ? 'transform 0.2s ease-out' : undefined
+        }}
+      >
+        <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} />
+        {/* ページタイトルと部署フィルタ */}
       <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
