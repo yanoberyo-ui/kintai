@@ -1095,7 +1095,7 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
   return (
     <div
       ref={containerRef}
-      className="max-w-2xl mx-auto pb-20 h-full overflow-y-auto relative"
+      className="max-w-2xl mx-auto pb-20 h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)] overflow-y-auto relative"
       style={{
         transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
         transition: pullDistance === 0 ? 'transform 0.2s ease-out' : undefined
