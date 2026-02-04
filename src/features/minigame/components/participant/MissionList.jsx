@@ -9,7 +9,7 @@ export default function MissionList({ eventId, participantId, otherMembers = [] 
 
   useEffect(() => {
     loadMissions()
-  }, [eventId, participantId])
+  }, [eventId, participantId, otherMembers.length])
 
   const loadMissions = async () => {
     if (!eventId || !participantId) return
@@ -17,7 +17,7 @@ export default function MissionList({ eventId, participantId, otherMembers = [] 
       setLoading(true)
       // まず配布を試みる（既に配布済みなら取得のみ）
       let data = await getParticipantMissions(eventId, participantId)
-      if (data.length === 0) {
+      if (data.length === 0 && otherMembers.length > 0) {
         // 未配布の場合は配布（同席メンバーを渡す）
         data = await assignMissions(eventId, participantId, otherMembers)
       }
