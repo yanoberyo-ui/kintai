@@ -389,7 +389,7 @@ function ParticipantView({ eventId, user, isDark, onBack }) {
     return (
       <div
         ref={containerRef}
-        className="h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)] overflow-y-auto relative"
+        className="-mx-8 -mt-24 h-dvh overflow-y-auto relative"
         style={{
           transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
           transition: pullDistance === 0 ? 'transform 0.2s ease-out' : undefined
@@ -413,7 +413,7 @@ function ParticipantView({ eventId, user, isDark, onBack }) {
     return (
       <div
         ref={containerRef}
-        className="h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)] overflow-y-auto relative"
+        className="-mx-8 -mt-24 h-dvh overflow-y-auto relative"
         style={{
           transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
           transition: pullDistance === 0 ? 'transform 0.2s ease-out' : undefined
