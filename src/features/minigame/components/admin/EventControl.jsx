@@ -3,7 +3,7 @@ import { useEventRealtime } from '../../hooks/useEventRealtime'
 import { useTimerRealtime } from '../../hooks/useTimerRealtime'
 import { usePullToRefresh, PullToRefreshIndicator } from '../../hooks/usePullToRefresh.jsx'
 import { updateEventStatus } from '../../utils/event'
-import { assignSeating, getLatestRoundNumber } from '../../utils/seating'
+import { assignSeating, getLatestRoundNumber, confirmSeating, swapParticipants } from '../../utils/seating'
 import { startTimer, pauseTimer, resumeTimer, resetTimer } from '../../utils/timer'
 
 // 接続状態インジケーター
@@ -35,9 +35,13 @@ export default function EventControl({ eventId, isDark, onBack }) {
   const [actionLoading, setActionLoading] = useState(false)
   const [timerDuration, setTimerDuration] = useState(5) // 分
 
+  // 席配置編集用の状態
+  const [selectedSeats, setSelectedSeats] = useState([]) // [{seating_id, participant_id, name, tableNumber}]
+
   // Pull-to-refresh
   const handleRefresh = useCallback(async () => {
     await Promise.all([refetch(), timerRefetch()])
+    setSelectedSeats([])
   }, [refetch, timerRefetch])
 
   const { containerRef, pullDistance, isRefreshing } = usePullToRefresh(handleRefresh)
@@ -50,6 +54,9 @@ export default function EventControl({ eventId, isDark, onBack }) {
     navigator.clipboard.writeText(participantUrl)
     alert('URLをコピーしました')
   }, [participantUrl])
+
+  // 席配置が確定済みかどうか
+  const isSeatingConfirmed = seating.length > 0 && seating[0]?.isConfirmed
 
   // ゲーム開始
   const handleStart = async () => {
@@ -74,6 +81,7 @@ export default function EventControl({ eventId, isDark, onBack }) {
   const handleShuffle = async () => {
     try {
       setActionLoading(true)
+      setSelectedSeats([])
       const nextRound = currentRound + 1
       await assignSeating(eventId, nextRound)
       await refetch()
@@ -85,11 +93,74 @@ export default function EventControl({ eventId, isDark, onBack }) {
     }
   }
 
+  // 再シャッフル（同じラウンド）
+  const handleReshuffle = async () => {
+    try {
+      setActionLoading(true)
+      setSelectedSeats([])
+      await assignSeating(eventId, currentRound)
+      await refetch()
+    } catch (error) {
+      console.error('Error reshuffling:', error)
+      alert('再シャッフルに失敗しました')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  // 席配置確定
+  const handleConfirmSeating = async () => {
+    try {
+      setActionLoading(true)
+      await confirmSeating(eventId, currentRound)
+      setSelectedSeats([])
+      await refetch()
+    } catch (error) {
+      console.error('Error confirming seating:', error)
+      alert('席配置の確定に失敗しました')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  // 参加者選択（入れ替え用）
+  const handleSelectParticipant = (seatingId, participantId, name, tableNumber) => {
+    setSelectedSeats(prev => {
+      // 既に選択されていたら解除
+      const existing = prev.find(s => s.seating_id === seatingId)
+      if (existing) {
+        return prev.filter(s => s.seating_id !== seatingId)
+      }
+      // 2人選択されていたらリセットして新しく選択
+      if (prev.length >= 2) {
+        return [{ seating_id: seatingId, participant_id: participantId, name, tableNumber }]
+      }
+      // 追加
+      return [...prev, { seating_id: seatingId, participant_id: participantId, name, tableNumber }]
+    })
+  }
+
+  // 入れ替え実行
+  const handleSwap = async () => {
+    if (selectedSeats.length !== 2) return
+    try {
+      setActionLoading(true)
+      await swapParticipants(selectedSeats[0].seating_id, selectedSeats[1].seating_id)
+      setSelectedSeats([])
+      await refetch()
+    } catch (error) {
+      console.error('Error swapping participants:', error)
+      alert('入れ替えに失敗しました')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   // タイマー開始
   const handleTimerStart = async () => {
     try {
       await startTimer(eventId, timerDuration * 60)
-      await timerRefetch() // 即座に状態を反映
+      await timerRefetch()
     } catch (error) {
       console.error('Error starting timer:', error)
       alert('タイマー開始に失敗しました')
@@ -104,7 +175,7 @@ export default function EventControl({ eventId, isDark, onBack }) {
       } else {
         await resumeTimer(eventId)
       }
-      await timerRefetch() // 即座に状態を反映
+      await timerRefetch()
     } catch (error) {
       console.error('Error toggling timer:', error)
     }
@@ -114,7 +185,7 @@ export default function EventControl({ eventId, isDark, onBack }) {
   const handleTimerReset = async () => {
     try {
       await resetTimer(eventId, timerDuration * 60)
-      await timerRefetch() // 即座に状態を反映
+      await timerRefetch()
     } catch (error) {
       console.error('Error resetting timer:', error)
     }
@@ -142,7 +213,7 @@ export default function EventControl({ eventId, isDark, onBack }) {
     return `${m}:${s.toString().padStart(2, '0')}`
   }
 
-  // 接続状態を統合（どちらかが切断状態なら表示）
+  // 接続状態を統合
   const overallConnectionStatus = connectionStatus !== 'connected' ? connectionStatus : timerConnectionStatus
 
   if (loading) {
@@ -170,10 +241,7 @@ export default function EventControl({ eventId, isDark, onBack }) {
         transition: pullDistance === 0 ? 'transform 0.2s ease-out' : undefined
       }}
     >
-      {/* 接続状態インジケーター */}
       <ConnectionStatusIndicator status={overallConnectionStatus} isDark={isDark} />
-
-      {/* Pull-to-refresh indicator */}
       <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} />
 
       {/* ヘッダー */}
@@ -319,18 +387,20 @@ export default function EventControl({ eventId, isDark, onBack }) {
               </div>
             </div>
 
-            {/* シャッフル */}
-            <button
-              onClick={handleShuffle}
-              disabled={actionLoading}
-              className={`w-full py-4 md:py-3 rounded-xl font-medium text-lg md:text-base transition-all duration-200 disabled:opacity-50 ${
-                isDark
-                  ? 'bg-purple-600 text-white hover:bg-purple-500'
-                  : 'bg-purple-600 text-white hover:bg-purple-700'
-              }`}
-            >
-              {actionLoading ? '処理中...' : `シャッフル（ラウンド${currentRound + 1}へ）`}
-            </button>
+            {/* シャッフル（確定済みの場合のみ） */}
+            {isSeatingConfirmed && (
+              <button
+                onClick={handleShuffle}
+                disabled={actionLoading}
+                className={`w-full py-4 md:py-3 rounded-xl font-medium text-lg md:text-base transition-all duration-200 disabled:opacity-50 ${
+                  isDark
+                    ? 'bg-purple-600 text-white hover:bg-purple-500'
+                    : 'bg-purple-600 text-white hover:bg-purple-700'
+                }`}
+              >
+                {actionLoading ? '処理中...' : `シャッフル（ラウンド${currentRound + 1}へ）`}
+              </button>
+            )}
 
             {/* 終了 */}
             <button
@@ -383,14 +453,70 @@ export default function EventControl({ eventId, isDark, onBack }) {
         )}
       </div>
 
-      {/* 席配置（ゲーム中のみ） */}
+      {/* 席配置プレビュー/編集（ゲーム中のみ） */}
       {event.status === 'active' && seating.length > 0 && (
         <div className={`backdrop-blur-xl rounded-2xl shadow-lg border p-5 md:p-6 ${
           isDark ? 'bg-gray-900/80 border-gray-800/50' : 'bg-white/80 border-gray-200/50'
         }`}>
-          <h2 className={`text-xl md:text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            現在の席配置（ラウンド{currentRound}）
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className={`text-xl md:text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              席配置（ラウンド{currentRound}）
+            </h2>
+            {!isSeatingConfirmed && (
+              <span className="px-3 py-1 rounded-full text-sm font-bold bg-yellow-500/20 text-yellow-400">
+                プレビュー中
+              </span>
+            )}
+          </div>
+
+          {/* 未確定時の説明 */}
+          {!isSeatingConfirmed && (
+            <div className={`mb-4 p-3 rounded-lg text-sm ${
+              isDark ? 'bg-yellow-900/30 text-yellow-300' : 'bg-yellow-100 text-yellow-700'
+            }`}>
+              ※ まだ参加者には見えていません。タップして入れ替え可能です。
+            </div>
+          )}
+
+          {/* 入れ替え操作バー */}
+          {selectedSeats.length > 0 && !isSeatingConfirmed && (
+            <div className={`mb-4 p-4 rounded-xl flex items-center justify-between ${
+              isDark ? 'bg-blue-900/30' : 'bg-blue-100'
+            }`}>
+              <div className={`text-sm ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>
+                {selectedSeats.length === 1 ? (
+                  <>
+                    <span className="font-bold">{selectedSeats[0].name}</span>
+                    <span className="opacity-70">（テーブル{selectedSeats[0].tableNumber}）</span>
+                    を選択中
+                  </>
+                ) : (
+                  <>
+                    <span className="font-bold">{selectedSeats[0].name}</span>
+                    <span className="opacity-70">（テーブル{selectedSeats[0].tableNumber}）</span>
+                    ↔
+                    <span className="font-bold">{selectedSeats[1].name}</span>
+                    <span className="opacity-70">（テーブル{selectedSeats[1].tableNumber}）</span>
+                  </>
+                )}
+              </div>
+              {selectedSeats.length === 2 && (
+                <button
+                  onClick={handleSwap}
+                  disabled={actionLoading}
+                  className={`px-4 py-2 rounded-lg font-medium text-sm ${
+                    isDark
+                      ? 'bg-blue-600 text-white hover:bg-blue-500'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  入れ替え
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* テーブル表示 */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {seating.map((table) => (
               <div
@@ -402,19 +528,65 @@ export default function EventControl({ eventId, isDark, onBack }) {
                 <div className={`text-lg md:text-base font-bold mb-3 md:mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
                   テーブル {table.table.table_number}
                 </div>
-                <div className="space-y-2 md:space-y-1">
-                  {table.participants.map((p) => (
-                    <div
-                      key={p.id}
-                      className={`text-base md:text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}
-                    >
-                      {p.name}
-                    </div>
-                  ))}
+                <div className="space-y-2">
+                  {table.participants.map((p) => {
+                    const isSelected = selectedSeats.some(s => s.seating_id === p.seating_id)
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => !isSeatingConfirmed && handleSelectParticipant(
+                          p.seating_id,
+                          p.id,
+                          p.name,
+                          table.table.table_number
+                        )}
+                        disabled={isSeatingConfirmed}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
+                          isSeatingConfirmed
+                            ? isDark ? 'text-gray-300' : 'text-gray-700'
+                            : isSelected
+                            ? 'bg-blue-500 text-white'
+                            : isDark
+                            ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            : 'bg-white text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {isSelected && '✓ '}{p.name}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             ))}
           </div>
+
+          {/* 確定/再シャッフルボタン */}
+          {!isSeatingConfirmed && (
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={handleReshuffle}
+                disabled={actionLoading}
+                className={`flex-1 py-4 md:py-3 rounded-xl font-medium text-lg md:text-base transition-all duration-200 disabled:opacity-50 ${
+                  isDark
+                    ? 'bg-gray-700 text-white hover:bg-gray-600'
+                    : 'bg-gray-300 text-gray-900 hover:bg-gray-400'
+                }`}
+              >
+                再シャッフル
+              </button>
+              <button
+                onClick={handleConfirmSeating}
+                disabled={actionLoading}
+                className={`flex-1 py-4 md:py-3 rounded-xl font-bold text-lg md:text-base transition-all duration-200 disabled:opacity-50 ${
+                  isDark
+                    ? 'bg-green-600 text-white hover:bg-green-500'
+                    : 'bg-green-600 text-white hover:bg-green-700'
+                }`}
+              >
+                確定して公開
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

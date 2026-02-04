@@ -196,10 +196,11 @@ export async function assignSeating(eventId, roundNumber) {
  * 現在の席配置取得
  * @param {string} eventId - イベントID
  * @param {number} roundNumber - ラウンド番号
+ * @param {boolean} confirmedOnly - 確定済みのみ取得するか（参加者側はtrue、管理者側はfalse）
  * @returns {Promise<Array>} 席配置（テーブルごとにグループ化）
  */
-export async function getCurrentSeating(eventId, roundNumber) {
-  const { data, error } = await supabase
+export async function getCurrentSeating(eventId, roundNumber, confirmedOnly = false) {
+  let query = supabase
     .from('minigame_seating')
     .select(`
       *,
@@ -210,22 +211,37 @@ export async function getCurrentSeating(eventId, roundNumber) {
     .eq('round_number', roundNumber)
     .order('table_id')
 
+  if (confirmedOnly) {
+    query = query.eq('is_confirmed', true)
+  }
+
+  const { data, error } = await query
+
   if (error) throw error
 
-  // テーブルごとにグループ化
+  // テーブルごとにグループ化（seating_idとis_confirmedも含める）
   const grouped = {}
+  let isConfirmed = false
   for (const seat of data || []) {
     const tableId = seat.table_id
     if (!grouped[tableId]) {
       grouped[tableId] = {
         table: seat.table,
-        participants: []
+        participants: [],
+        isConfirmed: seat.is_confirmed
       }
     }
-    grouped[tableId].participants.push(seat.participant)
+    grouped[tableId].participants.push({
+      ...seat.participant,
+      seating_id: seat.id
+    })
+    isConfirmed = seat.is_confirmed
   }
 
-  return Object.values(grouped).sort((a, b) => a.table.table_number - b.table.table_number)
+  const result = Object.values(grouped).sort((a, b) => a.table.table_number - b.table.table_number)
+  // メタ情報として確定状態を付加
+  result.isConfirmed = isConfirmed
+  return result
 }
 
 /**
