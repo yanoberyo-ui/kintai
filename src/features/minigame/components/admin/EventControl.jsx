@@ -633,28 +633,15 @@ export default function EventControl({ eventId, isDark, onBack }) {
             </button>
           </div>
 
-          {/* 全体達成率 */}
-          <div className={`mb-4 p-4 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
-            <div className="flex items-center justify-between mb-2">
-              <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>全体達成率</span>
-              <span className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                {missionStatus.completionRate}%
-              </span>
-            </div>
-            <div className={`h-3 rounded-full overflow-hidden ${isDark ? 'bg-gray-700' : 'bg-gray-300'}`}>
-              <div
-                className="h-full bg-green-500 transition-all duration-500"
-                style={{ width: `${missionStatus.completionRate}%` }}
-              />
-            </div>
-            <div className={`mt-2 text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-              {missionStatus.totalCompleted} / {missionStatus.totalMissions} 完了
-            </div>
-          </div>
-
-          {/* 参加者別 */}
+          {/* 参加者別（達成率順） */}
           <div className="space-y-2">
-            {missionStatus.participants.map((p) => {
+            {[...missionStatus.participants]
+              .map(p => ({
+                ...p,
+                rate: p.totalCount > 0 ? Math.round((p.completedCount / p.totalCount) * 100) : 0
+              }))
+              .sort((a, b) => b.rate - a.rate)
+              .map((p, index) => {
               const isExpanded = expandedParticipants[p.participant.id]
               return (
                 <div key={p.participant.id}>
@@ -670,20 +657,33 @@ export default function EventControl({ eventId, isDark, onBack }) {
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>
-                        {isExpanded ? '▼' : '▶'}
+                      <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${
+                        index === 0 ? 'bg-yellow-500 text-black' :
+                        index === 1 ? 'bg-gray-400 text-black' :
+                        index === 2 ? 'bg-amber-600 text-white' :
+                        isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-300 text-gray-600'
+                      }`}>
+                        {index + 1}
                       </span>
                       <span className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
                         {p.participant.name}
                       </span>
+                      <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>
+                        {isExpanded ? '▼' : '▶'}
+                      </span>
                     </div>
-                    <span className={`text-sm px-2 py-1 rounded-full ${
-                      p.completedCount === p.totalCount
-                        ? 'bg-green-500/20 text-green-400'
-                        : isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-600'
-                    }`}>
-                      {p.completedCount}/{p.totalCount} 完了
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-lg font-bold ${
+                        p.rate === 100 ? 'text-green-400' :
+                        p.rate >= 50 ? isDark ? 'text-white' : 'text-gray-900' :
+                        isDark ? 'text-gray-500' : 'text-gray-500'
+                      }`}>
+                        {p.rate}%
+                      </span>
+                      <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                        ({p.completedCount}/{p.totalCount})
+                      </span>
+                    </div>
                   </button>
 
                   {/* 展開時のミッション詳細 */}
