@@ -1091,7 +1091,7 @@ export default function AdminPage({ isDark }) {
   }
 
   return (
-    <div className="max-w-7xl mx-auto pb-20">
+    <div className="max-w-7xl mx-auto pb-20 h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)] overflow-y-auto">
       {/* ヘッダー */}
       <div className="mb-6">
         <h1 className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>

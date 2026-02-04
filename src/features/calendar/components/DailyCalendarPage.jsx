@@ -1085,7 +1085,7 @@ export default function DailyCalendarPage({ user, isDark }) {
   ]
 
   return (
-    <div className="max-w-full mx-auto p-4 md:p-8">
+    <div className="max-w-full mx-auto p-4 md:p-8 h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)] overflow-y-auto">
       {/* ヘッダー */}
       <div className={`rounded-2xl p-4 md:p-6 mb-4 ${isDark ? 'bg-gray-900/50' : 'bg-white/50'} backdrop-blur-sm border ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
         <div className="flex flex-wrap items-center justify-between gap-4">

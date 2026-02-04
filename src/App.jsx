@@ -1216,7 +1216,7 @@ function App() {
         sidebarOpen ? 'md:ml-64' : 'md:ml-0'
       } ml-0`}>
         {currentPage === 'home' ? (
-          <div className="max-w-3xl mx-auto space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6 h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)] overflow-y-auto">
             {/* 勤怠カード */}
             <AttendanceCard user={user} isDark={isDark} onStreakUpdate={setStreaks} />
 

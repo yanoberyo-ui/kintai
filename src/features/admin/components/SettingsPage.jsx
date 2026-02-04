@@ -209,7 +209,7 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6 h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)] overflow-y-auto">
       {/* ページタイトル */}
       <div>
         <h1 className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>

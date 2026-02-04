@@ -149,7 +149,7 @@ export default function ReservationsPage({ user, isDark }) {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6 h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)] overflow-y-auto">
       {/* ヘッダー */}
       <div className={`backdrop-blur-xl rounded-3xl shadow-xl border p-6 ${
         isDark
