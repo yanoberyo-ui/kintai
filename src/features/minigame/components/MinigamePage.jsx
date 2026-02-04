@@ -411,25 +411,13 @@ function ParticipantView({ eventId, user, isDark, onBack }) {
   // ゲーム中
   if (event.status === 'active') {
     return (
-      <div
-        ref={containerRef}
-        className="-mx-8 -mt-24 h-dvh overflow-hidden relative"
-        style={{
-          transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
-          transition: pullDistance === 0 ? 'transform 0.2s ease-out' : undefined
-        }}
-      >
+      <div className="fixed inset-0 z-30 bg-gray-900">
         <ConnectionStatusIndicator status={connectionStatus} isDark={isDark} />
-        <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} />
 
-        {/* 戻るボタン - 固定位置でヘッダーの下に表示 */}
+        {/* 戻るボタン - 固定位置 */}
         <button
           onClick={onBack}
-          className={`fixed top-28 left-4 md:left-8 z-40 flex items-center gap-2 px-4 py-2 rounded-xl backdrop-blur-md transition-colors ${
-            isDark
-              ? 'bg-gray-800/80 hover:bg-gray-700 text-gray-300 hover:text-white'
-              : 'bg-white/80 hover:bg-gray-100 text-gray-600 hover:text-gray-900 shadow-md'
-          }`}
+          className="fixed top-4 left-4 z-50 flex items-center gap-2 px-4 py-2 rounded-xl backdrop-blur-md bg-gray-800/80 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
