@@ -237,7 +237,7 @@ export default function PomodoroPage({ user, isDark }) {
   }
 
   return (
-    <div className={`min-h-screen ${isDark ? 'bg-gray-950 text-white' : 'bg-gray-50 text-gray-900'}`}>
+    <div className={`h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)] overflow-y-auto ${isDark ? 'bg-gray-950 text-white' : 'bg-gray-50 text-gray-900'}`}>
       <div className="max-w-4xl mx-auto p-6 space-y-8">
         {/* ヘッダー */}
         <div className="text-center">

@@ -215,7 +215,7 @@ export default function RankingPage({ isDark, user }) {
   return (
     <div
       ref={fullscreenRef}
-      className={`relative min-h-screen transition-all duration-500 overflow-y-auto ${
+      className={`relative h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)] transition-all duration-500 overflow-y-auto ${
         isDark
           ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-black'
           : 'bg-gradient-to-br from-gray-50 via-white to-blue-50'
