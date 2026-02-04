@@ -251,3 +251,89 @@ export async function getLatestRoundNumber(eventId) {
 
   return data?.round_number || 0
 }
+
+/**
+ * 席配置を確定する
+ * @param {string} eventId - イベントID
+ * @param {number} roundNumber - ラウンド番号
+ * @returns {Promise<Array>} 更新された席配置
+ */
+export async function confirmSeating(eventId, roundNumber) {
+  const { data, error } = await supabase
+    .from('minigame_seating')
+    .update({ is_confirmed: true })
+    .eq('event_id', eventId)
+    .eq('round_number', roundNumber)
+    .select()
+
+  if (error) throw error
+  return data
+}
+
+/**
+ * 2人の参加者の席を入れ替える
+ * @param {string} seatingId1 - 席配置ID1
+ * @param {string} seatingId2 - 席配置ID2
+ * @returns {Promise<Array>} 更新された席配置
+ */
+export async function swapParticipants(seatingId1, seatingId2) {
+  // 両方の席配置を取得
+  const { data: seats, error: fetchError } = await supabase
+    .from('minigame_seating')
+    .select('*')
+    .in('id', [seatingId1, seatingId2])
+
+  if (fetchError) throw fetchError
+  if (seats.length !== 2) {
+    throw new Error('Invalid seating IDs')
+  }
+
+  const seat1 = seats.find(s => s.id === seatingId1)
+  const seat2 = seats.find(s => s.id === seatingId2)
+
+  // 参加者IDを入れ替え
+  const { data: updated1, error: error1 } = await supabase
+    .from('minigame_seating')
+    .update({ participant_id: seat2.participant_id })
+    .eq('id', seatingId1)
+    .select()
+    .single()
+
+  if (error1) throw error1
+
+  const { data: updated2, error: error2 } = await supabase
+    .from('minigame_seating')
+    .update({ participant_id: seat1.participant_id })
+    .eq('id', seatingId2)
+    .select()
+    .single()
+
+  if (error2) throw error2
+
+  return [updated1, updated2]
+}
+
+/**
+ * 席配置の確定状態を取得
+ * @param {string} eventId - イベントID
+ * @param {number} roundNumber - ラウンド番号
+ * @returns {Promise<boolean>} 確定済みかどうか
+ */
+export async function isSeatingConfirmed(eventId, roundNumber) {
+  const { data, error } = await supabase
+    .from('minigame_seating')
+    .select('is_confirmed')
+    .eq('event_id', eventId)
+    .eq('round_number', roundNumber)
+    .limit(1)
+    .single()
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return false
+    }
+    throw error
+  }
+
+  return data?.is_confirmed || false
+}
