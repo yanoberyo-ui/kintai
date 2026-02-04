@@ -1,10 +1,11 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { useEventRealtime } from '../../hooks/useEventRealtime'
 import { useTimerRealtime } from '../../hooks/useTimerRealtime'
 import { usePullToRefresh, PullToRefreshIndicator } from '../../hooks/usePullToRefresh.jsx'
 import { updateEventStatus } from '../../utils/event'
 import { assignSeating, getLatestRoundNumber, confirmSeating, swapParticipants } from '../../utils/seating'
 import { startTimer, pauseTimer, resumeTimer, resetTimer } from '../../utils/timer'
+import { getAllMissionStatus } from '../../utils/mission'
 
 // 接続状態インジケーター
 function ConnectionStatusIndicator({ status, isDark }) {
@@ -38,11 +39,34 @@ export default function EventControl({ eventId, isDark, onBack }) {
   // 席配置編集用の状態
   const [selectedSeats, setSelectedSeats] = useState([]) // [{seating_id, participant_id, name, tableNumber}]
 
+  // ミッション状況
+  const [missionStatus, setMissionStatus] = useState(null)
+  const [expandedParticipants, setExpandedParticipants] = useState({})
+
+  // ミッション状況取得
+  const fetchMissionStatus = useCallback(async () => {
+    try {
+      const data = await getAllMissionStatus(eventId)
+      setMissionStatus(data)
+    } catch (error) {
+      console.error('Error fetching mission status:', error)
+    }
+  }, [eventId])
+
+  useEffect(() => {
+    if (eventId) {
+      fetchMissionStatus()
+      // 30秒ごとに更新
+      const interval = setInterval(fetchMissionStatus, 30000)
+      return () => clearInterval(interval)
+    }
+  }, [eventId, fetchMissionStatus])
+
   // Pull-to-refresh
   const handleRefresh = useCallback(async () => {
-    await Promise.all([refetch(), timerRefetch()])
+    await Promise.all([refetch(), timerRefetch(), fetchMissionStatus()])
     setSelectedSeats([])
-  }, [refetch, timerRefetch])
+  }, [refetch, timerRefetch, fetchMissionStatus])
 
   const { containerRef, pullDistance, isRefreshing } = usePullToRefresh(handleRefresh)
 
@@ -587,6 +611,121 @@ export default function EventControl({ eventId, isDark, onBack }) {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ミッション状況（ゲーム中のみ） */}
+      {event.status === 'active' && missionStatus && (
+        <div className={`backdrop-blur-xl rounded-2xl shadow-lg border p-5 md:p-6 ${
+          isDark ? 'bg-gray-900/80 border-gray-800/50' : 'bg-white/80 border-gray-200/50'
+        }`}>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className={`text-xl md:text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              🎯 ミッション状況
+            </h2>
+            <button
+              onClick={fetchMissionStatus}
+              className={`text-sm px-3 py-1 rounded-lg ${
+                isDark ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+              }`}
+            >
+              更新
+            </button>
+          </div>
+
+          {/* 全体達成率 */}
+          <div className={`mb-4 p-4 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
+            <div className="flex items-center justify-between mb-2">
+              <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>全体達成率</span>
+              <span className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                {missionStatus.completionRate}%
+              </span>
+            </div>
+            <div className={`h-3 rounded-full overflow-hidden ${isDark ? 'bg-gray-700' : 'bg-gray-300'}`}>
+              <div
+                className="h-full bg-green-500 transition-all duration-500"
+                style={{ width: `${missionStatus.completionRate}%` }}
+              />
+            </div>
+            <div className={`mt-2 text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+              {missionStatus.totalCompleted} / {missionStatus.totalMissions} 完了
+            </div>
+          </div>
+
+          {/* 参加者別 */}
+          <div className="space-y-2">
+            {missionStatus.participants.map((p) => {
+              const isExpanded = expandedParticipants[p.participant.id]
+              return (
+                <div key={p.participant.id}>
+                  <button
+                    onClick={() => setExpandedParticipants(prev => ({
+                      ...prev,
+                      [p.participant.id]: !prev[p.participant.id]
+                    }))}
+                    className={`w-full flex items-center justify-between p-3 rounded-xl transition-colors ${
+                      isDark
+                        ? 'bg-gray-800 hover:bg-gray-700'
+                        : 'bg-gray-100 hover:bg-gray-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>
+                        {isExpanded ? '▼' : '▶'}
+                      </span>
+                      <span className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        {p.participant.name}
+                      </span>
+                    </div>
+                    <span className={`text-sm px-2 py-1 rounded-full ${
+                      p.completedCount === p.totalCount
+                        ? 'bg-green-500/20 text-green-400'
+                        : isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-600'
+                    }`}>
+                      {p.completedCount}/{p.totalCount} 完了
+                    </span>
+                  </button>
+
+                  {/* 展開時のミッション詳細 */}
+                  {isExpanded && (
+                    <div className={`mt-2 ml-6 space-y-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                      {p.missions.map((m) => {
+                        // {name}を置換
+                        let content = m.mission?.content || ''
+                        if (m.target?.name) {
+                          content = content.replace('{name}', m.target.name)
+                        }
+                        return (
+                          <div
+                            key={m.id}
+                            className={`p-3 rounded-lg ${
+                              isDark ? 'bg-gray-800/50' : 'bg-gray-50'
+                            }`}
+                          >
+                            <div className="flex items-start gap-2">
+                              <span className={m.completed ? 'text-green-400' : 'text-gray-500'}>
+                                {m.completed ? '✅' : '⬜'}
+                              </span>
+                              <div className="flex-1">
+                                <div className={m.completed ? 'line-through opacity-70' : ''}>
+                                  {content}
+                                </div>
+                                {m.answer && (
+                                  <div className={`mt-1 text-sm ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
+                                    → {m.answer}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

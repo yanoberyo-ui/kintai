@@ -154,3 +154,53 @@ export async function updateMissionAnswer(participantMissionId, answer) {
   if (error) throw error
   return data
 }
+
+/**
+ * イベント全体のミッション状況取得（管理者用）
+ * @param {string} eventId - イベントID
+ * @returns {Promise<Object>} 参加者ごとのミッション状況
+ */
+export async function getAllMissionStatus(eventId) {
+  const { data, error } = await supabase
+    .from('minigame_participant_missions')
+    .select(`
+      *,
+      mission:minigame_missions(*),
+      participant:minigame_participants!participant_id(id, name),
+      target:minigame_participants!target_participant_id(id, name)
+    `)
+    .eq('event_id', eventId)
+    .order('participant_id')
+
+  if (error) throw error
+
+  // 参加者ごとにグループ化
+  const grouped = {}
+  for (const m of data || []) {
+    const pId = m.participant?.id
+    if (!pId) continue
+    if (!grouped[pId]) {
+      grouped[pId] = {
+        participant: m.participant,
+        missions: [],
+        completedCount: 0,
+        totalCount: 0
+      }
+    }
+    grouped[pId].missions.push(m)
+    grouped[pId].totalCount++
+    if (m.completed) grouped[pId].completedCount++
+  }
+
+  // 全体統計
+  const allMissions = data || []
+  const totalCompleted = allMissions.filter(m => m.completed).length
+  const totalMissions = allMissions.length
+
+  return {
+    participants: Object.values(grouped),
+    totalCompleted,
+    totalMissions,
+    completionRate: totalMissions > 0 ? Math.round((totalCompleted / totalMissions) * 100) : 0
+  }
+}
