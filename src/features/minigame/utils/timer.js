@@ -142,17 +142,38 @@ export async function resetTimer(eventId, durationSeconds = 180) {
   }
 }
 
+// サーバー時刻オフセット（クライアント時刻 - サーバー時刻、ミリ秒）
+let serverTimeOffset = 0
+
 /**
- * タイマー状態取得
+ * サーバー時刻オフセットを更新
+ * @param {string} serverTimestamp - サーバーからのタイムスタンプ
+ */
+function updateServerTimeOffset(serverTimestamp) {
+  if (serverTimestamp) {
+    const serverTime = new Date(serverTimestamp).getTime()
+    serverTimeOffset = Date.now() - serverTime
+    // オフセットが大きすぎる場合（1分以上）はログ出力
+    if (Math.abs(serverTimeOffset) > 60000) {
+      console.warn(`Timer: Large server time offset detected: ${serverTimeOffset}ms`)
+    }
+  }
+}
+
+/**
+ * タイマー状態取得（サーバー時刻も取得してオフセット計算）
  * @param {string} eventId - イベントID
  * @returns {Promise<Object|null>} タイマー状態
  */
 export async function getTimerState(eventId) {
+  // サーバー時刻も一緒に取得
+  const fetchStart = Date.now()
   const { data, error } = await supabase
     .from('minigame_timer')
-    .select('*')
+    .select('*, updated_at')
     .eq('event_id', eventId)
     .single()
+  const fetchEnd = Date.now()
 
   if (error) {
     if (error.code === 'PGRST116') {
@@ -160,11 +181,20 @@ export async function getTimerState(eventId) {
     }
     throw error
   }
+
+  // updated_atを使ってサーバー時刻オフセットを計算
+  // ネットワーク遅延の半分を考慮
+  if (data?.updated_at) {
+    const networkLatency = fetchEnd - fetchStart
+    const adjustedClientTime = fetchStart + networkLatency / 2
+    serverTimeOffset = adjustedClientTime - new Date(data.updated_at).getTime()
+  }
+
   return data
 }
 
 /**
- * 残り時間を計算
+ * 残り時間を計算（サーバー時刻オフセット考慮）
  * @param {Object} timerState - タイマー状態
  * @returns {number} 残り秒数
  */
@@ -176,7 +206,8 @@ export function calculateRemainingSeconds(timerState) {
     return timerState.duration_seconds
   }
 
-  // 実行中は経過時間を引く
-  const elapsed = Math.floor((Date.now() - new Date(timerState.started_at).getTime()) / 1000)
+  // 実行中は経過時間を引く（サーバー時刻オフセットを考慮）
+  const serverNow = Date.now() - serverTimeOffset
+  const elapsed = Math.floor((serverNow - new Date(timerState.started_at).getTime()) / 1000)
   return Math.max(0, timerState.duration_seconds - elapsed)
 }

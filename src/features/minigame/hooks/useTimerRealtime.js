@@ -129,6 +129,17 @@ export function useTimerRealtime(eventId) {
     }
   }, [setupSubscription])
 
+  // ポーリング（5秒間隔でバックアップ同期）
+  useEffect(() => {
+    if (!eventId) return
+
+    const pollInterval = setInterval(() => {
+      refetch()
+    }, 5000)
+
+    return () => clearInterval(pollInterval)
+  }, [eventId, refetch])
+
   // タイマー実行中は1秒ごとに残り時間を更新
   useEffect(() => {
     if (!isRunning || !timerState) return

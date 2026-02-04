@@ -89,6 +89,7 @@ export default function EventControl({ eventId, isDark, onBack }) {
   const handleTimerStart = async () => {
     try {
       await startTimer(eventId, timerDuration * 60)
+      await timerRefetch() // 即座に状態を反映
     } catch (error) {
       console.error('Error starting timer:', error)
       alert('タイマー開始に失敗しました')
@@ -103,6 +104,7 @@ export default function EventControl({ eventId, isDark, onBack }) {
       } else {
         await resumeTimer(eventId)
       }
+      await timerRefetch() // 即座に状態を反映
     } catch (error) {
       console.error('Error toggling timer:', error)
     }
@@ -112,6 +114,7 @@ export default function EventControl({ eventId, isDark, onBack }) {
   const handleTimerReset = async () => {
     try {
       await resetTimer(eventId, timerDuration * 60)
+      await timerRefetch() // 即座に状態を反映
     } catch (error) {
       console.error('Error resetting timer:', error)
     }
