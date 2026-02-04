@@ -28,7 +28,7 @@ export default function GameRound({ eventId, event, participant, seating, curren
   // 席が見つからない、または席配置が未確定の場合
   if (!myTable || !seating.isConfirmed) {
     return (
-      <div className="min-h-screen min-h-[100dvh] bg-gray-900 flex items-center justify-center p-6">
+      <div className="h-dvh bg-gray-900 flex items-center justify-center p-6">
         <div className="text-center">
           <div className="text-5xl mb-4">🔄</div>
           <p className="text-gray-400 text-lg">席を割り当て中...</p>
@@ -38,7 +38,7 @@ export default function GameRound({ eventId, event, participant, seating, curren
   }
 
   return (
-    <div className="min-h-screen min-h-[100dvh] bg-gray-900 flex flex-col safe-area-inset">
+    <div className="h-dvh bg-gray-900 flex flex-col safe-area-inset overflow-hidden">
       {/* ヘッダー */}
       <div className="p-4 text-center border-b border-gray-800 flex-shrink-0">
         <div className="text-gray-400 text-base">ラウンド {currentRound}</div>

@@ -413,7 +413,7 @@ function ParticipantView({ eventId, user, isDark, onBack }) {
     return (
       <div
         ref={containerRef}
-        className="-mx-8 -mt-24 h-dvh overflow-y-auto relative"
+        className="-mx-8 -mt-24 h-dvh overflow-hidden relative"
         style={{
           transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
           transition: pullDistance === 0 ? 'transform 0.2s ease-out' : undefined
