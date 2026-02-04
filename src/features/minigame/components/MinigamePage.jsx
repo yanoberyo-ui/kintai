@@ -422,12 +422,13 @@ function ParticipantView({ eventId, user, isDark, onBack }) {
         <ConnectionStatusIndicator status={connectionStatus} isDark={isDark} />
         <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} />
 
+        {/* 戻るボタン - 固定位置でヘッダーの下に表示 */}
         <button
           onClick={onBack}
-          className={`flex items-center gap-2 mb-4 px-4 py-2 rounded-xl transition-colors ${
+          className={`fixed top-28 left-4 md:left-8 z-40 flex items-center gap-2 px-4 py-2 rounded-xl backdrop-blur-md transition-colors ${
             isDark
-              ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
-              : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
+              ? 'bg-gray-800/80 hover:bg-gray-700 text-gray-300 hover:text-white'
+              : 'bg-white/80 hover:bg-gray-100 text-gray-600 hover:text-gray-900 shadow-md'
           }`}
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
