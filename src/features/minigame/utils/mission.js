@@ -18,9 +18,10 @@ export async function getMissions() {
  * 参加者にミッション配布（ランダムに3つ）
  * @param {string} eventId - イベントID
  * @param {string} participantId - 参加者ID
+ * @param {Array} otherMembers - 同席メンバーリスト（{name}置換用）
  * @returns {Promise<Array>} 配布されたミッション
  */
-export async function assignMissions(eventId, participantId) {
+export async function assignMissions(eventId, participantId, otherMembers = []) {
   // 既に配布済みかチェック
   const existing = await getParticipantMissions(eventId, participantId)
   if (existing.length > 0) {
@@ -37,20 +38,32 @@ export async function assignMissions(eventId, participantId) {
   const shuffled = [...missions].sort(() => Math.random() - 0.5)
   const selected = shuffled.slice(0, Math.min(3, shuffled.length))
 
-  // 配布レコード作成
-  const records = selected.map(mission => ({
-    event_id: eventId,
-    participant_id: participantId,
-    mission_id: mission.id,
-    completed: false
-  }))
+  // 配布レコード作成（{name}をランダムな同席メンバーで置換）
+  const records = selected.map(mission => {
+    let targetParticipantId = null
+
+    // {name}プレースホルダーがある場合、ランダムなメンバーを選択
+    if (mission.content.includes('{name}') && otherMembers.length > 0) {
+      const randomMember = otherMembers[Math.floor(Math.random() * otherMembers.length)]
+      targetParticipantId = randomMember.id
+    }
+
+    return {
+      event_id: eventId,
+      participant_id: participantId,
+      mission_id: mission.id,
+      target_participant_id: targetParticipantId,
+      completed: false
+    }
+  })
 
   const { data, error } = await supabase
     .from('minigame_participant_missions')
     .insert(records)
     .select(`
       *,
-      mission:minigame_missions(*)
+      mission:minigame_missions(*),
+      target:minigame_participants!target_participant_id(id, name)
     `)
 
   if (error) throw error
@@ -68,7 +81,8 @@ export async function getParticipantMissions(eventId, participantId) {
     .from('minigame_participant_missions')
     .select(`
       *,
-      mission:minigame_missions(*)
+      mission:minigame_missions(*),
+      target:minigame_participants!target_participant_id(id, name)
     `)
     .eq('event_id', eventId)
     .eq('participant_id', participantId)
@@ -89,7 +103,8 @@ export async function completeMission(participantMissionId) {
     .eq('id', participantMissionId)
     .select(`
       *,
-      mission:minigame_missions(*)
+      mission:minigame_missions(*),
+      target:minigame_participants!target_participant_id(id, name)
     `)
     .single()
 
@@ -109,7 +124,30 @@ export async function uncompleteMission(participantMissionId) {
     .eq('id', participantMissionId)
     .select(`
       *,
-      mission:minigame_missions(*)
+      mission:minigame_missions(*),
+      target:minigame_participants!target_participant_id(id, name)
+    `)
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+/**
+ * ミッションの回答を保存
+ * @param {string} participantMissionId - 参加者ミッションID
+ * @param {string} answer - 回答テキスト
+ * @returns {Promise<Object>} 更新されたレコード
+ */
+export async function updateMissionAnswer(participantMissionId, answer) {
+  const { data, error } = await supabase
+    .from('minigame_participant_missions')
+    .update({ answer })
+    .eq('id', participantMissionId)
+    .select(`
+      *,
+      mission:minigame_missions(*),
+      target:minigame_participants!target_participant_id(id, name)
     `)
     .single()
 

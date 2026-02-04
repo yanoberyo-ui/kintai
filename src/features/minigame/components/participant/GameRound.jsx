@@ -86,7 +86,7 @@ export default function GameRound({ eventId, event, participant, seating, curren
 
           {/* ミッション */}
           <div className="w-full max-w-md mx-auto">
-            <MissionList eventId={eventId} participantId={participant.id} />
+            <MissionList eventId={eventId} participantId={participant.id} otherMembers={otherMembers} />
           </div>
 
           {/* お題カード */}
