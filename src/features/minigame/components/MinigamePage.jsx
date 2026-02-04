@@ -389,7 +389,7 @@ function ParticipantView({ eventId, user, isDark, onBack }) {
     return (
       <div
         ref={containerRef}
-        className="max-w-md mx-auto h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)] overflow-y-auto relative"
+        className="h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)] overflow-y-auto relative"
         style={{
           transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
           transition: pullDistance === 0 ? 'transform 0.2s ease-out' : undefined
@@ -398,23 +398,11 @@ function ParticipantView({ eventId, user, isDark, onBack }) {
         <ConnectionStatusIndicator status={connectionStatus} isDark={isDark} />
         <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} />
 
-        <button
-          onClick={onBack}
-          className={`flex items-center gap-2 mb-4 px-4 py-2 rounded-xl transition-colors ${
-            isDark
-              ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
-              : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          戻る
-        </button>
         <WaitingRoom
           event={event}
           participants={participants}
           currentParticipant={participant}
+          onBack={onBack}
         />
       </div>
     )

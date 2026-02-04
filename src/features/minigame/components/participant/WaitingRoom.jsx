@@ -1,12 +1,26 @@
 import React from 'react'
 
-export default function WaitingRoom({ event, participants, currentParticipant }) {
+export default function WaitingRoom({ event, participants, currentParticipant, onBack }) {
   return (
-    <div className="min-h-screen min-h-[100dvh] bg-gray-900 flex flex-col safe-area-inset">
+    <div className="h-full bg-gray-900 flex flex-col safe-area-inset">
       {/* ヘッダー */}
-      <div className="p-5 text-center border-b border-gray-800 flex-shrink-0">
-        <h1 className="text-2xl font-bold text-white">{event.name}</h1>
-        <div className="text-gray-400 text-base mt-2">
+      <div className="p-5 border-b border-gray-800 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl transition-colors hover:bg-gray-800 text-gray-400 hover:text-white"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            戻る
+          </button>
+          <div className="flex-1 text-center">
+            <h1 className="text-2xl font-bold text-white">{event.name}</h1>
+          </div>
+          <div className="w-20" /> {/* バランス用スペーサー */}
+        </div>
+        <div className="text-gray-400 text-base mt-2 text-center">
           {currentParticipant?.name}さんとして参加中
         </div>
       </div>
