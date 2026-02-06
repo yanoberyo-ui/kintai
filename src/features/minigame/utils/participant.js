@@ -122,3 +122,35 @@ export async function checkInWithUser(eventId, userId, name) {
 export async function getParticipantByUserId(eventId, userId) {
   return getParticipantBySession(eventId, `user_${userId}`)
 }
+
+/**
+ * 全ユーザー取得（管理者設定用）
+ * @returns {Promise<Array>} ユーザー一覧
+ */
+export async function getAllUsers() {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, name, email, is_minigame_admin')
+    .order('name', { ascending: true })
+
+  if (error) throw error
+  return data || []
+}
+
+/**
+ * ゲーム管理者権限をトグル
+ * @param {string} userId - ユーザーID
+ * @param {boolean} isAdmin - 管理者かどうか
+ * @returns {Promise<Object>} 更新されたユーザー
+ */
+export async function setMinigameAdmin(userId, isAdmin) {
+  const { data, error } = await supabase
+    .from('users')
+    .update({ is_minigame_admin: isAdmin })
+    .eq('id', userId)
+    .select('id, name, email, is_minigame_admin')
+    .single()
+
+  if (error) throw error
+  return data
+}

@@ -25,12 +25,16 @@ export function useEventRealtime(eventId) {
   const retryTimeoutRef = useRef(null)
   const channelsRef = useRef([])
 
-  // データ取得
-  const refetch = useCallback(async () => {
+  const initialLoadDone = useRef(false)
+
+  // データ取得（silentの場合はloading状態を変更しない）
+  const refetch = useCallback(async (silent = false) => {
     if (!eventId) return
 
     try {
-      setLoading(true)
+      if (!silent && !initialLoadDone.current) {
+        setLoading(true)
+      }
       setError(null)
 
       const [eventData, participantsData, roundNumber] = await Promise.all([
@@ -52,6 +56,7 @@ export function useEventRealtime(eventId) {
 
       // 成功したらリトライカウントをリセット
       retryCountRef.current = 0
+      initialLoadDone.current = true
     } catch (err) {
       console.error('Error fetching event data:', err)
       setError(err)
@@ -224,11 +229,10 @@ export function useEventRealtime(eventId) {
       setConnectionStatus('disconnected')
     }
 
-    // ページ可視性変更時の再接続
+    // ページ可視性変更時の再接続（サイレント更新）
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        console.log('Page visible - checking connection')
-        refetch()
+        refetch(true)
       }
     }
 

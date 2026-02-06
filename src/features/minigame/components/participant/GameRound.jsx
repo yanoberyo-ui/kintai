@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useCallback } from 'react'
 import Timer from './Timer'
 import MissionList from './MissionList'
 import TopicCard from './TopicCard'
+import { usePullToRefresh, PullToRefreshIndicator } from '../../hooks/usePullToRefresh.jsx'
 
-export default function GameRound({ eventId, event, participant, seating, currentRound }) {
+export default function GameRound({ eventId, event, participant, seating, currentRound, onRefresh }) {
   // 自分のテーブルを探す
   const myTable = useMemo(() => {
     for (const table of seating) {
@@ -24,6 +25,12 @@ export default function GameRound({ eventId, event, participant, seating, curren
     if (!myTable) return []
     return myTable.members.filter(p => p.id !== participant.id)
   }, [myTable, participant.id])
+
+  // Pull-to-refresh
+  const handleRefresh = useCallback(async () => {
+    if (onRefresh) await onRefresh()
+  }, [onRefresh])
+  const { containerRef, pullDistance, isRefreshing } = usePullToRefresh(handleRefresh)
 
   // 席が見つからない、または席配置が未確定の場合
   if (!myTable || !seating.isConfirmed) {
@@ -48,8 +55,16 @@ export default function GameRound({ eventId, event, participant, seating, curren
       {/* タイマー（固定表示） */}
       <Timer eventId={eventId} />
 
-      {/* メインコンテンツ（スクロール可能） */}
-      <div className="flex-1 overflow-y-auto">
+      {/* メインコンテンツ（スクロール可能 + pull-to-refresh） */}
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-y-auto"
+        style={{
+          transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
+          transition: pullDistance === 0 ? 'transform 0.2s ease-out' : undefined
+        }}
+      >
+        <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} />
         <div className="p-5 pb-8 space-y-6">
           {/* テーブル番号（大きく表示） - 横向きでは小さめに */}
           <div className="text-center">

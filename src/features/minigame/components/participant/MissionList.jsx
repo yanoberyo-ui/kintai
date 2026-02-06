@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { getParticipantMissions, assignMissions, completeMission, uncompleteMission, updateMissionAnswer } from '../../utils/mission'
 
 export default function MissionList({ eventId, participantId, otherMembers = [] }) {
@@ -6,21 +6,26 @@ export default function MissionList({ eventId, participantId, otherMembers = [] 
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(null)
   const [savingAnswer, setSavingAnswer] = useState(null)
+  const assignedRef = useRef(false)
 
   useEffect(() => {
+    if (!eventId || !participantId) return
+    // 未配布 & otherMembersが来たらもう一度トライ
+    if (assignedRef.current && missions.length > 0) return
     loadMissions()
   }, [eventId, participantId, otherMembers.length])
 
   const loadMissions = async () => {
     if (!eventId || !participantId) return
     try {
-      setLoading(true)
+      if (!assignedRef.current) setLoading(true)
       // まず配布を試みる（既に配布済みなら取得のみ）
       let data = await getParticipantMissions(eventId, participantId)
       if (data.length === 0 && otherMembers.length > 0) {
         // 未配布の場合は配布（同席メンバーを渡す）
         data = await assignMissions(eventId, participantId, otherMembers)
       }
+      if (data.length > 0) assignedRef.current = true
       setMissions(data)
     } catch (error) {
       console.error('Error loading missions:', error)

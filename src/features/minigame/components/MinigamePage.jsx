@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { getEvents } from '../utils/event'
-import { getParticipantCount, checkInWithUser, getParticipantByUserId } from '../utils/participant'
+import { getParticipantCount, checkInWithUser, getParticipantByUserId, getAllUsers, setMinigameAdmin } from '../utils/participant'
 import EventCreate from './admin/EventCreate'
 import EventControl from './admin/EventControl'
 import GameRound from './participant/GameRound'
@@ -13,6 +13,9 @@ export default function MinigamePage({ user, isDark }) {
   const [participantCounts, setParticipantCounts] = useState({})
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showAdminSettings, setShowAdminSettings] = useState(false)
+  const [allUsers, setAllUsers] = useState([])
+  const [adminLoading, setAdminLoading] = useState(false)
 
   // 選択中のイベント
   const [selectedEventId, setSelectedEventId] = useState(null)
@@ -45,6 +48,33 @@ export default function MinigamePage({ user, isDark }) {
 
   // Pull-to-refresh for event list
   const { containerRef, pullDistance, isRefreshing } = usePullToRefresh(loadEvents)
+
+  // 管理者設定を開く
+  const handleOpenAdminSettings = async () => {
+    try {
+      setAdminLoading(true)
+      const users = await getAllUsers()
+      setAllUsers(users)
+      setShowAdminSettings(true)
+    } catch (error) {
+      console.error('Error loading users:', error)
+    } finally {
+      setAdminLoading(false)
+    }
+  }
+
+  // 管理者権限トグル
+  const handleToggleAdmin = async (userId, currentStatus) => {
+    try {
+      await setMinigameAdmin(userId, !currentStatus)
+      setAllUsers(prev =>
+        prev.map(u => u.id === userId ? { ...u, is_minigame_admin: !currentStatus } : u)
+      )
+    } catch (error) {
+      console.error('Error toggling admin:', error)
+      alert('管理者権限の変更に失敗しました')
+    }
+  }
 
   // イベント参加
   const handleJoin = async (eventId) => {
@@ -128,16 +158,30 @@ export default function MinigamePage({ user, isDark }) {
           </p>
         </div>
         {isAdmin && (
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
-              isDark
-                ? 'bg-white text-gray-900 hover:bg-gray-100'
-                : 'bg-gray-900 text-white hover:bg-gray-800'
-            }`}
-          >
-            + 新規イベント
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleOpenAdminSettings}
+              disabled={adminLoading}
+              className={`p-3 rounded-xl font-medium transition-all duration-200 ${
+                isDark
+                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+              title="管理者設定"
+            >
+              ⚙️
+            </button>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
+                isDark
+                  ? 'bg-white text-gray-900 hover:bg-gray-100'
+                  : 'bg-gray-900 text-white hover:bg-gray-800'
+              }`}
+            >
+              + 新規イベント
+            </button>
+          </div>
         )}
       </div>
 
@@ -177,6 +221,64 @@ export default function MinigamePage({ user, isDark }) {
           onClose={() => setShowCreateModal(false)}
           onCreated={handleEventCreated}
         />
+      )}
+
+      {/* 管理者設定モーダル */}
+      {showAdminSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowAdminSettings(false)}>
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
+          <div
+            className={`relative w-full max-w-md max-h-[70vh] rounded-2xl shadow-2xl border overflow-hidden flex flex-col ${
+              isDark ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'
+            }`}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className={`p-5 border-b flex items-center justify-between flex-shrink-0 ${
+              isDark ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                ゲーム管理者設定
+              </h2>
+              <button
+                onClick={() => setShowAdminSettings(false)}
+                className={`p-2 rounded-lg ${isDark ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-2">
+              {allUsers.map(u => (
+                <div
+                  key={u.id}
+                  className={`flex items-center justify-between p-3 rounded-xl ${
+                    isDark ? 'bg-gray-800' : 'bg-gray-100'
+                  }`}
+                >
+                  <div>
+                    <div className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      {u.name || u.email?.split('@')[0]}
+                    </div>
+                    <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                      {u.email}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleToggleAdmin(u.id, u.is_minigame_admin)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      u.is_minigame_admin
+                        ? 'bg-green-500 text-white hover:bg-green-600'
+                        : isDark
+                        ? 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                        : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                    }`}
+                  >
+                    {u.is_minigame_admin ? '管理者' : 'OFF'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -430,6 +532,7 @@ function ParticipantView({ eventId, user, isDark, onBack }) {
           participant={participant}
           seating={seating}
           currentRound={currentRound}
+          onRefresh={refetch}
         />
       </div>
     )
