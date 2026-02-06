@@ -3,7 +3,7 @@ import { useEventRealtime } from '../../hooks/useEventRealtime'
 import { useTimerRealtime } from '../../hooks/useTimerRealtime'
 import { usePullToRefresh, PullToRefreshIndicator } from '../../hooks/usePullToRefresh.jsx'
 import { updateEventStatus } from '../../utils/event'
-import { assignSeating, getLatestRoundNumber, confirmSeating, swapParticipants } from '../../utils/seating'
+import { assignSeating, getLatestRoundNumber, confirmSeating, swapParticipants, getSizeOptions } from '../../utils/seating'
 import { startTimer, pauseTimer, resumeTimer, resetTimer } from '../../utils/timer'
 import { getAllMissionStatus } from '../../utils/mission'
 
@@ -35,6 +35,7 @@ export default function EventControl({ eventId, isDark, onBack }) {
   const { remainingSeconds, isRunning, connectionStatus: timerConnectionStatus, refetch: timerRefetch } = useTimerRealtime(eventId)
   const [actionLoading, setActionLoading] = useState(false)
   const [timerDuration, setTimerDuration] = useState(5) // 分
+  const [membersPerTable, setMembersPerTable] = useState(4) // 1班あたりの人数
 
   // 席配置編集用の状態
   const [selectedSeats, setSelectedSeats] = useState([]) // [{seating_id, participant_id, name, tableNumber}]
@@ -90,7 +91,7 @@ export default function EventControl({ eventId, isDark, onBack }) {
     }
     try {
       setActionLoading(true)
-      await assignSeating(eventId, 1)
+      await assignSeating(eventId, 1, membersPerTable)
       await updateEventStatus(eventId, 'active')
       await refetch()
     } catch (error) {
@@ -107,7 +108,7 @@ export default function EventControl({ eventId, isDark, onBack }) {
       setActionLoading(true)
       setSelectedSeats([])
       const nextRound = currentRound + 1
-      await assignSeating(eventId, nextRound)
+      await assignSeating(eventId, nextRound, membersPerTable)
       await refetch()
     } catch (error) {
       console.error('Error shuffling:', error)
@@ -122,7 +123,7 @@ export default function EventControl({ eventId, isDark, onBack }) {
     try {
       setActionLoading(true)
       setSelectedSeats([])
-      await assignSeating(eventId, currentRound)
+      await assignSeating(eventId, currentRound, membersPerTable)
       await refetch()
     } catch (error) {
       console.error('Error reshuffling:', error)
@@ -339,17 +340,59 @@ export default function EventControl({ eventId, isDark, onBack }) {
         </h2>
 
         {event.status === 'waiting' && (
-          <button
-            onClick={handleStart}
-            disabled={actionLoading || participants.length < 2}
-            className={`w-full py-5 md:py-4 rounded-xl font-bold text-xl md:text-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
-              isDark
-                ? 'bg-green-600 text-white hover:bg-green-500'
-                : 'bg-green-600 text-white hover:bg-green-700'
-            }`}
-          >
-            {actionLoading ? '処理中...' : 'ゲーム開始'}
-          </button>
+          <div className="space-y-4">
+            {/* 班人数設定 */}
+            <div>
+              <div className={`text-base font-medium mb-3 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                1班あたりの人数
+              </div>
+              <div className="flex gap-2">
+                {getSizeOptions(participants.length).map(opt => (
+                  <button
+                    key={opt.size}
+                    onClick={() => setMembersPerTable(opt.size)}
+                    className={`flex-1 py-3 rounded-xl text-center transition-all ${
+                      membersPerTable === opt.size
+                        ? 'bg-blue-600 text-white font-bold'
+                        : isDark
+                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    <div className="text-lg font-bold">{opt.size}人</div>
+                    {opt.recommended && (
+                      <div className="text-xs text-green-400">余りなし</div>
+                    )}
+                    {!opt.recommended && (
+                      <div className={`text-xs ${membersPerTable === opt.size ? 'text-blue-200' : isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                        {opt.remainder}人余り
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+              {participants.length > 0 && (
+                <div className={`mt-2 text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                  {participants.length}人 → {Math.floor(participants.length / membersPerTable) + (participants.length % membersPerTable >= 3 ? 1 : participants.length % membersPerTable > 0 ? 0 : 0)}班
+                  {participants.length % membersPerTable === 1 && `（${membersPerTable + 1}人班が1つ）`}
+                  {participants.length % membersPerTable === 2 && `（${membersPerTable + 1}人班が2つ）`}
+                  {participants.length % membersPerTable >= 3 && `（${participants.length % membersPerTable}人班が1つ）`}
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={handleStart}
+              disabled={actionLoading || participants.length < 2}
+              className={`w-full py-5 md:py-4 rounded-xl font-bold text-xl md:text-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                isDark
+                  ? 'bg-green-600 text-white hover:bg-green-500'
+                  : 'bg-green-600 text-white hover:bg-green-700'
+              }`}
+            >
+              {actionLoading ? '処理中...' : 'ゲーム開始'}
+            </button>
+          </div>
         )}
 
         {event.status === 'active' && (

@@ -2,14 +2,74 @@ import { supabase } from '../../../utils/supabase'
 import { getParticipants } from './participant'
 
 /**
+ * 班人数から余りなしの候補を計算
+ * @param {number} participantCount - 参加人数
+ * @returns {Array} 候補一覧 [{size, tables, remainder, recommended}]
+ */
+export function getSizeOptions(participantCount) {
+  const options = []
+  for (let size = 3; size <= 6; size++) {
+    const remainder = participantCount % size
+    const tables = Math.floor(participantCount / size)
+    if (tables < 1) continue
+    options.push({
+      size,
+      tables: remainder === 0 ? tables : tables + (remainder >= 3 ? 1 : 0),
+      remainder,
+      recommended: remainder === 0
+    })
+  }
+  return options
+}
+
+/**
  * テーブル作成（参加人数に応じて自動生成）
  * @param {string} eventId - イベントID
  * @param {number} participantCount - 参加人数
- * @returns {Promise<Array>} 作成されたテーブル一覧
+ * @param {number} membersPerTable - 1班あたりの人数
+ * @returns {Promise<Array>} 作成されたテーブル一覧（capacityは実際の人数）
  */
-export async function createTables(eventId, participantCount) {
-  // 1卓4人基本
-  const tableCount = Math.ceil(participantCount / 4)
+export async function createTables(eventId, participantCount, membersPerTable = 4) {
+  const baseTableCount = Math.floor(participantCount / membersPerTable)
+  const remainder = participantCount % membersPerTable
+
+  // テーブルごとのキャパシティを計算
+  const capacities = []
+
+  if (remainder === 0) {
+    // 余りなし
+    for (let i = 0; i < baseTableCount; i++) capacities.push(membersPerTable)
+  } else if (remainder === 1) {
+    // 1人余り → 最後のテーブルに追加
+    for (let i = 0; i < baseTableCount - 1; i++) capacities.push(membersPerTable)
+    capacities.push(membersPerTable + 1)
+  } else if (remainder === 2) {
+    // 2人余り → 最後の2テーブルに1人ずつ追加
+    const adjustCount = Math.min(2, baseTableCount)
+    for (let i = 0; i < baseTableCount - adjustCount; i++) capacities.push(membersPerTable)
+    for (let i = 0; i < adjustCount; i++) capacities.push(membersPerTable + 1)
+  } else {
+    // 3人以上余り → 別テーブル作成
+    for (let i = 0; i < baseTableCount; i++) capacities.push(membersPerTable)
+    capacities.push(remainder)
+  }
+
+  // 5人以上のテーブルを分割（membersPerTableが4以下の場合）
+  if (membersPerTable <= 4) {
+    const finalCapacities = []
+    for (const cap of capacities) {
+      if (cap >= 2 * 3) {
+        // 6人以上なら分割（3+3, 3+4, 4+4, etc）
+        const half1 = Math.ceil(cap / 2)
+        const half2 = cap - half1
+        finalCapacities.push(half1, half2)
+      } else {
+        finalCapacities.push(cap)
+      }
+    }
+    capacities.length = 0
+    capacities.push(...finalCapacities)
+  }
 
   // 既存テーブルを削除
   await supabase
@@ -17,14 +77,11 @@ export async function createTables(eventId, participantCount) {
     .delete()
     .eq('event_id', eventId)
 
-  const tables = []
-  for (let i = 1; i <= tableCount; i++) {
-    tables.push({
-      event_id: eventId,
-      table_number: i,
-      capacity: 4
-    })
-  }
+  const tables = capacities.map((cap, i) => ({
+    event_id: eventId,
+    table_number: i + 1,
+    capacity: cap
+  }))
 
   const { data, error } = await supabase
     .from('minigame_tables')
@@ -86,7 +143,7 @@ function getPairCount(matrix, id1, id2) {
  * @param {number} roundNumber - ラウンド番号
  * @returns {Promise<Array>} 席配置結果
  */
-export async function assignSeating(eventId, roundNumber) {
+export async function assignSeating(eventId, roundNumber, membersPerTable = 4) {
   // 参加者取得
   const participants = await getParticipants(eventId)
   if (participants.length === 0) {
@@ -94,7 +151,7 @@ export async function assignSeating(eventId, roundNumber) {
   }
 
   // テーブル作成/取得
-  const tables = await createTables(eventId, participants.length)
+  const tables = await createTables(eventId, participants.length, membersPerTable)
 
   // 同卓履歴マトリクス取得
   const matrix = await getSeatingHistoryMatrix(eventId, participants)
