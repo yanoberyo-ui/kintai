@@ -172,16 +172,79 @@ serve(async (req) => {
 
         // 退勤時間をタイムスタンプに変換
         // dateとclockOutTimeを組み合わせてUTCに変換
-        const [hours, minutes] = clockOutTime.split(':').map(Number)
+        if (!clockOutTime || !date) {
+          console.error('Missing clockOutTime or date:', { clockOutTime, date })
+          return new Response(
+            JSON.stringify({
+              response_action: 'errors',
+              errors: {
+                clock_out_block: '退勤時間または日付が取得できませんでした'
+              }
+            }),
+            {
+              headers: { 'Content-Type': 'application/json' },
+              status: 200
+            }
+          )
+        }
+
         const clockOutDate = new Date(`${date}T${clockOutTime}:00+09:00`)
         const clockOutTimestamp = clockOutDate.toISOString()
+
+        // 既存の出勤時間を取得して稼働時間を計算
+        const { data: attendance, error: fetchError } = await supabaseClient
+          .from('attendances')
+          .select('clock_in')
+          .eq('id', attendance_id)
+          .single()
+
+        if (fetchError || !attendance?.clock_in) {
+          console.error('Failed to fetch attendance:', fetchError)
+          return new Response(
+            JSON.stringify({
+              response_action: 'errors',
+              errors: {
+                clock_out_block: '出勤データの取得に失敗しました'
+              }
+            }),
+            {
+              headers: { 'Content-Type': 'application/json' },
+              status: 200
+            }
+          )
+        }
+
+        const clockInDate = new Date(attendance.clock_in)
+
+        // 日付の妥当性チェック
+        if (isNaN(clockInDate.getTime()) || isNaN(clockOutDate.getTime())) {
+          console.error('Invalid date:', { clockIn: attendance.clock_in, clockOut: clockOutTimestamp })
+          return new Response(
+            JSON.stringify({
+              response_action: 'errors',
+              errors: {
+                clock_out_block: '日時の計算でエラーが発生しました'
+              }
+            }),
+            {
+              headers: { 'Content-Type': 'application/json' },
+              status: 200
+            }
+          )
+        }
+
+        const totalMinutes = Math.floor((clockOutDate.getTime() - clockInDate.getTime()) / 60000)
+        const totalWorkMinutes = Math.max(0, totalMinutes - breakMinutes)
+
+        console.log('Calculated work minutes:', { clockIn: attendance.clock_in, clockOut: clockOutTimestamp, breakMinutes, totalWorkMinutes })
 
         // DBを更新
         const { error: updateError } = await supabaseClient
           .from('attendances')
           .update({
             clock_out: clockOutTimestamp,
-            break_minutes_used: breakMinutes
+            break_minutes_used: breakMinutes,
+            total_work_minutes: totalWorkMinutes
           })
           .eq('id', attendance_id)
 
