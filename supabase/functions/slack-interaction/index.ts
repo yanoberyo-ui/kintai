@@ -188,9 +188,6 @@ serve(async (req) => {
           )
         }
 
-        const clockOutDate = new Date(`${date}T${clockOutTime}:00+09:00`)
-        const clockOutTimestamp = clockOutDate.toISOString()
-
         // 既存の出勤時間を取得して稼働時間を計算
         const { data: attendance, error: fetchError } = await supabaseClient
           .from('attendances')
@@ -215,6 +212,18 @@ serve(async (req) => {
         }
 
         const clockInDate = new Date(attendance.clock_in)
+
+        // 退勤時間をタイムスタンプに変換（dateは勤怠日=3am基準）
+        let clockOutDate = new Date(`${date}T${clockOutTime}:00+09:00`)
+
+        // 深夜出勤対策：退勤が出勤より前になる場合は翌日として扱う
+        // 例）date=2/10, 出勤=2/11 00:00(JST), 退勤=23:55 → 2/10T23:55+09:00だと逆転するので+1日
+        if (clockOutDate.getTime() <= clockInDate.getTime()) {
+          clockOutDate = new Date(clockOutDate.getTime() + 24 * 60 * 60 * 1000)
+          console.log('Adjusted clock_out to next day:', clockOutDate.toISOString())
+        }
+
+        const clockOutTimestamp = clockOutDate.toISOString()
 
         // 日付の妥当性チェック
         if (isNaN(clockInDate.getTime()) || isNaN(clockOutDate.getTime())) {
