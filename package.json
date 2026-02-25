@@ -1,0 +1,10 @@
+{
+  "name": "@kintai/monorepo",
+  "private": true,
+  "scripts": {
+    "dev:web": "pnpm --filter @kintai/web dev",
+    "dev:mobile": "pnpm --filter @kintai/mobile start",
+    "build:web": "pnpm --filter @kintai/web build",
+    "test:e2e": "pnpm --filter @kintai/web test:e2e"
+  }
+}

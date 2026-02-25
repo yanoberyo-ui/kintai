@@ -1,0 +1,17 @@
+{
+  "name": "@kintai/shared",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.js",
+  "exports": {
+    "./supabase": {
+      "react-native": "./src/supabase.native.ts",
+      "default": "./src/supabase.js"
+    },
+    "./storage": {
+      "react-native": "./src/storage.native.ts",
+      "default": "./src/storage.js"
+    },
+    "./utils/*": "./src/utils/*"
+  }
+}

@@ -229,7 +229,8 @@ function fetchMonthlyAttendanceDataFull() {
   const firstDayStr = Utilities.formatDate(firstDay, 'Asia/Tokyo', 'yyyy-MM-dd');
 
   // clock_inが存在する今月のデータを全取得
-  const url = `${SUPABASE_URL}/rest/v1/attendances?date=gte.${firstDayStr}&clock_in=not.is.null&select=*,users(*)&order=date.asc`;
+  // ※ PostgRESTのデフォルト上限は1000行のため、明示的にlimitを指定
+  const url = `${SUPABASE_URL}/rest/v1/attendances?date=gte.${firstDayStr}&clock_in=not.is.null&select=*,users(*)&order=date.asc&limit=10000`;
 
   const options = {
     method: 'get',
@@ -283,7 +284,7 @@ function fetchAttendanceData(date) {
     throw new Error('スクリプトプロパティが設定されていません。SUPABASE_URLとSUPABASE_SERVICE_ROLE_KEYを設定してください。');
   }
 
-  const url = `${SUPABASE_URL}/rest/v1/attendances?date=eq.${date}&status=eq.completed&select=*,users(*)`;
+  const url = `${SUPABASE_URL}/rest/v1/attendances?date=eq.${date}&status=eq.completed&select=*,users(*)&limit=10000`;
 
   const options = {
     method: 'get',
@@ -1076,7 +1077,7 @@ function fetchMonthlyAttendanceData() {
   const firstDayStr = Utilities.formatDate(firstDay, 'Asia/Tokyo', 'yyyy-MM-dd');
   
   // 今月のデータのみ取得（clock_inが存在するデータ、管理者ダッシュボードと同じ条件）
-  const url = `${SUPABASE_URL}/rest/v1/attendances?date=gte.${firstDayStr}&clock_in=not.is.null&select=*,users(name,department)`;
+  const url = `${SUPABASE_URL}/rest/v1/attendances?date=gte.${firstDayStr}&clock_in=not.is.null&select=*,users(name,department)&limit=10000`;
 
   const options = {
     method: 'get',
@@ -1278,7 +1279,7 @@ function rebuildTodoAchievementSheet() {
   const todayStr = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy-MM-dd');
   
   // 今月の全TODOデータを取得
-  const url = `${SUPABASE_URL}/rest/v1/todo_lists?date=gte.${firstDayStr}&date=lte.${todayStr}&select=*,users(id,name,department),todo_items(is_completed)&order=date.desc`;
+  const url = `${SUPABASE_URL}/rest/v1/todo_lists?date=gte.${firstDayStr}&date=lte.${todayStr}&select=*,users(id,name,department),todo_items(is_completed)&order=date.desc&limit=10000`;
   
   const options = {
     method: 'get',
@@ -1450,7 +1451,7 @@ function createTodoAchievementHeader(sheet) {
  * 期間指定でTODOデータを取得
  */
 function fetchTodoDataRange(startDate, endDate) {
-  const url = `${SUPABASE_URL}/rest/v1/todo_lists?date=gte.${startDate}&date=lte.${endDate}&select=*,users(id,name),todo_items(is_completed)`;
+  const url = `${SUPABASE_URL}/rest/v1/todo_lists?date=gte.${startDate}&date=lte.${endDate}&select=*,users(id,name),todo_items(is_completed)&limit=10000`;
 
   const options = {
     method: 'get',
@@ -1483,7 +1484,7 @@ function fetchTodoDataRange(startDate, endDate) {
  * TODOデータを取得
  */
 function fetchTodoData(date) {
-  const url = `${SUPABASE_URL}/rest/v1/todo_lists?date=eq.${date}&select=*,users(name),todo_items(is_completed)`;
+  const url = `${SUPABASE_URL}/rest/v1/todo_lists?date=eq.${date}&select=*,users(name),todo_items(is_completed)&limit=10000`;
 
   const options = {
     method: 'get',
@@ -1881,29 +1882,48 @@ function writeAttendanceRowSimple(sheet, row, attendance) {
  * ※ データベースのtotal_work_minutesを使用（アプリのダッシュボードと統一）
  */
 function fetchAllAttendanceData() {
-  // clock_inが存在するすべてのデータを取得（管理者ダッシュボードと同じ条件）
-  const url = `${SUPABASE_URL}/rest/v1/attendances?clock_in=not.is.null&select=*,users(*)&order=date.asc`;
+  // clock_inが存在するすべてのデータをページネーションで全件取得
+  // ※ Supabaseサーバー側のmax-rows制限（1000行）があるため、offsetで分割取得
+  const PAGE_SIZE = 1000;
+  let allData = [];
+  let offset = 0;
 
-  const options = {
-    method: 'get',
-    headers: {
-      'apikey': SUPABASE_SERVICE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_SERVICE_KEY,
-      'Content-Type': 'application/json'
-    },
-    muteHttpExceptions: true
-  };
+  while (true) {
+    const url = `${SUPABASE_URL}/rest/v1/attendances?clock_in=not.is.null&select=*,users(*)&order=date.asc&limit=${PAGE_SIZE}&offset=${offset}`;
 
-  const response = UrlFetchApp.fetch(url, options);
-  const statusCode = response.getResponseCode();
+    const options = {
+      method: 'get',
+      headers: {
+        'apikey': SUPABASE_SERVICE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_SERVICE_KEY,
+        'Content-Type': 'application/json'
+      },
+      muteHttpExceptions: true
+    };
 
-  if (statusCode !== 200) {
-    throw new Error('Supabaseからのデータ取得に失敗: ' + statusCode);
+    const response = UrlFetchApp.fetch(url, options);
+    const statusCode = response.getResponseCode();
+
+    if (statusCode !== 200) {
+      throw new Error('Supabaseからのデータ取得に失敗: ' + statusCode);
+    }
+
+    const data = JSON.parse(response.getContentText());
+    Logger.log(`ページ取得: offset=${offset}, 件数=${data.length}`);
+
+    if (data.length === 0) break;
+
+    allData = allData.concat(data);
+
+    // 取得件数がPAGE_SIZE未満なら最後のページ
+    if (data.length < PAGE_SIZE) break;
+
+    offset += PAGE_SIZE;
   }
 
-  const data = JSON.parse(response.getContentText());
+  Logger.log(`全データ取得完了: 合計${allData.length}件`);
 
-  return data
+  return allData
     .filter(record => record.users) // ユーザー情報がないレコードはスキップ
     .map(record => {
       const user = record.users;

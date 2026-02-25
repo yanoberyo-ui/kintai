@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "FDGroup勤怠管理",
+    "slug": "fdgroup-kintai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.fdgroup.kintai"
+    },
+    "android": {
+      "package": "com.fdgroup.kintai"
+    }
+  }
+}
