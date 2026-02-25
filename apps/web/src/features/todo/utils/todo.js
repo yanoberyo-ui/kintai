@@ -112,11 +112,11 @@ export async function createTodayTodoList(userId, title = '今日のtodo') {
 
   const { data, error } = await supabase
     .from('todo_lists')
-    .insert({
+    .upsert({
       user_id: userId,
       date: today,
       title: title
-    })
+    }, { onConflict: 'user_id,date', ignoreDuplicates: true })
     .select()
     .single();
 

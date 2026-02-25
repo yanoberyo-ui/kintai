@@ -4,8 +4,8 @@
  * codex-devのGraphQL APIと連携し、DailyTodoデータを取得する
  */
 
-// codex-dev API URL（環境変数で設定）
-const ROOTS_API_URL = import.meta.env.VITE_ROOTS_API_URL || 'http://localhost:8080/graphql'
+// codex-dev API URL（環境変数で設定、未設定なら無効化）
+const ROOTS_API_URL = import.meta.env.VITE_ROOTS_API_URL || ''
 
 /**
  * GraphQLクエリを実行
@@ -13,6 +13,10 @@ const ROOTS_API_URL = import.meta.env.VITE_ROOTS_API_URL || 'http://localhost:80
  * @param {object} variables - 変数
  */
 async function executeGraphQL(query, variables = {}) {
+  if (!ROOTS_API_URL) {
+    return null
+  }
+
   const response = await fetch(ROOTS_API_URL, {
     method: 'POST',
     headers: {
