@@ -211,6 +211,15 @@ function App() {
           try {
             const { data: userData, error: userError } = await fetchWithTimeout
 
+            // 退職者チェック: tags に deactivated が含まれるユーザーはログアウト
+            if (userData?.tags?.includes('deactivated')) {
+              await supabase.auth.signOut()
+              setUser(null)
+              setLoading(false)
+              alert('このアカウントは無効化されています。管理者にお問い合わせください。')
+              return
+            }
+
             // ユーザーが存在しない場合（Google OAuth 初回ログイン時など）は自動作成
             if (userError && userError.code === 'PGRST116') {
               const newUserData = {

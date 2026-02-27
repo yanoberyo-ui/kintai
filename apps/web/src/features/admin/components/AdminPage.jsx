@@ -944,6 +944,29 @@ export default function AdminPage({ isDark }) {
     }
   }
 
+  const handleToggleDeactivate = async (userId, userName, currentTags) => {
+    const isDeactivated = currentTags?.includes('deactivated')
+    const action = isDeactivated ? '有効化' : '無効化'
+    if (!window.confirm(`${userName}さんのアカウントを${action}しますか？`)) return
+
+    try {
+      const newTags = isDeactivated
+        ? (currentTags || []).filter(t => t !== 'deactivated')
+        : [...(currentTags || []), 'deactivated']
+      const { error } = await supabase
+        .from('users')
+        .update({ tags: newTags })
+        .eq('id', userId)
+
+      if (error) throw error
+      loadUsers()
+      alert(`${userName}さんのアカウントを${action}しました`)
+    } catch (error) {
+      console.error('Error toggling user deactivation:', error)
+      alert(`エラー: ${error.message}`)
+    }
+  }
+
   // 部署一括変更: 条件に合う対象者を返す
   const getBulkDeptTargetUsers = () => {
     if (!users.length) return []
@@ -2913,6 +2936,11 @@ export default function AdminPage({ isDark }) {
                   <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
                     isDark ? 'text-gray-400' : 'text-gray-500'
                   }`}>
+                    ステータス
+                  </th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+                    isDark ? 'text-gray-400' : 'text-gray-500'
+                  }`}>
                     登録日
                   </th>
                   <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
@@ -2950,10 +2978,21 @@ export default function AdminPage({ isDark }) {
                         {user.role === 'admin' ? '🛡️ 管理者' : '👤 一般'}
                       </button>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {user.tags?.includes('deactivated') ? (
+                        <span className="px-3 py-1 text-xs font-bold rounded-full bg-red-100 text-red-800">
+                          無効
+                        </span>
+                      ) : (
+                        <span className="px-3 py-1 text-xs font-bold rounded-full bg-green-100 text-green-800">
+                          有効
+                        </span>
+                      )}
+                    </td>
                     <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                       {new Date(user.created_at).toLocaleDateString('ja-JP')}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
                       <button
                         onClick={() => {
                           if (window.confirm(`${user.name}さんを${user.role === 'admin' ? '一般ユーザー' : '管理者'}に変更しますか？`)) {
@@ -2967,6 +3006,16 @@ export default function AdminPage({ isDark }) {
                         }`}
                       >
                         {user.role === 'admin' ? '👤 一般に変更' : '🛡️ 管理者に変更'}
+                      </button>
+                      <button
+                        onClick={() => handleToggleDeactivate(user.id, user.name, user.tags)}
+                        className={`px-3 py-1 rounded-lg font-medium transition-colors ${
+                          user.tags?.includes('deactivated')
+                            ? 'bg-green-600 text-white hover:bg-green-700'
+                            : 'bg-red-600 text-white hover:bg-red-700'
+                        }`}
+                      >
+                        {user.tags?.includes('deactivated') ? '有効化' : '無効化'}
                       </button>
                     </td>
                   </tr>
