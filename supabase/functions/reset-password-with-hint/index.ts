@@ -1,12 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 serve(async (req) => {
+  const origin = req.headers.get('origin')
+  const corsHeaders = getCorsHeaders(origin)
+
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -30,7 +29,7 @@ serve(async (req) => {
       )
     }
 
-    // Create Supabase client with service role key
+    // Create Supabase client with service role key (rate limit check requires DB)
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -41,6 +40,26 @@ serve(async (req) => {
         }
       }
     )
+
+    // Rate limit check: 15分間に5回まで
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString()
+    const { count: attemptCount } = await supabaseAdmin
+      .from('password_reset_attempts')
+      .select('*', { count: 'exact', head: true })
+      .eq('email', email.toLowerCase().trim())
+      .gte('attempted_at', fifteenMinutesAgo)
+
+    if (attemptCount !== null && attemptCount >= 5) {
+      return new Response(
+        JSON.stringify({ error: '試行回数の上限に達しました。15分後にもう一度お試しください。' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Record this attempt
+    await supabaseAdmin
+      .from('password_reset_attempts')
+      .insert({ email: email.toLowerCase().trim() })
 
     // Verify hint
     const { data: userData, error: userError } = await supabaseAdmin
@@ -63,7 +82,7 @@ serve(async (req) => {
       )
     }
 
-    // Parse hint data (support both JSON and legacy text format)
+    // Parse hint data (support hashed, JSON, and legacy text formats)
     let hintData = userData.password_hint
     if (typeof hintData === 'string') {
       try {
@@ -74,15 +93,29 @@ serve(async (req) => {
       }
     }
 
-    if (!hintData || !hintData.answer) {
+    if (!hintData || (!hintData.answer && !hintData.answer_hash)) {
       return new Response(
         JSON.stringify({ error: 'このアカウントにはパスワードヒントが正しく設定されていません' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Compare answer (case-insensitive)
-    if (hintData.answer.toLowerCase().trim() !== answer.toLowerCase().trim()) {
+    // Compare answer: support both hashed and legacy plaintext formats
+    let answerMatch = false
+    if (hintData.answer_hash && hintData.salt) {
+      // New hashed format: hash the submitted answer with stored salt and compare
+      const normalized = answer.toLowerCase().trim()
+      const data = new TextEncoder().encode(hintData.salt + normalized)
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+      const hashArray = Array.from(new Uint8Array(hashBuffer))
+      const submittedHash = hashArray.map((b: number) => b.toString(16).padStart(2, '0')).join('')
+      answerMatch = submittedHash === hintData.answer_hash
+    } else if (hintData.answer) {
+      // Legacy plaintext format: case-insensitive comparison
+      answerMatch = hintData.answer.toLowerCase().trim() === answer.toLowerCase().trim()
+    }
+
+    if (!answerMatch) {
       return new Response(
         JSON.stringify({ error: '答えが一致しません' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -98,7 +131,7 @@ serve(async (req) => {
     if (authError) {
       console.error('Password update error:', authError)
       return new Response(
-        JSON.stringify({ error: 'パスワードの変更に失敗しました: ' + authError.message }),
+        JSON.stringify({ error: 'パスワードの変更に失敗しました。管理者にお問い合わせください。' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -110,7 +143,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: 'サーバーエラーが発生しました。しばらくしてからもう一度お試しください。' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

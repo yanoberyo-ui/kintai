@@ -2,6 +2,7 @@
 // 出勤・退勤時にSlackへ通知を送信（シンプル版）
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { getCorsHeaders } from '../_shared/cors.ts';
 
 const SLACK_WEBHOOK_URL = Deno.env.get('SLACK_WEBHOOK_URL') || '';
 
@@ -16,15 +17,14 @@ interface NotificationPayload {
 }
 
 serve(async (req) => {
+  const origin = req.headers.get('origin');
+  const corsHeaders = getCorsHeaders(origin);
+
   try {
     // CORSヘッダー
     if (req.method === 'OPTIONS') {
       return new Response('ok', {
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST',
-          'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-        },
+        headers: corsHeaders,
       });
     }
 
@@ -130,8 +130,8 @@ serve(async (req) => {
       JSON.stringify({ success: true, message: 'Notification sent' }),
       {
         headers: {
+          ...corsHeaders,
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
         },
       }
     );
@@ -142,8 +142,8 @@ serve(async (req) => {
       {
         status: 400,
         headers: {
+          ...corsHeaders,
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
         },
       }
     );

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../utils/supabase'
+import { generateSalt, hashHintAnswer } from '../../../utils/crypto'
 import ProfileEdit from './ProfileEdit'
 
 export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) {
@@ -170,9 +171,12 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
     setPasswordMessage('')
 
     try {
+      const salt = generateSalt()
+      const answerHash = await hashHintAnswer(tempHintAnswer, salt)
       const hintData = {
         question: tempHintQuestion.trim(),
-        answer: tempHintAnswer.trim(),
+        answer_hash: answerHash,
+        salt: salt,
       }
 
       const { error } = await supabase
@@ -185,14 +189,14 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
       setPasswordMessage('✅ パスワードヒントを設定しました！')
       setUserData({ ...userData, password_hint: hintData })
       setHintQuestion(tempHintQuestion.trim())
-      setHintAnswer(tempHintAnswer.trim())
+      setHintAnswer('')
       setTempHintQuestion('')
       setTempHintAnswer('')
       setShowHintSetting(false)
       setTimeout(() => setPasswordMessage(''), 3000)
     } catch (error) {
       console.error('Hint save error:', error)
-      setPasswordMessage('❌ エラー: ' + (error.message || 'ヒントの設定に失敗しました'))
+      setPasswordMessage('❌ ヒントの設定に失敗しました。もう一度お試しください。')
     } finally {
       setHintSaving(false)
     }

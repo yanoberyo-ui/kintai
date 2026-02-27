@@ -2004,7 +2004,7 @@ function LoginScreen({ isDark }) {
     setHintVerified(false)
 
     try {
-      // メールアドレスとヒントでユーザーを検証
+      // メールアドレスでユーザーの質問のみ取得（回答はサーバー側で検証）
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('id, email, password_hint')
@@ -2019,30 +2019,22 @@ function LoginScreen({ isDark }) {
         throw new Error('このアカウントにはパスワードヒントが設定されていません。設定ページでヒントを設定してください。')
       }
 
-      // JSON形式のヒントを確認
+      // JSON形式のヒントから質問のみ取得
       let hintData = userData.password_hint
       if (typeof hintData === 'string') {
         try {
           hintData = JSON.parse(hintData)
         } catch {
-          // 古い形式の場合は、単純なテキストとして扱う
-          hintData = { question: '', answer: hintData }
+          hintData = { question: '' }
         }
       }
 
-      if (!hintData || !hintData.question || !hintData.answer) {
+      if (!hintData || !hintData.question) {
         throw new Error('このアカウントにはパスワードヒントが正しく設定されていません。設定ページでヒントを設定してください。')
       }
 
-      // 質問を保存して表示
+      // 質問を保存して表示（回答の検証はパスワード変更時にEdge Functionで実施）
       setHintQuestion(hintData.question)
-
-      // 答えを比較（大文字小文字を区別しない）
-      if (hintData.answer.toLowerCase().trim() !== resetHint.toLowerCase().trim()) {
-        throw new Error('答えが一致しません。もう一度お試しください。')
-      }
-
-      // 答えが一致したら、パスワード変更画面を表示
       setHintVerified(true)
       setResetError('')
     } catch (error) {
@@ -2548,7 +2540,7 @@ function LoginScreen({ isDark }) {
                                 try {
                                   hintData = JSON.parse(hintData)
                                 } catch {
-                                  hintData = { question: '', answer: hintData }
+                                  hintData = { question: '' }
                                 }
                               }
                               if (hintData && hintData.question) {

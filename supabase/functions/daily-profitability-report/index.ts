@@ -2,6 +2,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getCorsHeaders } from '../_shared/cors.ts';
 
 // KPI用のSlack Webhook URL（#全体-kpi-management チャンネル用）
 const SLACK_KPI_WEBHOOK_URL = Deno.env.get('SLACK_KPI_WEBHOOK_URL') || '';
@@ -16,15 +17,14 @@ interface UnitSummary {
 }
 
 serve(async (req) => {
+  const origin = req.headers.get('origin');
+  const corsHeaders = getCorsHeaders(origin);
+
   try {
     // CORSヘッダー
     if (req.method === 'OPTIONS') {
       return new Response('ok', {
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST',
-          'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-        },
+        headers: corsHeaders,
       });
     }
 
@@ -233,8 +233,8 @@ serve(async (req) => {
       }),
       {
         headers: {
+          ...corsHeaders,
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
         },
       }
     );
@@ -245,8 +245,8 @@ serve(async (req) => {
       {
         status: 500,
         headers: {
+          ...corsHeaders,
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
         },
       }
     );

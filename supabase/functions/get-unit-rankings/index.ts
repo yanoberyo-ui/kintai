@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 const SPREADSHEET_ID = "1nBNo7bSQKPmNb_1g6VRFl6Ise8TAMqo48kaJMfHCY18"
 const SHEET_NAME = "報告/MG粗利11月"
@@ -78,10 +79,8 @@ function pemToArrayBuffer(pem: string) {
 
 serve(async (req) => {
   // CORSヘッダー
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  }
+  const origin = req.headers.get('origin')
+  const corsHeaders = getCorsHeaders(origin)
 
   // OPTIONSリクエスト対応
   if (req.method === 'OPTIONS') {

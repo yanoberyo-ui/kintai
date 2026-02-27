@@ -4,9 +4,21 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 })
 
+const ALLOWED_ORIGINS = [
+  'https://fd-app-gamma.vercel.app',
+  'https://kintai-web-fd9.vercel.app',
+  'https://kintai-web-pink.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+]
+
 export default async function handler(req, res) {
-  // CORSヘッダー
-  res.setHeader('Access-Control-Allow-Origin', '*')
+  // CORSヘッダー（許可されたオリジンのみ）
+  const origin = req.headers.origin
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+  }
+  res.setHeader('Vary', 'Origin')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
@@ -84,8 +96,7 @@ ${isAfter19 && additionalCompletedTasks > 0 ? `- 19:00以降の追加完了: ${a
   } catch (error) {
     console.error('Error generating feedback:', error)
     return res.status(500).json({
-      error: 'Failed to generate feedback',
-      details: error.message
+      error: 'フィードバックの生成に失敗しました。しばらくしてからもう一度お試しください。'
     })
   }
 }
