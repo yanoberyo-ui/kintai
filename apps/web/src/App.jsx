@@ -13,8 +13,11 @@ import AdminPage from './features/admin/components/AdminPage'
 import RankingPage from './features/ranking/components/RankingPage'
 import AttendanceHistoryPage from './features/attendance/components/AttendanceHistoryPage'
 import MinigamePage from './features/minigame/components/MinigamePage'
+import LoginScreen from './features/auth/components/LoginScreen'
+import PasswordResetPage from './features/auth/components/PasswordResetPage'
 import Avatar from './features/common/components/Avatar'
 import WeeklyTasksSection from './features/todo/components/WeeklyTasksSection'
+import { Modal, Button } from './components/ui'
 import { getStreaks } from './features/pomodoro/utils/streaks'
 import { getHeatmapData } from './utils/heatmap'
 import { getRootsUserByEmail } from './utils/rootsApi'
@@ -1455,76 +1458,29 @@ function App() {
       )}
 
       {/* イベント投票通知ポップアップ */}
-      {eventNotification && (
-        <>
-          {/* オーバーレイ */}
-          <div
-            onClick={() => dismissNotification(eventNotification.id, 'event')}
-            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm animate-fade-in"
-          />
-
-          {/* ポップアップ */}
-          <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-11/12 max-w-md backdrop-blur-xl rounded-3xl shadow-2xl border overflow-hidden animate-scale-in ${
-            isDark
-              ? 'bg-gray-900/95 border-gray-800/50'
-              : 'bg-white/95 border-gray-200/50'
-          }`}>
-            {/* ヘッダー */}
-            <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="text-3xl">🎉</div>
-                  <div>
-                    <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                      新しいイベント！
-                    </h3>
-                    <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                      投票が必要です
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => dismissNotification(eventNotification.id, 'event')}
-                  className={`p-2 rounded-full transition-colors ${
-                    isDark
-                      ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
-                      : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+      <Modal isOpen={!!eventNotification} onClose={() => dismissNotification(eventNotification?.id, 'event')} isDark={isDark}>
+        {eventNotification && (
+          <>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="text-3xl">🎉</div>
+              <div>
+                <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>新しいイベント！</h3>
+                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>投票が必要です</p>
               </div>
             </div>
-
-            {/* コンテンツ */}
-            <div className="p-6 space-y-4">
+            <div className="space-y-4">
               <div>
-                <h4 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                  {eventNotification.title}
-                </h4>
-                <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                  {eventNotification.content}
-                </p>
+                <h4 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>{eventNotification.title}</h4>
+                <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{eventNotification.content}</p>
               </div>
-
               {eventNotification.voting_deadline && (
-                <div className={`flex items-center gap-2 text-sm p-3 rounded-xl ${
-                  isDark ? 'bg-gray-800/50' : 'bg-gray-100/50'
-                }`}>
+                <div className={`flex items-center gap-2 text-sm p-3 rounded-xl ${isDark ? 'bg-gray-800/50' : 'bg-gray-100/50'}`}>
                   <span>⏰</span>
                   <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>
-                    投票期限: {new Date(eventNotification.voting_deadline).toLocaleString('ja-JP', {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+                    投票期限: {new Date(eventNotification.voting_deadline).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
               )}
-
               {eventNotification.author && (
                 <div className={`flex items-center gap-2 text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                   <span>投稿者:</span>
@@ -1532,219 +1488,76 @@ function App() {
                 </div>
               )}
             </div>
-
-            {/* アクション */}
-            <div className={`px-6 py-4 border-t flex gap-3 ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
-              <button
-                onClick={() => dismissNotification(eventNotification.id, 'event')}
-                className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
-                  isDark
-                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                後で
-              </button>
-              <button
-                onClick={() => {
-                  dismissNotification(eventNotification.id, 'event')
-                  setCurrentPage('announcements')
-                }}
-                className={`flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-200 ${
-                  isDark
-                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600'
-                    : 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700'
-                }`}
-              >
-                今すぐ投票
-              </button>
+            <div className="flex gap-3 mt-6">
+              <Button variant="secondary" size="lg" isDark={isDark} onClick={() => dismissNotification(eventNotification.id, 'event')} className="flex-1">後で</Button>
+              <Button variant="primary" size="lg" isDark={isDark} onClick={() => { dismissNotification(eventNotification.id, 'event'); setCurrentPage('announcements') }} className="flex-1">今すぐ投票</Button>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </Modal>
 
-      {/* イベント当日通知ポップアップ */}
-      {todayEventNotification && (
-        <>
-          {/* オーバーレイ */}
-          <div
-            onClick={() => dismissNotification(todayEventNotification.id, 'today')}
-            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm animate-fade-in"
-          />
-
-          {/* ポップアップ */}
-          <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-11/12 max-w-md backdrop-blur-xl rounded-3xl shadow-2xl border overflow-hidden animate-scale-in ${
-            isDark
-              ? 'bg-gray-900/95 border-gray-800/50'
-              : 'bg-white/95 border-gray-200/50'
-          }`}>
-            {/* ヘッダー */}
-            <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="text-3xl">📅</div>
-                  <div>
-                    <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                      今日はイベント当日！
-                    </h3>
-                    <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                      参加登録済みのイベントです
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => dismissNotification(todayEventNotification.id, 'today')}
-                  className={`p-2 rounded-full transition-colors ${
-                    isDark
-                      ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
-                      : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            {/* コンテンツ */}
-            <div className="p-6 space-y-4">
+      <Modal isOpen={!!todayEventNotification} onClose={() => dismissNotification(todayEventNotification?.id, 'today')} isDark={isDark}>
+        {todayEventNotification && (
+          <>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="text-3xl">📅</div>
               <div>
-                <h4 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                  {todayEventNotification.title}
-                </h4>
-                <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                  {todayEventNotification.content}
-                </p>
+                <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>今日はイベント当日！</h3>
+                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>参加登録済みのイベントです</p>
               </div>
-
+            </div>
+            <div className="space-y-4">
+              <div>
+                <h4 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>{todayEventNotification.title}</h4>
+                <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{todayEventNotification.content}</p>
+              </div>
               {todayEventNotification.event_date && (
-                <div className={`flex items-center gap-2 text-sm p-3 rounded-xl ${
-                  isDark ? 'bg-gray-800/50' : 'bg-gray-100/50'
-                }`}>
+                <div className={`flex items-center gap-2 text-sm p-3 rounded-xl ${isDark ? 'bg-gray-800/50' : 'bg-gray-100/50'}`}>
                   <span>⏰</span>
                   <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>
-                    開始時刻: {new Date(todayEventNotification.event_date).toLocaleString('ja-JP', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+                    開始時刻: {new Date(todayEventNotification.event_date).toLocaleString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
               )}
-
               {todayEventNotification.event_location && (
-                <div className={`flex items-center gap-2 text-sm p-3 rounded-xl ${
-                  isDark ? 'bg-gray-800/50' : 'bg-gray-100/50'
-                }`}>
+                <div className={`flex items-center gap-2 text-sm p-3 rounded-xl ${isDark ? 'bg-gray-800/50' : 'bg-gray-100/50'}`}>
                   <span>📍</span>
-                  <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>
-                    場所: {todayEventNotification.event_location}
-                  </span>
+                  <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>場所: {todayEventNotification.event_location}</span>
                 </div>
               )}
-
               {todayEventNotification.participants_only_message && (
-                <div className={`p-3 rounded-xl ${
-                  isDark ? 'bg-purple-900/30 border border-purple-700/50' : 'bg-purple-50 border border-purple-200'
-                }`}>
+                <div className={`p-3 rounded-xl ${isDark ? 'bg-purple-900/30 border border-purple-700/50' : 'bg-purple-50 border border-purple-200'}`}>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-sm">🔒</span>
-                    <span className={`text-xs font-bold ${isDark ? 'text-purple-300' : 'text-purple-700'}`}>
-                      参加者へのメッセージ
-                    </span>
+                    <span className={`text-xs font-bold ${isDark ? 'text-purple-300' : 'text-purple-700'}`}>参加者へのメッセージ</span>
                   </div>
-                  <p className={`text-sm whitespace-pre-wrap ${isDark ? 'text-purple-200' : 'text-purple-900'}`}>
-                    {todayEventNotification.participants_only_message}
-                  </p>
+                  <p className={`text-sm whitespace-pre-wrap ${isDark ? 'text-purple-200' : 'text-purple-900'}`}>{todayEventNotification.participants_only_message}</p>
                 </div>
               )}
             </div>
-
-            {/* アクション */}
-            <div className={`px-6 py-4 border-t flex gap-3 ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
-              <button
-                onClick={() => dismissNotification(todayEventNotification.id, 'today')}
-                className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
-                  isDark
-                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                閉じる
-              </button>
-              <button
-                onClick={() => {
-                  dismissNotification(todayEventNotification.id, 'today')
-                  setCurrentPage('announcements')
-                }}
-                className={`flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-200 ${
-                  isDark
-                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600'
-                    : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700'
-                }`}
-              >
-                詳細を見る
-              </button>
+            <div className="flex gap-3 mt-6">
+              <Button variant="secondary" size="lg" isDark={isDark} onClick={() => dismissNotification(todayEventNotification.id, 'today')} className="flex-1">閉じる</Button>
+              <Button variant="blue" size="lg" isDark={isDark} onClick={() => { dismissNotification(todayEventNotification.id, 'today'); setCurrentPage('announcements') }} className="flex-1">詳細を見る</Button>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </Modal>
 
-      {/* お願いもの通知ポップアップ */}
-      {requestNotification && (
-        <>
-          {/* オーバーレイ */}
-          <div
-            onClick={() => dismissNotification(requestNotification.id, 'request')}
-            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm animate-fade-in"
-          />
-
-          {/* ポップアップ */}
-          <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-11/12 max-w-md backdrop-blur-xl rounded-3xl shadow-2xl border overflow-hidden animate-scale-in ${
-            isDark
-              ? 'bg-gray-900/95 border-gray-800/50'
-              : 'bg-white/95 border-gray-200/50'
-          }`}>
-            {/* ヘッダー */}
-            <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="text-3xl">📢</div>
-                  <div>
-                    <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                      新しいお願い
-                    </h3>
-                    <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                      確認をお願いします
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => dismissNotification(requestNotification.id, 'request')}
-                  className={`p-2 rounded-full transition-colors ${
-                    isDark
-                      ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
-                      : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            {/* コンテンツ */}
-            <div className="p-6 space-y-4">
+      <Modal isOpen={!!requestNotification} onClose={() => dismissNotification(requestNotification?.id, 'request')} isDark={isDark}>
+        {requestNotification && (
+          <>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="text-3xl">📢</div>
               <div>
-                <h4 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                  {requestNotification.title}
-                </h4>
-                <p className={`text-sm whitespace-pre-wrap ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                  {requestNotification.content}
-                </p>
+                <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>新しいお願い</h3>
+                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>確認をお願いします</p>
               </div>
-
+            </div>
+            <div className="space-y-4">
+              <div>
+                <h4 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>{requestNotification.title}</h4>
+                <p className={`text-sm whitespace-pre-wrap ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{requestNotification.content}</p>
+              </div>
               {requestNotification.author && (
                 <div className={`flex items-center gap-2 text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                   <span>投稿者:</span>
@@ -1752,1102 +1565,43 @@ function App() {
                 </div>
               )}
             </div>
-
-            {/* アクション */}
-            <div className={`px-6 py-4 border-t flex gap-3 ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
-              <button
-                onClick={() => dismissNotification(requestNotification.id, 'request')}
-                className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
-                  isDark
-                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                後で
-              </button>
-              <button
-                onClick={() => {
-                  dismissNotification(requestNotification.id, 'request')
-                  setCurrentPage('announcements')
-                }}
-                className={`flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-200 ${
-                  isDark
-                    ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600'
-                    : 'bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700'
-                }`}
-              >
-                確認する
-              </button>
+            <div className="flex gap-3 mt-6">
+              <Button variant="secondary" size="lg" isDark={isDark} onClick={() => dismissNotification(requestNotification.id, 'request')} className="flex-1">後で</Button>
+              <Button variant="primary" size="lg" isDark={isDark} onClick={() => { dismissNotification(requestNotification.id, 'request'); setCurrentPage('announcements') }} className="flex-1">確認する</Button>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </Modal>
 
-      {/* フォローアップメッセージ通知ポップアップ */}
-      {followUpNotification && (
-        <>
-          {/* オーバーレイ */}
-          <div
-            onClick={() => dismissNotification(followUpNotification.id, 'followup')}
-            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm animate-fade-in"
-          />
-
-          {/* ポップアップ */}
-          <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-11/12 max-w-md backdrop-blur-xl rounded-3xl shadow-2xl border overflow-hidden animate-scale-in ${
-            isDark
-              ? 'bg-gray-900/95 border-gray-800/50'
-              : 'bg-white/95 border-gray-200/50'
-          }`}>
-            {/* ヘッダー */}
-            <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="text-3xl">💬</div>
-                  <div>
-                    <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                      新着メッセージ
-                    </h3>
-                    <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {followUpNotification.announcement?.title}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => dismissNotification(followUpNotification.id, 'followup')}
-                  className={`p-2 rounded-full transition-colors ${
-                    isDark
-                      ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
-                      : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+      <Modal isOpen={!!followUpNotification} onClose={() => dismissNotification(followUpNotification?.id, 'followup')} isDark={isDark}>
+        {followUpNotification && (
+          <>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="text-3xl">💬</div>
+              <div>
+                <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>新着メッセージ</h3>
+                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{followUpNotification.announcement?.title}</p>
               </div>
             </div>
-
-            {/* コンテンツ */}
-            <div className="p-6 space-y-4">
-              <div className={`p-4 rounded-xl ${
-                isDark ? 'bg-green-900/20 border border-green-700/30' : 'bg-green-50 border border-green-200'
-              }`}>
-                <p className={`text-sm whitespace-pre-wrap ${isDark ? 'text-green-100' : 'text-green-900'}`}>
-                  {followUpNotification.message}
-                </p>
+            <div className="space-y-4">
+              <div className={`p-4 rounded-xl ${isDark ? 'bg-green-900/20 border border-green-700/30' : 'bg-green-50 border border-green-200'}`}>
+                <p className={`text-sm whitespace-pre-wrap ${isDark ? 'text-green-100' : 'text-green-900'}`}>{followUpNotification.message}</p>
               </div>
-
               <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                {followUpNotification.target_type === 'all_participants' ? (
-                  <p>📢 全参加者へのメッセージ</p>
-                ) : (
-                  <p>🎯 特定の日程に投票した方へのメッセージ</p>
-                )}
+                {followUpNotification.target_type === 'all_participants' ? <p>全参加者へのメッセージ</p> : <p>特定の日程に投票した方へのメッセージ</p>}
               </div>
             </div>
-
-            {/* アクション */}
-            <div className={`px-6 py-4 border-t flex gap-3 ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
-              <button
-                onClick={() => dismissNotification(followUpNotification.id, 'followup')}
-                className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
-                  isDark
-                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                閉じる
-              </button>
-              <button
-                onClick={() => {
-                  dismissNotification(followUpNotification.id, 'followup')
-                  setCurrentPage('announcements')
-                }}
-                className={`flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-200 ${
-                  isDark
-                    ? 'bg-white text-gray-900 hover:bg-gray-100'
-                    : 'bg-gray-900 text-white hover:bg-gray-800'
-                }`}
-              >
-                イベントを見る
-              </button>
+            <div className="flex gap-3 mt-6">
+              <Button variant="secondary" size="lg" isDark={isDark} onClick={() => dismissNotification(followUpNotification.id, 'followup')} className="flex-1">閉じる</Button>
+              <Button variant="primary" size="lg" isDark={isDark} onClick={() => { dismissNotification(followUpNotification.id, 'followup'); setCurrentPage('announcements') }} className="flex-1">イベントを見る</Button>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </Modal>
 
-    </div>
-  )
-}
-
-function LoginScreen({ isDark }) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [name, setName] = useState('')
-  const [slackId, setSlackId] = useState('')
-  const [department, setDepartment] = useState('')
-  const [birthday, setBirthday] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [isSignUp, setIsSignUp] = useState(false)
-  const [showPasswordReset, setShowPasswordReset] = useState(false)
-  const [resetEmail, setResetEmail] = useState('')
-  const [resetHint, setResetHint] = useState('')
-  const [hintQuestion, setHintQuestion] = useState('')
-  const [resetLoading, setResetLoading] = useState(false)
-  const [resetSuccess, setResetSuccess] = useState(false)
-  const [resetError, setResetError] = useState('')
-  const [hintVerified, setHintVerified] = useState(false)
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [googleLoading, setGoogleLoading] = useState(false)
-
-  // Google OAuth ログイン（Calendar APIスコープ付き）
-  const handleGoogleLogin = async () => {
-    setGoogleLoading(true)
-    setError('')
-
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-          scopes: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events',
-        },
-      })
-
-      if (error) throw error
-    } catch (error) {
-      console.error('Google login error:', error)
-      setError(error.message || 'Googleログインに失敗しました')
-      setGoogleLoading(false)
-    }
-  }
-
-  const handleLogin = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-
-    if (error) {
-      setError(error.message)
-      setLoading(false)
-    }
-    // ログイン成功時はonAuthStateChangeが発火するのでloadingはそこで解除
-  }
-
-  const handleSignUp = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-
-    try {
-      // 1. Supabase Authでユーザー作成
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-      })
-
-      if (authError) throw authError
-
-      // authDataが正しく返されているか確認
-      if (!authData?.user?.id) {
-        throw new Error('ユーザー登録に失敗しました。もう一度お試しください。')
-      }
-
-      // 2. 既存のユーザーレコードをチェック
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('id')
-        .eq('id', authData.user.id)
-        .maybeSingle()
-
-      // SELECTエラーがある場合はスルー（RLSでブロックされている可能性）
-      // 3. ユーザーレコードが存在しない場合のみ挿入
-      if (!existingUser) {
-        const { error: insertError } = await supabase
-          .from('users')
-          .insert([
-            {
-              id: authData.user.id,
-              email: email,
-              name: name,
-              slack_user_id: slackId,
-              role: 'user',
-              department: department || null,
-              birthday: birthday || null,
-            },
-          ])
-
-        if (insertError) {
-          // 既に存在する場合のエラーは無視（別のタブで登録完了した可能性）
-          if (!insertError.message.includes('duplicate') && !insertError.message.includes('already exists')) {
-            throw insertError
-          }
-        }
-      }
-
-      alert('登録完了！ログインしてください。')
-      setIsSignUp(false)
-      setName('')
-      setSlackId('')
-      setDepartment('')
-      setBirthday('')
-    } catch (error) {
-      console.error('Sign up error:', error)
-      setError(error.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleHintVerification = async (e) => {
-    e.preventDefault()
-    setResetLoading(true)
-    setResetError('')
-    setHintVerified(false)
-
-    try {
-      // メールアドレスでユーザーの質問のみ取得（回答はサーバー側で検証）
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('id, email, password_hint')
-        .eq('email', resetEmail)
-        .single()
-
-      if (userError || !userData) {
-        throw new Error('このメールアドレスは登録されていません。')
-      }
-
-      if (!userData.password_hint) {
-        throw new Error('このアカウントにはパスワードヒントが設定されていません。設定ページでヒントを設定してください。')
-      }
-
-      // JSON形式のヒントから質問のみ取得
-      let hintData = userData.password_hint
-      if (typeof hintData === 'string') {
-        try {
-          hintData = JSON.parse(hintData)
-        } catch {
-          hintData = { question: '' }
-        }
-      }
-
-      if (!hintData || !hintData.question) {
-        throw new Error('このアカウントにはパスワードヒントが正しく設定されていません。設定ページでヒントを設定してください。')
-      }
-
-      // 質問を保存して表示（回答の検証はパスワード変更時にEdge Functionで実施）
-      setHintQuestion(hintData.question)
-      setHintVerified(true)
-      setResetError('')
-    } catch (error) {
-      console.error('❌ ヒント認証エラー:', error)
-      setResetError(error.message || '答えの確認に失敗しました')
-    } finally {
-      setResetLoading(false)
-    }
-  }
-
-  const handlePasswordChange = async (e) => {
-    e.preventDefault()
-    setResetLoading(true)
-    setResetError('')
-
-    if (newPassword !== confirmPassword) {
-      setResetError('パスワードが一致しません')
-      setResetLoading(false)
-      return
-    }
-
-    if (newPassword.length < 6) {
-      setResetError('パスワードは6文字以上である必要があります')
-      setResetLoading(false)
-      return
-    }
-
-    try {
-      // Edge Functionを呼び出してパスワードを変更
-      const { data, error } = await supabase.functions.invoke('reset-password-with-hint', {
-        body: {
-          email: resetEmail,
-          answer: resetHint, // 答えを送信
-          newPassword: newPassword,
-        },
-      })
-
-      if (error) {
-        throw new Error(error.message || 'パスワードの変更に失敗しました')
-      }
-
-      if (data?.error) {
-        throw new Error(data.error)
-      }
-
-      setResetSuccess(true)
-      setResetEmail('')
-      setResetHint('')
-      setHintQuestion('')
-      setNewPassword('')
-      setConfirmPassword('')
-      setHintVerified(false)
-    } catch (error) {
-      console.error('❌ パスワード変更エラー:', error)
-      setResetError(error.message || 'パスワードの変更に失敗しました')
-    } finally {
-      setResetLoading(false)
-    }
-  }
-
-  return (
-    <div className={`min-h-screen flex items-center justify-center px-4 transition-colors duration-500 ${
-      isDark
-        ? 'bg-gradient-to-br from-gray-900 via-black to-gray-900'
-        : 'bg-gradient-to-br from-gray-50 via-white to-gray-50'
-    }`}>
-      <div className="w-full max-w-md">
-        {/* ロゴ */}
-        <div className="text-center mb-12">
-          <img
-            src="/images/logo.png"
-            alt="FD GROUP"
-            className={`h-12 mx-auto mb-4 transition-all duration-500 ${
-              isDark ? '' : 'invert'
-            }`}
-          />
-          <p className={`font-light ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-            勤怠管理システム
-          </p>
-        </div>
-
-        {/* ログイン/サインアップカード */}
-        <div className={`backdrop-blur-xl rounded-3xl shadow-2xl border p-8 transition-colors duration-500 ${
-          isDark
-            ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
-            : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
-        }`}>
-          {/* タブ切り替え */}
-          <div className="flex gap-2 mb-6">
-            <button
-              onClick={() => setIsSignUp(false)}
-              className={`flex-1 py-2 rounded-lg font-medium transition-all ${
-                !isSignUp
-                  ? isDark
-                    ? 'bg-white text-gray-900'
-                    : 'bg-gray-900 text-white'
-                  : isDark
-                  ? 'text-gray-400 hover:text-white'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              ログイン
-            </button>
-            <button
-              onClick={() => setIsSignUp(true)}
-              className={`flex-1 py-2 rounded-lg font-medium transition-all ${
-                isSignUp
-                  ? isDark
-                    ? 'bg-white text-gray-900'
-                    : 'bg-gray-900 text-white'
-                  : isDark
-                  ? 'text-gray-400 hover:text-white'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              新規登録
-            </button>
-          </div>
-
-          <form onSubmit={isSignUp ? handleSignUp : handleLogin} className="space-y-6">
-            {isSignUp && (
-              <>
-                <div>
-                  <label className={`block text-sm font-medium mb-2 ${
-                    isDark ? 'text-gray-300' : 'text-gray-700'
-                  }`}>
-                    氏名
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
-                      isDark
-                        ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                        : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
-                    }`}
-                    placeholder="山田太郎"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className={`block text-sm font-medium mb-2 ${
-                    isDark ? 'text-gray-300' : 'text-gray-700'
-                  }`}>
-                    Slack ID
-                  </label>
-                  <input
-                    type="text"
-                    value={slackId}
-                    onChange={(e) => setSlackId(e.target.value)}
-                    className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
-                      isDark
-                        ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                        : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
-                    }`}
-                    placeholder="U01234ABCDE"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className={`block text-sm font-medium mb-2 ${
-                    isDark ? 'text-gray-300' : 'text-gray-700'
-                  }`}>
-                    部署（任意）
-                  </label>
-                  <input
-                    type="text"
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
-                    className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
-                      isDark
-                        ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                        : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
-                    }`}
-                    placeholder="開発部"
-                  />
-                </div>
-
-                <div>
-                  <label className={`block text-sm font-medium mb-2 ${
-                    isDark ? 'text-gray-300' : 'text-gray-700'
-                  }`}>
-                    誕生日（任意）
-                  </label>
-                  <input
-                    type="date"
-                    value={birthday}
-                    onChange={(e) => setBirthday(e.target.value)}
-                    className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
-                      isDark
-                        ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                        : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
-                    }`}
-                  />
-                </div>
-              </>
-            )}
-
-            <div>
-              <label className={`block text-sm font-medium mb-2 ${
-                isDark ? 'text-gray-300' : 'text-gray-700'
-              }`}>
-                メールアドレス
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
-                  isDark
-                    ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                    : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
-                }`}
-                placeholder="email@example.com"
-                required
-              />
-            </div>
-
-            <div>
-              <label className={`block text-sm font-medium mb-2 ${
-                isDark ? 'text-gray-300' : 'text-gray-700'
-              }`}>
-                パスワード
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
-                  isDark
-                    ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                    : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
-                }`}
-                placeholder="パスワード"
-                required
-              />
-            </div>
-
-            {error && (
-              <div className="text-sm text-red-500 bg-red-50 px-4 py-3 rounded-xl font-light">
-                {error}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className={`w-full font-medium py-3 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg ${
-                isDark
-                  ? 'bg-white text-gray-900 hover:bg-gray-100 shadow-white/20'
-                  : 'bg-gray-900 text-white hover:bg-gray-800 shadow-gray-900/20'
-              }`}
-            >
-              {loading ? (isSignUp ? '登録中...' : 'ログイン中...') : (isSignUp ? '新規登録' : 'ログイン')}
-            </button>
-
-            {/* パスワードを忘れた場合のリンク（ログインモードの時のみ表示） */}
-            {!isSignUp && (
-              <div className="text-center mt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPasswordReset(true)
-                    setResetEmail(email) // ログインフォームのメールアドレスを自動入力
-                    setResetError('')
-                    setResetSuccess(false)
-                  }}
-                  className={`text-sm font-light transition-colors ${
-                    isDark
-                      ? 'text-gray-400 hover:text-white'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  パスワードを忘れた場合
-                </button>
-              </div>
-            )}
-
-            {/* または セパレーター */}
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className={`w-full border-t ${isDark ? 'border-gray-700' : 'border-gray-200'}`}></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className={`px-4 ${isDark ? 'bg-gray-900 text-gray-400' : 'bg-white text-gray-500'}`}>
-                  または
-                </span>
-              </div>
-            </div>
-
-            {/* Google OAuth ボタン */}
-            <button
-              type="button"
-              onClick={handleGoogleLogin}
-              disabled={googleLoading}
-              className={`w-full font-medium py-3 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 border ${
-                isDark
-                  ? 'bg-gray-800/50 text-white border-gray-700 hover:bg-gray-700/50 hover:border-gray-600'
-                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400'
-              }`}
-            >
-              {/* Google アイコン */}
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path
-                  fill="#4285F4"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                />
-              </svg>
-              {googleLoading ? 'ログイン中...' : 'Googleでログイン'}
-            </button>
-
-            {/* Roots連携の説明（ログインモードのみ） */}
-            {!isSignUp && (
-              <p className={`text-xs text-center mt-3 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                💡 Rootsと同じGoogleアカウントでログインすると連携できます
-              </p>
-            )}
-          </form>
-
-          {/* パスワードリセットフォーム */}
-          {showPasswordReset && (
-            <div className={`mt-6 pt-6 border-t ${
-              isDark ? 'border-gray-800' : 'border-gray-200'
-            }`}>
-              <h3 className={`text-lg font-medium mb-4 ${
-                isDark ? 'text-white' : 'text-gray-900'
-              }`}>
-                パスワードリセット
-              </h3>
-              
-              {resetSuccess ? (
-                <div className={`p-4 rounded-xl ${
-                  isDark ? 'bg-green-900/20 border border-green-700/50' : 'bg-green-50 border border-green-200'
-                }`}>
-                  <p className={`text-sm ${
-                    isDark ? 'text-green-300' : 'text-green-800'
-                  }`}>
-                    ✅ パスワードを変更しました！新しいパスワードでログインしてください。
-                  </p>
-                  <button
-                    onClick={() => {
-                      setShowPasswordReset(false)
-                      setResetSuccess(false)
-                      setResetEmail('')
-                      setResetHint('')
-                      setNewPassword('')
-                      setConfirmPassword('')
-                      setHintVerified(false)
-                    }}
-                    className={`mt-3 text-sm font-medium ${
-                      isDark ? 'text-green-400 hover:text-green-300' : 'text-green-600 hover:text-green-700'
-                    }`}
-                  >
-                    閉じる
-                  </button>
-                </div>
-              ) : hintVerified ? (
-                <form onSubmit={handlePasswordChange} className="space-y-4">
-                  <div className={`p-4 rounded-xl ${
-                    isDark ? 'bg-blue-900/20 border border-blue-700/50' : 'bg-blue-50 border border-blue-200'
-                  }`}>
-                    <p className={`text-sm ${
-                      isDark ? 'text-blue-300' : 'text-blue-800'
-                    }`}>
-                      ✅ ヒントが確認できました。新しいパスワードを設定してください。
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className={`block text-sm font-medium mb-2 ${
-                      isDark ? 'text-gray-300' : 'text-gray-700'
-                    }`}>
-                      新しいパスワード
-                    </label>
-                    <input
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
-                        isDark
-                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                          : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
-                      }`}
-                      placeholder="6文字以上"
-                      required
-                      minLength={6}
-                    />
-                  </div>
-
-                  <div>
-                    <label className={`block text-sm font-medium mb-2 ${
-                      isDark ? 'text-gray-300' : 'text-gray-700'
-                    }`}>
-                      パスワード（確認）
-                    </label>
-                    <input
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
-                        isDark
-                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                          : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
-                      }`}
-                      placeholder="もう一度入力"
-                      required
-                      minLength={6}
-                    />
-                  </div>
-
-                  {resetError && (
-                    <div className={`text-sm px-4 py-3 rounded-xl font-light whitespace-pre-line ${
-                      isDark ? 'text-red-400 bg-red-900/20' : 'text-red-600 bg-red-50'
-                    }`}>
-                      {resetError}
-                    </div>
-                  )}
-
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setHintVerified(false)
-                        setNewPassword('')
-                        setConfirmPassword('')
-                        setResetError('')
-                      }}
-                      className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
-                        isDark
-                          ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      }`}
-                    >
-                      戻る
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={resetLoading}
-                      className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
-                        isDark
-                          ? 'bg-white text-gray-900 hover:bg-gray-100'
-                          : 'bg-gray-900 text-white hover:bg-gray-800'
-                      }`}
-                    >
-                      {resetLoading ? '変更中...' : 'パスワードを変更'}
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <form onSubmit={handleHintVerification} className="space-y-4">
-                  <div className={`p-4 rounded-xl mb-4 ${
-                    isDark ? 'bg-blue-900/20 border border-blue-700/50' : 'bg-blue-50 border border-blue-200'
-                  }`}>
-                    <p className={`text-sm ${
-                      isDark ? 'text-blue-300' : 'text-blue-800'
-                    }`}>
-                      💡 メールアドレスを入力すると、設定した質問が表示されます。
-                      <br />
-                      その質問の答えを入力してパスワードをリセットできます。
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className={`block text-sm font-medium mb-2 ${
-                      isDark ? 'text-gray-300' : 'text-gray-700'
-                    }`}>
-                      メールアドレス
-                    </label>
-                    <input
-                      type="email"
-                      value={resetEmail}
-                      onChange={async (e) => {
-                        setResetEmail(e.target.value)
-                        setResetHint('')
-                        setHintQuestion('')
-                        // メールアドレスが変更されたら、質問を取得
-                        if (e.target.value) {
-                          try {
-                            const { data: userData } = await supabase
-                              .from('users')
-                              .select('password_hint')
-                              .eq('email', e.target.value)
-                              .single()
-                            
-                            if (userData?.password_hint) {
-                              let hintData = userData.password_hint
-                              if (typeof hintData === 'string') {
-                                try {
-                                  hintData = JSON.parse(hintData)
-                                } catch {
-                                  hintData = { question: '' }
-                                }
-                              }
-                              if (hintData && hintData.question) {
-                                setHintQuestion(hintData.question)
-                              }
-                            }
-                          } catch (error) {
-                            // エラーは無視（ユーザーが見つからない場合など）
-                          }
-                        }
-                      }}
-                      className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
-                        isDark
-                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                          : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
-                      }`}
-                      placeholder="email@example.com"
-                      required
-                    />
-                  </div>
-
-                  {hintQuestion && (
-                    <div className={`p-4 rounded-xl border ${
-                      isDark ? 'bg-green-900/20 border-green-700/50' : 'bg-green-50 border-green-200'
-                    }`}>
-                      <div className={`text-sm font-medium mb-2 ${
-                        isDark ? 'text-green-300' : 'text-green-800'
-                      }`}>
-                        💡 質問
-                      </div>
-                      <div className={`text-base ${
-                        isDark ? 'text-green-200' : 'text-green-900'
-                      }`}>
-                        {hintQuestion}
-                      </div>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className={`block text-sm font-medium mb-2 ${
-                      isDark ? 'text-gray-300' : 'text-gray-700'
-                    }`}>
-                      {hintQuestion ? '答え' : 'パスワードヒント'}
-                    </label>
-                    <input
-                      type="text"
-                      value={resetHint}
-                      onChange={(e) => setResetHint(e.target.value)}
-                      className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
-                        isDark
-                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                          : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
-                      }`}
-                      placeholder={hintQuestion ? "質問の答えを入力" : "メールアドレスを入力してください"}
-                      required
-                      disabled={!hintQuestion}
-                    />
-                  </div>
-
-                  {resetError && (
-                    <div className={`text-sm px-4 py-3 rounded-xl font-light whitespace-pre-line ${
-                      isDark ? 'text-red-400 bg-red-900/20' : 'text-red-600 bg-red-50'
-                    }`}>
-                      {resetError}
-                    </div>
-                  )}
-
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowPasswordReset(false)
-                        setResetEmail('')
-                        setResetHint('')
-                        setResetError('')
-                        setHintVerified(false)
-                      }}
-                      className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
-                        isDark
-                          ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      }`}
-                    >
-                      キャンセル
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={resetLoading}
-                      className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
-                        isDark
-                          ? 'bg-white text-gray-900 hover:bg-gray-100'
-                          : 'bg-gray-900 text-white hover:bg-gray-800'
-                      }`}
-                    >
-                      {resetLoading ? '確認中...' : '確認'}
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function PasswordResetPage({ isDark, onResetComplete }) {
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
-
-  useEffect(() => {
-    // URLハッシュからトークンを取得
-    const hashParams = new URLSearchParams(window.location.hash.substring(1))
-    const type = hashParams.get('type')
-    const accessToken = hashParams.get('access_token')
-
-    if (type === 'recovery' && accessToken) {
-      // トークンが有効か確認
-      // Supabaseは自動的にセッションを設定するので、ここでは何もしない
-    } else {
-      // トークンがない場合はエラー
-      setError('無効なリンクです。パスワードリセットメールから再度アクセスしてください。')
-    }
-  }, [])
-
-  const handleResetPassword = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-
-    if (password !== confirmPassword) {
-      setError('パスワードが一致しません')
-      setLoading(false)
-      return
-    }
-
-    if (password.length < 6) {
-      setError('パスワードは6文字以上である必要があります')
-      setLoading(false)
-      return
-    }
-
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password: password
-      })
-
-      if (error) throw error
-
-      setSuccess(true)
-      // 3秒後にログイン画面に戻る
-      setTimeout(() => {
-        window.location.hash = ''
-        onResetComplete()
-      }, 3000)
-    } catch (error) {
-      console.error('Password reset error:', error)
-      setError(error.message || 'パスワードのリセットに失敗しました')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className={`min-h-screen flex items-center justify-center px-4 transition-colors duration-500 ${
-      isDark
-        ? 'bg-gradient-to-br from-gray-900 via-black to-gray-900'
-        : 'bg-gradient-to-br from-gray-50 via-white to-gray-50'
-    }`}>
-      <div className="w-full max-w-md">
-        {/* ロゴ */}
-        <div className="text-center mb-12">
-          <img
-            src="/images/logo.png"
-            alt="FD GROUP"
-            className={`h-12 mx-auto mb-4 transition-all duration-500 ${
-              isDark ? '' : 'invert'
-            }`}
-          />
-          <p className={`font-light ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-            パスワードリセット
-          </p>
-        </div>
-
-        {/* パスワードリセットカード */}
-        <div className={`backdrop-blur-xl rounded-3xl shadow-2xl border p-8 transition-colors duration-500 ${
-          isDark
-            ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
-            : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
-        }`}>
-          {success ? (
-            <div className="text-center space-y-4">
-              <div className="text-4xl mb-4">✅</div>
-              <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                パスワードをリセットしました
-              </h2>
-              <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                新しいパスワードでログインできます。
-                <br />
-                3秒後にログイン画面に戻ります...
-              </p>
-            </div>
-          ) : (
-            <form onSubmit={handleResetPassword} className="space-y-6">
-              <h2 className={`text-xl font-bold mb-6 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                新しいパスワードを設定
-              </h2>
-
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${
-                  isDark ? 'text-gray-300' : 'text-gray-700'
-                }`}>
-                  新しいパスワード
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
-                    isDark
-                      ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                      : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
-                  }`}
-                  placeholder="6文字以上"
-                  required
-                  minLength={6}
-                />
-              </div>
-
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${
-                  isDark ? 'text-gray-300' : 'text-gray-700'
-                }`}>
-                  パスワード（確認）
-                </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none font-light ${
-                    isDark
-                      ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                      : 'bg-gray-50/50 border-gray-200 text-gray-900 focus:border-gray-400'
-                  }`}
-                  placeholder="パスワードを再入力"
-                  required
-                  minLength={6}
-                />
-              </div>
-
-              {error && (
-                <div className={`text-sm px-4 py-3 rounded-xl font-light ${
-                  isDark ? 'text-red-400 bg-red-900/20' : 'text-red-600 bg-red-50'
-                }`}>
-                  {error}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className={`w-full font-medium py-3 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg ${
-                  isDark
-                    ? 'bg-white text-gray-900 hover:bg-gray-100 shadow-white/20'
-                    : 'bg-gray-900 text-white hover:bg-gray-800 shadow-gray-900/20'
-                }`}
-              >
-                {loading ? '設定中...' : 'パスワードを設定'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  window.location.hash = ''
-                  onResetComplete()
-                }}
-                className={`w-full text-sm font-light py-2 transition-colors ${
-                  isDark
-                    ? 'text-gray-400 hover:text-white'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                ログイン画面に戻る
-              </button>
-            </form>
-          )}
-        </div>
-      </div>
     </div>
   )
 }
 
 export default App
+// LoginScreen and PasswordResetPage extracted to src/features/auth/components/
