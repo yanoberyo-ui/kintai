@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../utils/supabase'
 import { generateSalt, hashHintAnswer } from '../../../utils/crypto'
+import { GlassCard, Button, Input, PageHeader } from '../../../components/ui'
 import ProfileEdit from './ProfileEdit'
 
 export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) {
@@ -215,36 +216,27 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
   return (
     <div className="max-w-4xl mx-auto space-y-6 h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)] overflow-y-auto">
       {/* ページタイトル */}
-      <div>
-        <h1 className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-          設定
-        </h1>
-        <p className={`mt-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-          アカウント情報とアプリケーションの設定を管理します
-        </p>
-      </div>
+      <PageHeader
+        isDark={isDark}
+        title="設定"
+        subtitle="アカウント情報とアプリケーションの設定を管理します"
+      />
 
       {/* アカウント情報 */}
-      <div className={`backdrop-blur-xl rounded-3xl shadow-lg border p-8 transition-colors duration-500 ${
-        isDark
-          ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
-          : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
-      }`}>
+      <GlassCard isDark={isDark} padding="p-8">
         <div className="flex items-center justify-between mb-6">
           <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
             アカウント情報
           </h2>
           {!isEditing && (
-            <button
+            <Button
+              isDark={isDark}
+              variant="primary"
+              size="md"
               onClick={() => setIsEditing(true)}
-              className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
-                isDark
-                  ? 'bg-white text-gray-900 hover:bg-gray-100'
-                  : 'bg-gray-900 text-white hover:bg-gray-800'
-              }`}
             >
               ✏️ 編集
-            </button>
+            </Button>
           )}
         </div>
 
@@ -257,6 +249,7 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
                 isDark ? 'bg-gradient-to-br from-gray-700 to-gray-600' : 'bg-gradient-to-br from-gray-800 to-gray-700'
               }`}
               title="プロフィール画像を変更"
+              aria-label="プロフィール画像を変更"
             >
               {userData?.avatar_url ? (
                 <img src={userData.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
@@ -278,163 +271,145 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* 名前 */}
             <div>
-              <label className={`block text-sm font-medium mb-2 ${
-                isDark ? 'text-gray-300' : 'text-gray-700'
-              }`}>
-                氏名 <span className="text-red-500">*</span>
-              </label>
               {isEditing ? (
-                <input
+                <Input
+                  isDark={isDark}
+                  label={<>氏名 <span className="text-red-500">*</span></>}
+                  id="settings-name"
                   type="text"
                   value={userData.name}
                   onChange={(e) => setUserData({ ...userData, name: e.target.value })}
                   required
-                  className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
-                    isDark
-                      ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                      : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
-                  }`}
                   placeholder="山田太郎"
                 />
               ) : (
-                <div className={`px-4 py-3 rounded-xl ${
-                  isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
-                }`}>
-                  {userData?.name || '-'}
-                </div>
+                <>
+                  <label className={`block text-sm font-medium mb-2 ${
+                    isDark ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    氏名 <span className="text-red-500">*</span>
+                  </label>
+                  <div className={`px-4 py-3 rounded-xl ${
+                    isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
+                  }`}>
+                    {userData?.name || '-'}
+                  </div>
+                </>
               )}
             </div>
 
             {/* Slack ID */}
             <div>
-              <label className={`block text-sm font-medium mb-2 ${
-                isDark ? 'text-gray-300' : 'text-gray-700'
-              }`}>
-                Slack ID
-              </label>
               {isEditing ? (
-                <input
+                <Input
+                  isDark={isDark}
+                  label="Slack ID"
+                  id="settings-slack-id"
                   type="text"
                   value={userData.slack_user_id}
                   onChange={(e) => setUserData({ ...userData, slack_user_id: e.target.value })}
-                  className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
-                    isDark
-                      ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                      : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
-                  }`}
                   placeholder="U01234ABCDE"
                 />
               ) : (
-                <div className={`px-4 py-3 rounded-xl ${
-                  isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
-                }`}>
-                  {userData?.slack_user_id || '-'}
-                </div>
+                <>
+                  <label className={`block text-sm font-medium mb-2 ${
+                    isDark ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    Slack ID
+                  </label>
+                  <div className={`px-4 py-3 rounded-xl ${
+                    isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
+                  }`}>
+                    {userData?.slack_user_id || '-'}
+                  </div>
+                </>
               )}
             </div>
 
             {/* 部署 */}
             <div>
-              <label className={`block text-sm font-medium mb-2 ${
-                isDark ? 'text-gray-300' : 'text-gray-700'
-              }`}>
-                部署
-              </label>
               {isEditing ? (
-                <input
+                <Input
+                  isDark={isDark}
+                  label="部署"
+                  id="settings-department"
                   type="text"
                   value={userData.department}
                   onChange={(e) => setUserData({ ...userData, department: e.target.value })}
-                  className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
-                    isDark
-                      ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                      : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
-                  }`}
                   placeholder="開発部"
                 />
               ) : (
-                <div className={`px-4 py-3 rounded-xl ${
-                  isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
-                }`}>
-                  {userData?.department || '-'}
-                </div>
+                <>
+                  <label className={`block text-sm font-medium mb-2 ${
+                    isDark ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    部署
+                  </label>
+                  <div className={`px-4 py-3 rounded-xl ${
+                    isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
+                  }`}>
+                    {userData?.department || '-'}
+                  </div>
+                </>
               )}
             </div>
 
             {/* 誕生日 */}
             <div>
-              <label className={`block text-sm font-medium mb-2 ${
-                isDark ? 'text-gray-300' : 'text-gray-700'
-              }`}>
-                誕生日
-              </label>
               {isEditing ? (
-                <input
+                <Input
+                  isDark={isDark}
+                  label="誕生日"
+                  id="settings-birthday"
                   type="date"
                   value={userData.birthday}
                   onChange={(e) => setUserData({ ...userData, birthday: e.target.value })}
-                  className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
-                    isDark
-                      ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                      : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
-                  }`}
                 />
               ) : (
-                <div className={`px-4 py-3 rounded-xl ${
-                  isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
-                }`}>
-                  {userData?.birthday || '-'}
-                </div>
+                <>
+                  <label className={`block text-sm font-medium mb-2 ${
+                    isDark ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    誕生日
+                  </label>
+                  <div className={`px-4 py-3 rounded-xl ${
+                    isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
+                  }`}>
+                    {userData?.birthday || '-'}
+                  </div>
+                </>
               )}
             </div>
           </div>
 
           {/* パスワードヒント */}
           <div className="md:col-span-2">
-            <label className={`block text-sm font-medium mb-2 ${
-              isDark ? 'text-gray-300' : 'text-gray-700'
-            }`}>
-              パスワードヒント（質問と答え）
-            </label>
             {isEditing ? (
               <>
+                <label className={`block text-sm font-medium mb-2 ${
+                  isDark ? 'text-gray-300' : 'text-gray-700'
+                }`}>
+                  パスワードヒント（質問と答え）
+                </label>
                 <div className="space-y-3">
-                  <div>
-                    <label className={`block text-xs font-medium mb-1 ${
-                      isDark ? 'text-gray-400' : 'text-gray-600'
-                    }`}>
-                      質問
-                    </label>
-                    <input
-                      type="text"
-                      value={hintQuestion}
-                      onChange={(e) => setHintQuestion(e.target.value)}
-                      className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
-                        isDark
-                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                          : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
-                      }`}
-                      placeholder="例: ちっちゃい頃の車は？"
-                    />
-                  </div>
-                  <div>
-                    <label className={`block text-xs font-medium mb-1 ${
-                      isDark ? 'text-gray-400' : 'text-gray-600'
-                    }`}>
-                      答え
-                    </label>
-                    <input
-                      type="text"
-                      value={hintAnswer}
-                      onChange={(e) => setHintAnswer(e.target.value)}
-                      className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
-                        isDark
-                          ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                          : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
-                      }`}
-                      placeholder="例: ハイエース"
-                    />
-                  </div>
+                  <Input
+                    isDark={isDark}
+                    label="質問"
+                    id="settings-hint-question"
+                    type="text"
+                    value={hintQuestion}
+                    onChange={(e) => setHintQuestion(e.target.value)}
+                    placeholder="例: ちっちゃい頃の車は？"
+                  />
+                  <Input
+                    isDark={isDark}
+                    label="答え"
+                    id="settings-hint-answer"
+                    type="text"
+                    value={hintAnswer}
+                    onChange={(e) => setHintAnswer(e.target.value)}
+                    placeholder="例: ハイエース"
+                  />
                 </div>
                 <p className={`mt-2 text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                   💡 パスワードを忘れた場合、この質問と答えでパスワードをリセットできます。
@@ -443,28 +418,35 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
                 </p>
               </>
             ) : (
-              <div className={`px-4 py-3 rounded-xl ${
-                isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
-              }`}>
-                {userData?.password_hint && typeof userData.password_hint === 'object' ? (
-                  <div className="space-y-2">
-                    <div>
-                      <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                        質問: 
-                      </span>
-                      <span className="ml-2">{userData.password_hint.question || '-'}</span>
+              <>
+                <label className={`block text-sm font-medium mb-2 ${
+                  isDark ? 'text-gray-300' : 'text-gray-700'
+                }`}>
+                  パスワードヒント（質問と答え）
+                </label>
+                <div className={`px-4 py-3 rounded-xl ${
+                  isDark ? 'bg-gray-800/50 text-white' : 'bg-gray-50 text-gray-900'
+                }`}>
+                  {userData?.password_hint && typeof userData.password_hint === 'object' ? (
+                    <div className="space-y-2">
+                      <div>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                          質問:
+                        </span>
+                        <span className="ml-2">{userData.password_hint.question || '-'}</span>
+                      </div>
+                      <div>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                          答え:
+                        </span>
+                        <span className="ml-2 opacity-60">設定済み（セキュリティのため非表示）</span>
+                      </div>
                     </div>
-                    <div>
-                      <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                        答え: 
-                      </span>
-                      <span className="ml-2 opacity-60">設定済み（セキュリティのため非表示）</span>
-                    </div>
-                  </div>
-                ) : (
-                  <span className="opacity-40">未設定</span>
-                )}
-              </div>
+                  ) : (
+                    <span className="opacity-40">未設定</span>
+                  )}
+                </div>
+              </>
             )}
           </div>
 
@@ -482,44 +464,34 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
           {/* 保存・キャンセルボタン */}
           {isEditing && (
             <div className="flex gap-3">
-              <button
+              <Button
+                isDark={isDark}
+                variant="primary"
+                size="full"
                 type="submit"
                 disabled={saving}
-                className={`flex-1 py-3 rounded-xl font-medium transition-all duration-200 ${
-                  saving
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : isDark
-                    ? 'bg-white text-gray-900 hover:bg-gray-100'
-                    : 'bg-gray-900 text-white hover:bg-gray-800'
-                }`}
               >
                 {saving ? '保存中...' : '💾 保存'}
-              </button>
-              <button
+              </Button>
+              <Button
+                isDark={isDark}
+                variant="secondary"
+                size="lg"
                 type="button"
                 onClick={() => {
                   setIsEditing(false)
                   loadUserData()
                 }}
-                className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
-                  isDark
-                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
               >
                 キャンセル
-              </button>
+              </Button>
             </div>
           )}
         </form>
-      </div>
+      </GlassCard>
 
       {/* 表示設定 */}
-      <div className={`backdrop-blur-xl rounded-3xl shadow-lg border p-8 transition-colors duration-500 ${
-        isDark
-          ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
-          : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
-      }`}>
+      <GlassCard isDark={isDark} padding="p-8">
         <h2 className={`text-xl font-bold mb-6 ${isDark ? 'text-white' : 'text-gray-900'}`}>
           表示設定
         </h2>
@@ -537,6 +509,7 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
             </div>
             <button
               onClick={() => setIsDark(!isDark)}
+              aria-label="ダークモードを切り替え"
               className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
                 isDark ? 'bg-white' : 'bg-gray-900'
               }`}
@@ -561,14 +534,10 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
             </div>
           </div>
         </div>
-      </div>
+      </GlassCard>
 
       {/* パスワード変更 */}
-      <div className={`backdrop-blur-xl rounded-3xl shadow-lg border p-8 transition-colors duration-500 ${
-        isDark
-          ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
-          : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
-      }`}>
+      <GlassCard isDark={isDark} padding="p-8">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
@@ -581,27 +550,23 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
           {!showPasswordChange && (
             <div className="flex gap-2">
               {!userData.password_hint && (
-                <button
+                <Button
+                  isDark={isDark}
+                  variant="blue"
+                  size="md"
                   onClick={() => setShowHintSetting(true)}
-                  className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
-                    isDark
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
-                      : 'bg-blue-500 text-white hover:bg-blue-600'
-                  }`}
                 >
                   💡 ヒントを設定
-                </button>
+                </Button>
               )}
-              <button
+              <Button
+                isDark={isDark}
+                variant="primary"
+                size="md"
                 onClick={() => setShowPasswordChange(true)}
-                className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
-                  isDark
-                    ? 'bg-white text-gray-900 hover:bg-gray-100'
-                    : 'bg-gray-900 text-white hover:bg-gray-800'
-                }`}
               >
                 🔒 パスワードを変更
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -609,8 +574,8 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
         {/* パスワードヒント設定フォーム */}
         {showHintSetting && (
           <div className={`mb-6 p-4 rounded-xl border ${
-            isDark 
-              ? 'bg-gray-800/50 border-gray-700' 
+            isDark
+              ? 'bg-gray-800/50 border-gray-700'
               : 'bg-gray-50 border-gray-200'
           }`}>
             <h3 className={`text-lg font-medium mb-3 ${
@@ -626,69 +591,48 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
               例: 質問「ちっちゃい頃の車は？」→ 答え「ハイエース」
             </p>
             <div className="space-y-3">
-              <div>
-                <label className={`block text-xs font-medium mb-1 ${
-                  isDark ? 'text-gray-400' : 'text-gray-600'
-                }`}>
-                  質問
-                </label>
-                <input
-                  type="text"
-                  value={tempHintQuestion}
-                  onChange={(e) => setTempHintQuestion(e.target.value)}
-                  className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
-                    isDark
-                      ? 'bg-gray-700/50 border-gray-600 text-white focus:border-gray-500'
-                      : 'bg-white border-gray-300 text-gray-900 focus:border-gray-400'
-                  }`}
-                  placeholder="例: ちっちゃい頃の車は？"
-                />
-              </div>
-              <div>
-                <label className={`block text-xs font-medium mb-1 ${
-                  isDark ? 'text-gray-400' : 'text-gray-600'
-                }`}>
-                  答え
-                </label>
-                <input
-                  type="text"
-                  value={tempHintAnswer}
-                  onChange={(e) => setTempHintAnswer(e.target.value)}
-                  className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
-                    isDark
-                      ? 'bg-gray-700/50 border-gray-600 text-white focus:border-gray-500'
-                      : 'bg-white border-gray-300 text-gray-900 focus:border-gray-400'
-                  }`}
-                  placeholder="例: ハイエース"
-                />
-              </div>
+              <Input
+                isDark={isDark}
+                label="質問"
+                id="hint-setting-question"
+                type="text"
+                value={tempHintQuestion}
+                onChange={(e) => setTempHintQuestion(e.target.value)}
+                placeholder="例: ちっちゃい頃の車は？"
+              />
+              <Input
+                isDark={isDark}
+                label="答え"
+                id="hint-setting-answer"
+                type="text"
+                value={tempHintAnswer}
+                onChange={(e) => setTempHintAnswer(e.target.value)}
+                placeholder="例: ハイエース"
+              />
               <div className="flex gap-2">
-                <button
+                <Button
+                  isDark={isDark}
+                  variant="secondary"
+                  size="md"
                   onClick={() => {
                     setShowHintSetting(false)
                     setTempHintQuestion('')
                     setTempHintAnswer('')
                     setPasswordMessage('')
                   }}
-                  className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
-                    isDark
-                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
                 >
                   キャンセル
-                </button>
-                <button
+                </Button>
+                <Button
+                  isDark={isDark}
+                  variant="primary"
+                  size="md"
+                  className="flex-1"
                   onClick={handleHintSave}
                   disabled={hintSaving}
-                  className={`flex-1 px-4 py-2 rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
-                    isDark
-                      ? 'bg-white text-gray-900 hover:bg-gray-100'
-                      : 'bg-gray-900 text-white hover:bg-gray-800'
-                  }`}
                 >
                   {hintSaving ? '保存中...' : '💾 保存'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -710,8 +654,8 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
             {/* パスワードヒント表示 */}
             {userData.password_hint ? (
               <div className={`p-4 rounded-xl border ${
-                isDark 
-                  ? 'bg-blue-900/20 border-blue-700/50' 
+                isDark
+                  ? 'bg-blue-900/20 border-blue-700/50'
                   : 'bg-blue-50 border-blue-200'
               }`}>
                 <div className={`text-sm font-medium mb-1 ${
@@ -732,8 +676,8 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
               </div>
             ) : (
               <div className={`p-4 rounded-xl border ${
-                isDark 
-                  ? 'bg-yellow-900/20 border-yellow-700/50' 
+                isDark
+                  ? 'bg-yellow-900/20 border-yellow-700/50'
                   : 'bg-yellow-50 border-yellow-200'
               }`}>
                 <div className={`text-sm font-medium mb-1 ${
@@ -763,67 +707,40 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
               </div>
             )}
 
-            <div>
-              <label className={`block text-sm font-medium mb-2 ${
-                isDark ? 'text-gray-300' : 'text-gray-700'
-              }`}>
-                現在のパスワード
-              </label>
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
-                  isDark
-                    ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                    : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
-                }`}
-                placeholder="現在のパスワードを入力"
-                required
-              />
-            </div>
+            <Input
+              isDark={isDark}
+              label="現在のパスワード"
+              id="settings-current-password"
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="現在のパスワードを入力"
+              required
+            />
 
-            <div>
-              <label className={`block text-sm font-medium mb-2 ${
-                isDark ? 'text-gray-300' : 'text-gray-700'
-              }`}>
-                新しいパスワード
-              </label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
-                  isDark
-                    ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                    : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
-                }`}
-                placeholder="6文字以上"
-                required
-                minLength={6}
-              />
-            </div>
+            <Input
+              isDark={isDark}
+              label="新しいパスワード"
+              id="settings-new-password"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="6文字以上"
+              required
+              minLength={6}
+            />
 
-            <div>
-              <label className={`block text-sm font-medium mb-2 ${
-                isDark ? 'text-gray-300' : 'text-gray-700'
-              }`}>
-                新しいパスワード（確認）
-              </label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className={`w-full px-4 py-3 rounded-xl border focus:ring-0 transition-colors outline-none ${
-                  isDark
-                    ? 'bg-gray-800/50 border-gray-700 text-white focus:border-gray-600'
-                    : 'bg-white border-gray-200 text-gray-900 focus:border-gray-400'
-                }`}
-                placeholder="もう一度入力"
-                required
-                minLength={6}
-              />
-            </div>
+            <Input
+              isDark={isDark}
+              label="新しいパスワード（確認）"
+              id="settings-confirm-password"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="もう一度入力"
+              required
+              minLength={6}
+            />
 
             {passwordMessage && (
               <div className={`p-4 rounded-xl ${
@@ -836,7 +753,10 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
             )}
 
             <div className="flex gap-3">
-              <button
+              <Button
+                isDark={isDark}
+                variant="secondary"
+                size="lg"
                 type="button"
                 onClick={() => {
                   setShowPasswordChange(false)
@@ -845,53 +765,38 @@ export default function SettingsPage({ user, isDark, setIsDark, onUserUpdate }) 
                   setConfirmPassword('')
                   setPasswordMessage('')
                 }}
-                className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
-                  isDark
-                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
               >
                 キャンセル
-              </button>
-              <button
+              </Button>
+              <Button
+                isDark={isDark}
+                variant="primary"
+                size="full"
                 type="submit"
                 disabled={passwordChanging}
-                className={`flex-1 py-3 rounded-xl font-medium transition-all duration-200 ${
-                  passwordChanging
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : isDark
-                    ? 'bg-white text-gray-900 hover:bg-gray-100'
-                    : 'bg-gray-900 text-white hover:bg-gray-800'
-                }`}
               >
                 {passwordChanging ? '変更中...' : '💾 パスワードを変更'}
-              </button>
+              </Button>
             </div>
           </form>
         )}
-      </div>
+      </GlassCard>
 
       {/* 危険な操作 */}
-      <div className={`backdrop-blur-xl rounded-3xl shadow-lg border p-8 transition-colors duration-500 ${
-        isDark
-          ? 'bg-gray-900/80 shadow-black/50 border-red-900/50'
-          : 'bg-white/80 shadow-gray-200/50 border-red-200/50'
-      }`}>
+      <GlassCard isDark={isDark} padding="p-8" className={isDark ? 'border-red-900/50' : 'border-red-200/50'}>
         <h2 className={`text-xl font-bold mb-6 ${isDark ? 'text-red-400' : 'text-red-600'}`}>
           危険な操作
         </h2>
 
-        <button
+        <Button
+          isDark={isDark}
+          variant="danger"
+          size="lg"
           onClick={() => supabase.auth.signOut()}
-          className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
-            isDark
-              ? 'bg-red-900/50 text-red-300 hover:bg-red-900/70 border border-red-800'
-              : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
-          }`}
         >
           ログアウト
-        </button>
-      </div>
+        </Button>
+      </GlassCard>
 
       {/* プロフィール編集モーダル */}
       {showProfileEdit && (

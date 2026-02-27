@@ -31,6 +31,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { supabase } from '../../../utils/supabase'
 import { checkTodoStreakRisk } from '../../../features/pomodoro/utils/streaks'
+import { GlassCard, Button, PageHeader, Badge } from '../../../components/ui'
 
 export default function TodoList({ user, isDark, currentUser = null }) {
   const [todoList, setTodoList] = useState(null)
@@ -613,15 +614,11 @@ export default function TodoList({ user, isDark, currentUser = null }) {
 
   if (loading) {
     return (
-      <div className={`backdrop-blur-xl rounded-3xl shadow-lg border p-8 transition-colors duration-500 ${
-        isDark
-          ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
-          : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
-      }`}>
+      <GlassCard isDark={isDark} padding="p-8">
         <div className={`animate-pulse ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
           読み込み中...
         </div>
-      </div>
+      </GlassCard>
     )
   }
 
@@ -631,35 +628,21 @@ export default function TodoList({ user, isDark, currentUser = null }) {
       {showConfetti && <ConfettiAnimation />}
 
       {/* 進捗バーセクション */}
-      <div className={`backdrop-blur-xl rounded-3xl shadow-lg border overflow-hidden transition-colors duration-500 relative mb-6 ${
-        isDark
-          ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
-          : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
-      }`}>
-        <div className="p-8">
+      <GlassCard isDark={isDark} padding="p-8" className="overflow-hidden relative mb-6">
           {/* タイトルと進捗バッジ */}
-          <div className="flex items-center justify-between mb-6">
-            <h2 className={`text-2xl font-bold tracking-tight ${
-              isDark ? 'text-white' : 'text-gray-900'
-            }`}>
-              {new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/')}のToDo
-            </h2>
-            <div className={`px-4 py-2 rounded-full font-bold text-lg ${
-              progress >= 70
-                ? isDark
-                  ? 'bg-white text-gray-900'
-                  : 'bg-gray-900 text-white'
-                : progress >= 40
-                ? isDark
-                  ? 'bg-gray-300 text-gray-900'
-                  : 'bg-gray-700 text-white'
-                : isDark
-                ? 'bg-gray-700 text-gray-300'
-                : 'bg-gray-300 text-gray-700'
-            }`}>
-              {progress}%
-            </div>
-          </div>
+          <PageHeader
+            isDark={isDark}
+            title={`${new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/')}のToDo`}
+            action={
+              <Badge
+                isDark={isDark}
+                variant={progress >= 70 ? 'success' : progress >= 40 ? 'warning' : 'default'}
+                className="px-4 py-2 text-lg font-bold"
+              >
+                {progress}%
+              </Badge>
+            }
+          />
 
           {/* プログレスバー */}
           <div>
@@ -682,17 +665,19 @@ export default function TodoList({ user, isDark, currentUser = null }) {
               />
             </div>
           </div>
-        </div>
-      </div>
+      </GlassCard>
 
       {/* ストリーク警告 */}
       {streakWarning && (
-        <div className={`backdrop-blur-xl rounded-3xl shadow-lg border overflow-hidden transition-colors duration-500 relative mb-6 animate-pulse ${
-          isDark
-            ? 'bg-yellow-900/20 border-yellow-700/50 shadow-yellow-900/20'
-            : 'bg-yellow-50 border-yellow-200/50 shadow-yellow-200/20'
-        }`}>
-          <div className="p-4 md:p-6">
+        <GlassCard
+          isDark={isDark}
+          padding="p-4 md:p-6"
+          className={`overflow-hidden relative mb-6 animate-pulse ${
+            isDark
+              ? 'bg-yellow-900/20 border-yellow-700/50 shadow-yellow-900/20'
+              : 'bg-yellow-50 border-yellow-200/50 shadow-yellow-200/20'
+          }`}
+        >
             <div className="flex items-start gap-3">
               <div className="text-2xl md:text-3xl flex-shrink-0">⚠️</div>
               <div className="flex-1">
@@ -702,39 +687,35 @@ export default function TodoList({ user, isDark, currentUser = null }) {
                   {streakWarning.message}
                 </p>
               </div>
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
+                isDark={isDark}
                 onClick={() => setStreakWarning(null)}
-                className={`flex-shrink-0 p-1 rounded-full transition-colors ${
+                aria-label="警告を閉じる"
+                className={`flex-shrink-0 p-1 ${
                   isDark
-                    ? 'hover:bg-yellow-900/30 text-yellow-300'
-                    : 'hover:bg-yellow-100 text-yellow-700'
+                    ? 'text-yellow-300 hover:bg-yellow-900/30'
+                    : 'text-yellow-700 hover:bg-yellow-100'
                 }`}
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
+        </GlassCard>
       )}
 
       {/* 定常TODOセクション */}
-      <div className={`backdrop-blur-xl rounded-3xl shadow-lg border overflow-hidden transition-colors duration-500 relative mb-6 ${
-        isDark
-          ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
-          : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
-      }`}>
+      <GlassCard isDark={isDark} padding="p-0" className="overflow-hidden relative mb-6">
         {/* ヘッダー */}
         <div className="p-8 pb-6">
-          <h2 className={`text-2xl font-bold tracking-tight mb-4 ${
-            isDark ? 'text-white' : 'text-gray-900'
-          }`}>
-            定常ToDo
-          </h2>
-          <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-            毎日繰り返すタスク（完了状態は毎日リセットされます）
-          </p>
+          <PageHeader
+            isDark={isDark}
+            title="定常ToDo"
+            subtitle="毎日繰り返すタスク（完了状態は毎日リセットされます）"
+          />
         </div>
 
         {/* 定常タスクリスト */}
@@ -835,24 +816,17 @@ export default function TodoList({ user, isDark, currentUser = null }) {
             </SortableContext>
           </DndContext>
         </div>
-      </div>
+      </GlassCard>
 
       {/* 通常のTODOセクション */}
-      <div className={`backdrop-blur-xl rounded-3xl shadow-lg border overflow-hidden transition-colors duration-500 relative ${
-        isDark
-          ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
-          : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
-      }`}>
+      <GlassCard isDark={isDark} padding="p-0" className="overflow-hidden relative">
         {/* ヘッダー */}
         <div className="p-8 pb-6">
-          <h2 className={`text-2xl font-bold tracking-tight mb-4 ${
-            isDark ? 'text-white' : 'text-gray-900'
-          }`}>
-            本日のToDo
-          </h2>
-          <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-            今日やるべきタスク
-          </p>
+          <PageHeader
+            isDark={isDark}
+            title="本日のToDo"
+            subtitle="今日やるべきタスク"
+          />
         </div>
 
         {/* タスクリスト */}
@@ -937,25 +911,24 @@ export default function TodoList({ user, isDark, currentUser = null }) {
             }}
           />
           ) : (
-            <button
+            <Button
+              variant="ghost"
+              size="full"
+              isDark={isDark}
               onClick={() => setShowNewTaskInput(true)}
-              className={`w-full py-3 mt-2 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 ${
-                isDark
-                  ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/30'
-                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100/30'
-              }`}
+              className="mt-2 flex items-center justify-center gap-2"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
               <span className="text-sm font-medium">タスクを追加</span>
-            </button>
+            </Button>
           )}
             </div>
           </SortableContext>
         </DndContext>
         </div>
-      </div>
+      </GlassCard>
     </>
   )
 }
@@ -1466,6 +1439,7 @@ const TaskItem = React.forwardRef(({ item, isDark, onToggle, onDelete, onBackspa
           {...(canEdit && dragHandleProps ? dragHandleProps : {})}
           onClick={handleToggle}
           disabled={!canEdit}
+          aria-label={item.is_completed ? 'タスクを未完了に戻す' : 'タスクを完了にする'}
           title={isAddedByOther && addedByUser ? `${addedByUser.name || addedByUser.email}さんが追加` : undefined}
           className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm overflow-hidden relative ${
             canEdit ? 'cursor-grab active:cursor-grabbing hover:scale-110' : 'cursor-not-allowed opacity-80'

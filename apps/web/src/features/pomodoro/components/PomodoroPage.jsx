@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { getTodayTodoList } from '../../../features/todo/utils/todo'
 import { supabase } from '../../../utils/supabase'
+import { GlassCard, Button, PageHeader } from '../../../components/ui'
 
 export default function PomodoroPage({ user, isDark }) {
   const [todoList, setTodoList] = useState(null)
@@ -240,17 +241,14 @@ export default function PomodoroPage({ user, isDark }) {
     <div className={`h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)] overflow-y-auto ${isDark ? 'bg-gray-950 text-white' : 'bg-gray-50 text-gray-900'}`}>
       <div className="max-w-4xl mx-auto p-6 space-y-8">
         {/* ヘッダー */}
-        <div className="text-center">
-          <h1 className="text-4xl font-bold mb-2">集中タイマー</h1>
-          <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-            25分集中 → 5分休憩のサイクルで生産性UP！
-          </p>
-        </div>
+        <PageHeader
+          isDark={isDark}
+          title="集中タイマー"
+          subtitle="25分集中 → 5分休憩のサイクルで生産性UP！"
+        />
 
         {/* タイマー本体 */}
-        <div className={`rounded-3xl shadow-2xl p-6 md:p-12 ${
-          isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white'
-        }`}>
+        <GlassCard isDark={isDark} padding="p-6 md:p-12" className="shadow-2xl">
           {/* 円形タイマー */}
           <div className="relative w-full max-w-80 aspect-square mx-auto mb-8">
             {/* 進捗円 */}
@@ -309,63 +307,58 @@ export default function PomodoroPage({ user, isDark }) {
           {/* コントロールボタン */}
           <div className="flex gap-4 justify-center mb-6">
             {timerState === 'idle' && (
-              <button
+              <Button
+                isDark={isDark}
+                variant="primary"
+                size="lg"
                 onClick={() => startWork(selectedTask)}
-                className={`px-8 py-4 rounded-xl font-semibold transition-colors shadow-lg ${
-                  isDark
-                    ? 'bg-white text-gray-900 hover:bg-gray-100'
-                    : 'bg-gray-900 text-white hover:bg-gray-800'
-                }`}
+                className="px-8 py-4"
               >
                 開始
-              </button>
+              </Button>
             )}
             {timerState === 'paused' && (
               <>
-                <button
+                <Button
+                  isDark={isDark}
+                  variant="primary"
+                  size="lg"
                   onClick={resumeTimer}
-                  className={`px-8 py-4 rounded-xl font-semibold transition-colors shadow-lg ${
-                    isDark
-                      ? 'bg-white text-gray-900 hover:bg-gray-100'
-                      : 'bg-gray-900 text-white hover:bg-gray-800'
-                  }`}
+                  className="px-8 py-4"
                 >
                   再開
-                </button>
-                <button
+                </Button>
+                <Button
+                  isDark={isDark}
+                  variant="secondary"
+                  size="lg"
                   onClick={resetTimer}
-                  className={`px-8 py-4 rounded-xl font-semibold transition-colors shadow-lg ${
-                    isDark
-                      ? 'bg-gray-700 text-white hover:bg-gray-600'
-                      : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-                  }`}
+                  className="px-8 py-4"
                 >
                   リセット
-                </button>
+                </Button>
               </>
             )}
             {(timerState === 'working' || timerState === 'short_break' || timerState === 'long_break') && (
               <>
-                <button
+                <Button
+                  isDark={isDark}
+                  variant="secondary"
+                  size="lg"
                   onClick={pauseTimer}
-                  className={`px-8 py-4 rounded-xl font-semibold transition-colors shadow-lg ${
-                    isDark
-                      ? 'bg-gray-700 text-white hover:bg-gray-600'
-                      : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-                  }`}
+                  className="px-8 py-4"
                 >
                   一時停止
-                </button>
-                <button
+                </Button>
+                <Button
+                  isDark={isDark}
+                  variant="secondary"
+                  size="lg"
                   onClick={resetTimer}
-                  className={`px-8 py-4 rounded-xl font-semibold transition-colors shadow-lg ${
-                    isDark
-                      ? 'bg-gray-700 text-white hover:bg-gray-600'
-                      : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-                  }`}
+                  className="px-8 py-4"
                 >
                   リセット
-                </button>
+                </Button>
               </>
             )}
           </div>
@@ -381,24 +374,20 @@ export default function PomodoroPage({ user, isDark }) {
               <p className="text-3xl font-bold">{pomodoroCount % 4} / 4</p>
             </div>
           </div>
-        </div>
+        </GlassCard>
 
         {/* タスク一覧 */}
-        <div className={`rounded-3xl shadow-2xl p-8 ${
-          isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white'
-        }`}>
+        <GlassCard isDark={isDark} padding="p-8" className="shadow-2xl">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold">今日のタスク</h2>
-            <button
+            <Button
+              isDark={isDark}
+              variant="secondary"
+              size="sm"
               onClick={requestNotificationPermission}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                isDark
-                  ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
             >
               通知を有効にする
-            </button>
+            </Button>
           </div>
 
           {todoList?.todo_items?.length > 0 ? (
@@ -442,7 +431,7 @@ export default function PomodoroPage({ user, isDark }) {
               今日のタスクがありません。TODOページでタスクを追加しましょう！
             </p>
           )}
-        </div>
+        </GlassCard>
       </div>
 
       {/* 音声用の隠しaudio要素 */}

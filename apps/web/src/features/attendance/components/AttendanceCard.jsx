@@ -8,6 +8,7 @@ import { getStreaks } from '../../../features/pomodoro/utils/streaks'
 import { getTodayDate } from '../../../utils/date'
 import { shouldShowSurvey } from '../../../features/survey/utils/healthSurvey'
 import SurveyModal, { SurveyCompleteScreen } from '../../../features/survey/components/SurveyModal'
+import { GlassCard, Button, Modal } from '../../../components/ui'
 
 export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
   const [attendance, setAttendance] = useState(null)
@@ -639,62 +640,49 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
       {showConfetti && <ConfettiAnimation />}
 
       {/* 誕生日ポップアップ */}
-      {showBirthdayPopup && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-          onClick={() => setShowBirthdayPopup(false)}
-        >
-          <div
-            className={`max-w-md w-full rounded-3xl shadow-2xl border p-8 ${
-              isDark
-                ? 'bg-gray-900/95 border-gray-800/50'
-                : 'bg-white/95 border-gray-200/50'
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-center">
-              <div className="text-6xl mb-4">🎉</div>
-              {birthdayData.isCurrentUser ? (
-                <>
-                  <h2 className={`text-3xl font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                    誕生日おめでとうございます！
-                  </h2>
-                  <p className={`text-lg ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                    素敵な一年になりますように
-                  </p>
-                </>
-              ) : (
-                <>
-                  <h2 className={`text-2xl font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                    今日は
-                    {birthdayData.members.map((member, index) => (
-                      <span key={member.id}>
-                        {index > 0 && '、'}
-                        <span className="text-blue-500">{member.name || member.email.split('@')[0]}</span>
-                        さん
-                      </span>
-                    ))}
-                    のお誕生日です！
-                  </h2>
-                  <p className={`text-lg ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                    お祝いしましょう！
-                  </p>
-                </>
-              )}
-              <button
-                onClick={() => setShowBirthdayPopup(false)}
-                className={`mt-6 px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
-                  isDark
-                    ? 'bg-white text-gray-900 hover:bg-gray-100'
-                    : 'bg-gray-900 text-white hover:bg-gray-800'
-                }`}
-              >
-                閉じる
-              </button>
-            </div>
+      <Modal isOpen={showBirthdayPopup} onClose={() => setShowBirthdayPopup(false)} isDark={isDark}>
+        <div className="p-8">
+          <div className="text-center">
+            <div className="text-6xl mb-4">🎉</div>
+            {birthdayData.isCurrentUser ? (
+              <>
+                <h2 className={`text-3xl font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  誕生日おめでとうございます！
+                </h2>
+                <p className={`text-lg ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  素敵な一年になりますように
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className={`text-2xl font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  今日は
+                  {birthdayData.members.map((member, index) => (
+                    <span key={member.id}>
+                      {index > 0 && '、'}
+                      <span className="text-blue-500">{member.name || member.email.split('@')[0]}</span>
+                      さん
+                    </span>
+                  ))}
+                  のお誕生日です！
+                </h2>
+                <p className={`text-lg ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  お祝いしましょう！
+                </p>
+              </>
+            )}
+            <Button
+              isDark={isDark}
+              variant="primary"
+              size="lg"
+              onClick={() => setShowBirthdayPopup(false)}
+              className="mt-6"
+            >
+              閉じる
+            </Button>
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* ストリーク通知アニメーション */}
       {showStreakNotification && (
@@ -725,19 +713,9 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
       )}
 
       {/* AIフィードバックポップアップ */}
-      {showAIFeedbackPopup && aiFeedback && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-          onClick={() => setShowAIFeedbackPopup(false)}
-        >
-          <div
-            className={`max-w-lg w-full rounded-3xl shadow-2xl border p-8 ${
-              isDark
-                ? 'bg-gray-900/95 border-gray-800/50'
-                : 'bg-white/95 border-gray-200/50'
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
+      <Modal isOpen={showAIFeedbackPopup && !!aiFeedback} onClose={() => setShowAIFeedbackPopup(false)} isDark={isDark} className="max-w-lg">
+        {aiFeedback && (
+          <div className="p-8">
             <div className="text-center mb-6">
               <div className="text-6xl mb-4">
                 {aiFeedback.stats.rank === 1 ? '🥇' : aiFeedback.stats.rank === 2 ? '🥈' : aiFeedback.stats.rank === 3 ? '🥉' : '🎯'}
@@ -791,65 +769,46 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
               </p>
             </div>
 
-            <button
+            <Button
+              isDark={isDark}
+              variant="primary"
+              size="full"
               onClick={() => setShowAIFeedbackPopup(false)}
-              className={`w-full px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
-                isDark
-                  ? 'bg-white text-gray-900 hover:bg-gray-100'
-                  : 'bg-gray-900 text-white hover:bg-gray-800'
-              }`}
             >
               閉じる
-            </button>
+            </Button>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* 残業アラート */}
-      {showOvertimeAlert && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-          onClick={() => setShowOvertimeAlert(false)}
-        >
-          <div
-            className={`max-w-md w-full rounded-3xl shadow-2xl border p-8 ${
-              isDark
-                ? 'bg-gray-900/95 border-red-900/50'
-                : 'bg-white/95 border-red-200/50'
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-center">
-              <div className="text-6xl mb-4">⚠️</div>
-              <h2 className={`text-3xl font-bold mb-4 ${isDark ? 'text-red-400' : 'text-red-600'}`}>
-                長時間労働アラート
-              </h2>
-              <p className={`text-lg mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                勤務時間が15時間を超えています
-              </p>
-              <p className={`text-base ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                健康のため、早めに退勤することをおすすめします
-              </p>
-              <button
-                onClick={() => setShowOvertimeAlert(false)}
-                className={`mt-6 px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
-                  isDark
-                    ? 'bg-red-600 text-white hover:bg-red-700'
-                    : 'bg-red-500 text-white hover:bg-red-600'
-                }`}
-              >
-                確認しました
-              </button>
-            </div>
+      <Modal isOpen={showOvertimeAlert} onClose={() => setShowOvertimeAlert(false)} isDark={isDark} className={isDark ? 'border-red-900/50' : 'border-red-200/50'}>
+        <div className="p-8">
+          <div className="text-center">
+            <div className="text-6xl mb-4">⚠️</div>
+            <h2 className={`text-3xl font-bold mb-4 ${isDark ? 'text-red-400' : 'text-red-600'}`}>
+              長時間労働アラート
+            </h2>
+            <p className={`text-lg mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              勤務時間が15時間を超えています
+            </p>
+            <p className={`text-base ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              健康のため、早めに退勤することをおすすめします
+            </p>
+            <Button
+              isDark={isDark}
+              variant="danger"
+              size="lg"
+              onClick={() => setShowOvertimeAlert(false)}
+              className={`mt-6 ${isDark ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-red-500 text-white hover:bg-red-600'}`}
+            >
+              確認しました
+            </Button>
           </div>
         </div>
-      )}
+      </Modal>
     
-    <div className={`backdrop-blur-xl rounded-3xl shadow-lg border p-8 transition-colors duration-500 relative z-10 ${
-      isDark
-        ? 'bg-gray-900/80 shadow-black/50 border-gray-800/50'
-        : 'bg-white/80 shadow-gray-200/50 border-gray-200/50'
-    }`}>
+    <GlassCard isDark={isDark} padding="p-8" className="relative z-10">
       <div className="text-center space-y-6">
         {/* ステータスバッジ */}
         <div>
@@ -902,60 +861,66 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
         {/* アクションボタン */}
         <div className="pt-4">
           {status === 'not_started' && (
-            <button
+            <Button
+              isDark={isDark}
+              variant="primary"
+              size="full"
               onClick={handleClockIn}
               disabled={loading}
-              className={`w-full font-medium py-4 rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg ${
-                isDark
-                  ? 'bg-white text-gray-900 hover:bg-gray-100 shadow-white/20'
-                  : 'bg-gray-900 text-white hover:bg-gray-800 shadow-gray-900/20'
-              }`}
+              className="py-4"
             >
               🌅 出勤する
-            </button>
+            </Button>
           )}
 
           {status === 'working' && (
             <div className="relative">
               {/* 中抜け/戻りボタン（右上に小さく） */}
               {isOnBreak() ? (
-                <button
+                <Button
+                  isDark={isDark}
+                  variant="primary"
+                  size="sm"
                   onClick={handleEndBreak}
                   disabled={loading}
-                  className={`absolute -top-2 -right-2 px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-200 disabled:opacity-50 shadow-md z-10 ${
+                  aria-label="中抜けから戻る"
+                  className={`absolute -top-2 -right-2 rounded-full shadow-md z-10 ${
                     isDark
                       ? 'bg-green-600 text-white hover:bg-green-700'
                       : 'bg-green-500 text-white hover:bg-green-600'
                   }`}
                 >
                   🔙 戻る
-                </button>
+                </Button>
               ) : (
-                <button
+                <Button
+                  isDark={isDark}
+                  variant="primary"
+                  size="sm"
                   onClick={handleStartBreak}
                   disabled={loading}
-                  className={`absolute -top-2 -right-2 px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-200 disabled:opacity-50 shadow-md z-10 ${
+                  aria-label="中抜けを開始"
+                  className={`absolute -top-2 -right-2 rounded-full shadow-md z-10 ${
                     isDark
                       ? 'bg-yellow-600 text-white hover:bg-yellow-700'
                       : 'bg-yellow-500 text-white hover:bg-yellow-600'
                   }`}
                 >
                   🚶 中抜け
-                </button>
+                </Button>
               )}
-              
+
               {/* 退勤ボタン（中抜け時間は自動計算される） */}
-              <button
+              <Button
+                isDark={isDark}
+                variant="primary"
+                size="full"
                 onClick={handleClockOut}
                 disabled={loading}
-                className={`w-full font-medium py-4 rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg ${
-                  isDark
-                    ? 'bg-white text-gray-900 hover:bg-gray-100 shadow-white/20'
-                    : 'bg-gray-900 text-white hover:bg-gray-800 shadow-gray-900/20'
-                }`}
+                className="py-4"
               >
                 🌆 退勤する
-              </button>
+              </Button>
               {isOnBreak() && (
                 <p className={`text-xs mt-2 text-center ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                   ※ 中抜け時間は自動的に休憩時間として計算されます
@@ -978,210 +943,201 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
               </div>
 
               {/* 再出勤ボタン */}
-              <button
+              <Button
+                isDark={isDark}
+                variant="blue"
+                size="full"
                 onClick={handleReClockIn}
                 disabled={loading}
-                className={`w-full font-medium py-4 rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg ${
-                  isDark
-                    ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-600/20'
-                    : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20'
-                }`}
+                className="py-4"
               >
                 🔄 再出勤する
-              </button>
+              </Button>
             </div>
           )}
         </div>
       </div>
 
       {/* 勤務タイプ選択モーダル */}
-      {showWorkTypeModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 animate-fade-in">
-          <div className={`rounded-2xl shadow-2xl p-8 max-w-md w-full animate-scale-in ${
-            isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white'
+      <Modal isOpen={showWorkTypeModal} onClose={() => setShowWorkTypeModal(false)} isDark={isDark}>
+        <div className="p-8">
+          <h3 className={`text-2xl font-semibold mb-4 ${
+            isDark ? 'text-white' : 'text-gray-900'
           }`}>
-            <h3 className={`text-2xl font-semibold mb-4 ${
-              isDark ? 'text-white' : 'text-gray-900'
-            }`}>
-              出勤タイプを選択
-            </h3>
+            出勤タイプを選択
+          </h3>
 
-            <p className={`mb-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-              今日の勤務タイプを選択してください
-            </p>
+          <p className={`mb-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+            今日の勤務タイプを選択してください
+          </p>
 
-            <div className="space-y-3 mb-6">
-              <button
-                onClick={() => confirmClockIn('remote')}
-                disabled={loading}
-                className={`w-full font-medium py-4 rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg ${
-                  isDark
-                    ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-600/20'
-                    : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20'
-                }`}
-              >
-                🏠 リモート
-              </button>
-              <button
-                onClick={() => confirmClockIn('office')}
-                disabled={loading}
-                className={`w-full font-medium py-4 rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg ${
-                  isDark
-                    ? 'bg-green-600 text-white hover:bg-green-700 shadow-green-600/20'
-                    : 'bg-green-500 text-white hover:bg-green-600 shadow-green-500/20'
-                }`}
-              >
-                🏢 出社
-              </button>
-            </div>
-
-            <button
-              onClick={() => setShowWorkTypeModal(false)}
+          <div className="space-y-3 mb-6">
+            <Button
+              isDark={isDark}
+              variant="blue"
+              size="full"
+              onClick={() => confirmClockIn('remote')}
               disabled={loading}
-              className={`w-full py-2 text-sm font-medium rounded-lg transition-colors ${
+              className="py-4"
+            >
+              🏠 リモート
+            </Button>
+            <Button
+              isDark={isDark}
+              variant="primary"
+              size="full"
+              onClick={() => confirmClockIn('office')}
+              disabled={loading}
+              className={`py-4 ${
                 isDark
-                  ? 'text-gray-400 hover:text-gray-300'
-                  : 'text-gray-600 hover:text-gray-800'
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-green-500 text-white hover:bg-green-600'
               }`}
             >
-              キャンセル
-            </button>
+              🏢 出社
+            </Button>
           </div>
+
+          <Button
+            isDark={isDark}
+            variant="ghost"
+            size="full"
+            onClick={() => setShowWorkTypeModal(false)}
+            disabled={loading}
+            className="py-2 text-sm"
+          >
+            キャンセル
+          </Button>
         </div>
-      )}
+      </Modal>
 
       {/* 再出勤タイプ選択モーダル */}
-      {showReClockInWorkTypeModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 animate-fade-in">
-          <div className={`rounded-2xl shadow-2xl p-8 max-w-md w-full animate-scale-in ${
-            isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white'
+      <Modal isOpen={showReClockInWorkTypeModal} onClose={() => setShowReClockInWorkTypeModal(false)} isDark={isDark}>
+        <div className="p-8">
+          <h3 className={`text-2xl font-semibold mb-4 ${
+            isDark ? 'text-white' : 'text-gray-900'
           }`}>
-            <h3 className={`text-2xl font-semibold mb-4 ${
-              isDark ? 'text-white' : 'text-gray-900'
-            }`}>
-              再出勤タイプを選択
-            </h3>
+            再出勤タイプを選択
+          </h3>
 
-            <p className={`mb-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-              再出勤の勤務タイプを選択してください
-            </p>
+          <p className={`mb-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+            再出勤の勤務タイプを選択してください
+          </p>
 
-            <div className="space-y-3 mb-6">
-              <button
-                onClick={() => confirmReClockIn('remote')}
-                disabled={loading}
-                className={`w-full font-medium py-4 rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg ${
-                  isDark
-                    ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-600/20'
-                    : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20'
-                }`}
-              >
-                🏠 リモート
-              </button>
-              <button
-                onClick={() => confirmReClockIn('office')}
-                disabled={loading}
-                className={`w-full font-medium py-4 rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg ${
-                  isDark
-                    ? 'bg-green-600 text-white hover:bg-green-700 shadow-green-600/20'
-                    : 'bg-green-500 text-white hover:bg-green-600 shadow-green-500/20'
-                }`}
-              >
-                🏢 出社
-              </button>
-            </div>
-
-            <button
-              onClick={() => setShowReClockInWorkTypeModal(false)}
+          <div className="space-y-3 mb-6">
+            <Button
+              isDark={isDark}
+              variant="blue"
+              size="full"
+              onClick={() => confirmReClockIn('remote')}
               disabled={loading}
-              className={`w-full py-2 text-sm font-medium rounded-lg transition-colors ${
+              className="py-4"
+            >
+              🏠 リモート
+            </Button>
+            <Button
+              isDark={isDark}
+              variant="primary"
+              size="full"
+              onClick={() => confirmReClockIn('office')}
+              disabled={loading}
+              className={`py-4 ${
                 isDark
-                  ? 'text-gray-400 hover:text-gray-300'
-                  : 'text-gray-600 hover:text-gray-800'
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-green-500 text-white hover:bg-green-600'
               }`}
             >
-              キャンセル
-            </button>
+              🏢 出社
+            </Button>
           </div>
+
+          <Button
+            isDark={isDark}
+            variant="ghost"
+            size="full"
+            onClick={() => setShowReClockInWorkTypeModal(false)}
+            disabled={loading}
+            className="py-2 text-sm"
+          >
+            キャンセル
+          </Button>
         </div>
-      )}
+      </Modal>
 
       {/* 休憩時間入力モーダル */}
-      {showBreakMinutesModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className={`rounded-2xl p-6 md:p-8 max-w-md w-full shadow-2xl ${
-            isDark ? 'bg-gray-800' : 'bg-white'
-          }`}>
-            <h3 className={`text-xl md:text-2xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              🌆 退勤確認
-            </h3>
-            <p className={`text-sm mb-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-              中抜け時間は自動的に計算されます。<br />
-              休憩時間を入力してください（必須）。
-            </p>
+      <Modal isOpen={showBreakMinutesModal} onClose={() => setShowBreakMinutesModal(false)} isDark={isDark}>
+        <div className="p-6 md:p-8">
+          <h3 className={`text-xl md:text-2xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            🌆 退勤確認
+          </h3>
+          <p className={`text-sm mb-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+            中抜け時間は自動的に計算されます。<br />
+            休憩時間を入力してください（必須）。
+          </p>
 
-            <div className="mb-6">
-              <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                休憩時間（分）<span className="text-red-500 ml-1">※必須</span>
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={additionalBreakMinutes}
-                onChange={(e) => {
-                  // 数字のみ許可し、先頭の0を除去（ただし「0」単体は許可）
-                  const value = e.target.value.replace(/[^0-9]/g, '')
-                  const numValue = value === '' ? '' : String(parseInt(value, 10))
-                  setAdditionalBreakMinutes(numValue)
-                }}
-                className={`w-full px-4 py-3 rounded-xl border text-lg font-medium ${
-                  isDark
-                    ? 'bg-gray-700 border-gray-600 text-white focus:border-blue-500'
-                    : 'bg-gray-50 border-gray-300 text-gray-900 focus:border-blue-500'
-                } focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
-                placeholder="休憩なしの場合は 0 を入力"
-              />
-              {additionalBreakMinutes === '' && (
-                <p className="text-xs mt-2 text-red-500">
-                  休憩時間を入力してください（休憩なしの場合は 0 を入力）
-                </p>
-              )}
-              {additionalBreakMinutes !== '' && (
-                <p className={`text-xs mt-2 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                  例: 昼休憩60分、その他の休憩時間など
-                </p>
-              )}
-            </div>
+          <div className="mb-6">
+            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+              休憩時間（分）<span className="text-red-500 ml-1">※必須</span>
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={additionalBreakMinutes}
+              onChange={(e) => {
+                // 数字のみ許可し、先頭の0を除去（ただし「0」単体は許可）
+                const value = e.target.value.replace(/[^0-9]/g, '')
+                const numValue = value === '' ? '' : String(parseInt(value, 10))
+                setAdditionalBreakMinutes(numValue)
+              }}
+              className={`w-full px-4 py-3 rounded-xl border text-lg font-medium ${
+                isDark
+                  ? 'bg-gray-700 border-gray-600 text-white focus:border-blue-500'
+                  : 'bg-gray-50 border-gray-300 text-gray-900 focus:border-blue-500'
+              } focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+              placeholder="休憩なしの場合は 0 を入力"
+            />
+            {additionalBreakMinutes === '' && (
+              <p className="text-xs mt-2 text-red-500">
+                休憩時間を入力してください（休憩なしの場合は 0 を入力）
+              </p>
+            )}
+            {additionalBreakMinutes !== '' && (
+              <p className={`text-xs mt-2 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                例: 昼休憩60分、その他の休憩時間など
+              </p>
+            )}
+          </div>
 
-            <div className="space-y-3">
-              <button
-                onClick={handleClockOutConfirm}
-                disabled={loading || additionalBreakMinutes === ''}
-                className={`w-full font-medium py-4 rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg ${
-                  isDark
-                    ? 'bg-orange-600 text-white hover:bg-orange-700 shadow-orange-600/20'
-                    : 'bg-orange-500 text-white hover:bg-orange-600 shadow-orange-500/20'
-                }`}
-              >
-                {loading ? '処理中...' : '退勤する'}
-              </button>
+          <div className="space-y-3">
+            <Button
+              isDark={isDark}
+              variant="primary"
+              size="full"
+              onClick={handleClockOutConfirm}
+              disabled={loading || additionalBreakMinutes === ''}
+              className={`py-4 ${
+                isDark
+                  ? 'bg-orange-600 text-white hover:bg-orange-700'
+                  : 'bg-orange-500 text-white hover:bg-orange-600'
+              }`}
+            >
+              {loading ? '処理中...' : '退勤する'}
+            </Button>
 
-              <button
-                onClick={() => setShowBreakMinutesModal(false)}
-                disabled={loading}
-                className={`w-full py-2 text-sm font-medium rounded-lg transition-colors ${
-                  isDark
-                    ? 'text-gray-400 hover:text-gray-300'
-                    : 'text-gray-600 hover:text-gray-800'
-                }`}
-              >
-                キャンセル
-              </button>
-            </div>
+            <Button
+              isDark={isDark}
+              variant="ghost"
+              size="full"
+              onClick={() => setShowBreakMinutesModal(false)}
+              disabled={loading}
+              className="py-2 text-sm"
+            >
+              キャンセル
+            </Button>
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* ヘルスケアサーベイモーダル */}
       {showSurveyModal && currentSurvey && (
@@ -1211,7 +1167,7 @@ export default function AttendanceCard({ user, isDark, onStreakUpdate }) {
         />
       )}
 
-    </div>
+    </GlassCard>
     </>
   )
 }

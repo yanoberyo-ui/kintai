@@ -803,8 +803,9 @@ function App() {
         <div className="px-6 py-4 flex items-center gap-4">
           {/* ハンバーガーメニューボタン (PC only) */}
           <button
+            aria-label={sidebarOpen ? 'サイドバーを閉じる' : 'サイドバーを開く'}
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className={`hidden md:block p-2 rounded-xl transition-colors duration-300 ${
+            className={`hidden md:block p-2 rounded-xl transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
               isDark
                 ? 'hover:bg-gray-800/50 text-white'
                 : 'hover:bg-gray-100/50 text-gray-900'
@@ -911,10 +912,11 @@ function App() {
         <div className="flex md:flex-col h-full md:p-6 p-4">
 
           {/* ナビゲーション */}
-          <nav className="flex md:flex-col flex-1 md:space-y-2 space-x-2 md:space-x-0 justify-around md:justify-start">
+          <nav aria-label="メインナビゲーション" className="flex md:flex-col flex-1 md:space-y-2 space-x-2 md:space-x-0 justify-around md:justify-start">
             <button
+              aria-label="ホーム"
               onClick={() => setCurrentPage('home')}
-              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
                 currentPage === 'home'
                   ? isDark
                     ? 'bg-white text-gray-900'
@@ -933,8 +935,9 @@ function App() {
             </button>
 
             <button
+              aria-label="カレンダー"
               onClick={() => setCurrentPage('calendar')}
-              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
                 currentPage === 'calendar'
                   ? isDark
                     ? 'bg-white text-gray-900'
@@ -953,8 +956,9 @@ function App() {
             </button>
 
             <button
+              aria-label="日毎カレンダー"
               onClick={() => setCurrentPage('dailycalendar')}
-              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
                 currentPage === 'dailycalendar'
                   ? isDark
                     ? 'bg-white text-gray-900'
@@ -973,8 +977,9 @@ function App() {
             </button>
 
             <button
+              aria-label="メンバー"
               onClick={() => setCurrentPage('members')}
-              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
                 currentPage === 'members'
                   ? isDark
                     ? 'bg-white text-gray-900'
@@ -993,11 +998,12 @@ function App() {
             </button>
 
             <button
+              aria-label="タイムライン"
               onClick={() => {
                 setCurrentPage('announcements')
                 setAnnouncementsUnreadCount(0) // タイムラインを開いたら未読カウントをクリア
               }}
-              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 relative ${
+              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none relative ${
                 currentPage === 'announcements'
                   ? isDark
                     ? 'bg-white text-gray-900'
@@ -1026,8 +1032,9 @@ function App() {
             {/* PC専用: 管理者ボタン */}
             {user?.role === 'admin' && (
               <button
+                aria-label="管理者メニュー"
                 onClick={() => setCurrentPage('admin')}
-                className={`hidden md:block md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+                className={`hidden md:block md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
                   currentPage === 'admin'
                     ? isDark
                       ? 'bg-white text-gray-900'
@@ -1048,8 +1055,9 @@ function App() {
 
             {/* PC専用: ゲームボタン（全員表示） */}
             <button
+              aria-label="ミニゲーム"
               onClick={() => setCurrentPage('minigame')}
-              className={`hidden md:block md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+              className={`hidden md:block md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
                 currentPage === 'minigame'
                   ? isDark
                     ? 'bg-white text-gray-900'
@@ -1070,8 +1078,9 @@ function App() {
 
             {/* PC専用: 集中ボタン */}
             <button
+              aria-label="集中モード"
               onClick={() => setCurrentPage('pomodoro')}
-              className={`hidden md:block md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+              className={`hidden md:block md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
                 currentPage === 'pomodoro'
                   ? isDark
                     ? 'bg-white text-gray-900'
@@ -1091,8 +1100,9 @@ function App() {
 
             {/* PC専用: 予約ボタン */}
             <button
+              aria-label="予約管理"
               onClick={() => setCurrentPage('reservations')}
-              className={`hidden md:block md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+              className={`hidden md:block md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
                 currentPage === 'reservations'
                   ? isDark
                     ? 'bg-white text-gray-900'
@@ -1112,8 +1122,9 @@ function App() {
 
             {/* PC専用: 出勤履歴ボタン */}
             <button
+              aria-label="出勤履歴"
               onClick={() => setCurrentPage('attendance-history')}
-              className={`hidden md:block md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 ${
+              className={`hidden md:block md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
                 currentPage === 'attendance-history'
                   ? isDark
                     ? 'bg-white text-gray-900'
@@ -1133,8 +1144,9 @@ function App() {
 
             {/* モバイル専用: メニューボタン */}
             <button
+              aria-label="メニューを開く"
               onClick={() => setUserMenuOpen(!userMenuOpen)}
-              className={`md:hidden md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 relative ${
+              className={`md:hidden md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none relative ${
                 userMenuOpen || ['admin', 'pomodoro', 'reservations', 'attendance-history', 'settings'].includes(currentPage)
                   ? isDark
                     ? 'bg-white text-gray-900'
@@ -1159,8 +1171,9 @@ function App() {
           <div className={`hidden md:block border-t pt-4 space-y-3 ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
             {/* ユーザー情報 */}
             <button
+              aria-label="設定"
               onClick={() => setCurrentPage('settings')}
-              className={`w-full px-2 py-2 rounded-xl transition-all duration-200 ${
+              className={`w-full px-2 py-2 rounded-xl transition-all duration-200 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
                 currentPage === 'settings'
                   ? isDark
                     ? 'bg-gray-800'

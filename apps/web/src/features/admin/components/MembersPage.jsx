@@ -4,6 +4,7 @@ import { usePullToRefresh, PullToRefreshIndicator } from '../../../hooks/usePull
 import { calculateProgress } from '../../../features/todo/utils/todo'
 import TodoList from '../../../features/todo/components/TodoList'
 import { getTodayDate } from '../../../utils/date'
+import { GlassCard, Button, Modal, PageHeader, Badge } from '../../../components/ui'
 
 export default function MembersPage({ user, isDark }) {
   const [members, setMembers] = useState([])
@@ -93,7 +94,7 @@ export default function MembersPage({ user, isDark }) {
     })
 
     setBirthdayNotifications({ today: todayBirthdays, tomorrow: tomorrowBirthdays })
-    
+
     // ポップアップは自動で表示しない（出勤ボタン押下時に表示）
   }
 
@@ -113,7 +114,7 @@ export default function MembersPage({ user, isDark }) {
 
       if (error) throw error
       setMembers(data || [])
-      
+
       // 部署一覧を抽出（重複を除く）
       const uniqueDepartments = [...new Set(data?.map(m => m.department).filter(d => d))]
       setDepartments(uniqueDepartments.sort())
@@ -177,7 +178,7 @@ export default function MembersPage({ user, isDark }) {
       data?.forEach(list => {
         const taskCount = list.todo_items?.length || 0
         countMap[list.user_id] = taskCount
-        
+
         if (list.todo_items && taskCount > 0) {
           progressMap[list.user_id] = calculateProgress(list.todo_items)
         } else {
@@ -282,7 +283,7 @@ export default function MembersPage({ user, isDark }) {
   }
 
   const toggleDepartment = (dept) => {
-    setSelectedDepartments(prev => 
+    setSelectedDepartments(prev =>
       prev.includes(dept)
         ? prev.filter(d => d !== dept)
         : [...prev, dept]
@@ -317,62 +318,49 @@ export default function MembersPage({ user, isDark }) {
       {showBirthdayPopup && isCurrentUserBirthday && <ConfettiAnimation />}
 
       {/* 誕生日ポップアップ */}
-      {showBirthdayPopup && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-          onClick={() => setShowBirthdayPopup(false)}
-        >
-          <div
-            className={`max-w-md w-full rounded-3xl shadow-2xl border p-8 ${
-              isDark
-                ? 'bg-gray-900/95 border-gray-800/50'
-                : 'bg-white/95 border-gray-200/50'
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-center">
-              <div className="text-6xl mb-4">🎉</div>
-              {isCurrentUserBirthday ? (
-                <>
-                  <h2 className={`text-3xl font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                    誕生日おめでとうございます！
-                  </h2>
-                  <p className={`text-lg ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                    素敵な一年になりますように
-                  </p>
-                </>
-              ) : (
-                <>
-                  <h2 className={`text-2xl font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                    今日は
-                    {birthdayNotifications.today.map((member, index) => (
-                      <span key={member.id}>
-                        {index > 0 && '、'}
-                        <span className="text-blue-500">{member.name || member.email.split('@')[0]}</span>
-                        さん
-                      </span>
-                    ))}
-                    のお誕生日です！
-                  </h2>
-                  <p className={`text-lg ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                    お祝いしましょう！
-                  </p>
-                </>
-              )}
-              <button
-                onClick={() => setShowBirthdayPopup(false)}
-                className={`mt-6 px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
-                  isDark
-                    ? 'bg-white text-gray-900 hover:bg-gray-100'
-                    : 'bg-gray-900 text-white hover:bg-gray-800'
-                }`}
-              >
-                閉じる
-              </button>
-            </div>
+      <Modal isOpen={showBirthdayPopup} onClose={() => setShowBirthdayPopup(false)} isDark={isDark}>
+        <div className="p-8">
+          <div className="text-center">
+            <div className="text-6xl mb-4">🎉</div>
+            {isCurrentUserBirthday ? (
+              <>
+                <h2 className={`text-3xl font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  誕生日おめでとうございます！
+                </h2>
+                <p className={`text-lg ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  素敵な一年になりますように
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className={`text-2xl font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  今日は
+                  {birthdayNotifications.today.map((member, index) => (
+                    <span key={member.id}>
+                      {index > 0 && '、'}
+                      <span className="text-blue-500">{member.name || member.email.split('@')[0]}</span>
+                      さん
+                    </span>
+                  ))}
+                  のお誕生日です！
+                </h2>
+                <p className={`text-lg ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  お祝いしましょう！
+                </p>
+              </>
+            )}
+            <Button
+              variant="primary"
+              size="lg"
+              isDark={isDark}
+              onClick={() => setShowBirthdayPopup(false)}
+              className="mt-6"
+            >
+              閉じる
+            </Button>
           </div>
         </div>
-      )}
+      </Modal>
 
       <div
         ref={containerRef}
@@ -385,21 +373,14 @@ export default function MembersPage({ user, isDark }) {
         <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} />
         {/* ページタイトルと部署フィルタ */}
       <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            メンバー
-          </h1>
-          <p className={`mt-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-            チームメンバーと今日のタスクを確認
-          </p>
-        </div>
+        <PageHeader
+          isDark={isDark}
+          title="メンバー"
+          subtitle="チームメンバーと今日のタスクを確認"
+        />
 
         {/* 検索・部署フィルタ */}
-        <div className={`backdrop-blur-xl rounded-2xl shadow-lg border p-4 ${
-          isDark
-            ? 'bg-gray-900/80 border-gray-800/50'
-            : 'bg-white/80 border-gray-200/50'
-        }`}>
+        <GlassCard isDark={isDark} padding="p-4" className="rounded-2xl">
           {/* 検索入力欄 */}
           <div className="relative mb-3">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -419,19 +400,21 @@ export default function MembersPage({ user, isDark }) {
               placeholder={placeholders[placeholderIndex]}
             />
             {searchQuery && (
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
+                isDark={isDark}
                 onClick={() => setSearchQuery('')}
-                className={`absolute inset-y-0 right-0 pr-3 flex items-center ${
-                  isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
-                }`}
+                aria-label="検索をクリア"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
-              </button>
+              </Button>
             )}
           </div>
-          
+
           {/* 部署フィルタ */}
           {departments.length > 0 && (
             <div className="flex flex-wrap gap-2">
@@ -468,7 +451,7 @@ export default function MembersPage({ user, isDark }) {
                   <span>{dept}</span>
                 </button>
               ))}
-              
+
               {/* 残りの部署を展開表示 */}
               {showAllDepartments && departments.slice(3).map((dept) => (
                 <button
@@ -502,23 +485,22 @@ export default function MembersPage({ user, isDark }) {
                   <span>{dept}</span>
                 </button>
               ))}
-              
+
               {/* 展開ボタン（3つより多い場合のみ表示） */}
               {departments.length > 3 && (
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  isDark={isDark}
                   onClick={() => setShowAllDepartments(!showAllDepartments)}
-                  className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                    isDark
-                      ? 'bg-gray-800/50 text-gray-400 hover:bg-gray-800 hover:text-white'
-                      : 'bg-gray-100/50 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
-                  }`}
+                  className="rounded-xl"
                 >
                   {showAllDepartments ? '閉じる' : `...他${departments.length - 3}件`}
-                </button>
+                </Button>
               )}
             </div>
           )}
-        </div>
+        </GlassCard>
       </div>
 
       {/* 明日の誕生日通知 */}
@@ -559,14 +541,14 @@ export default function MembersPage({ user, isDark }) {
           const sortedMembers = members
             .filter(member => {
               // 検索クエリでフィルタ
-              const matchesSearch = !searchQuery || 
+              const matchesSearch = !searchQuery ||
                 (member.name && member.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
                 (member.email && member.email.toLowerCase().includes(searchQuery.toLowerCase()))
-              
+
               // 部署でフィルタ
-              const matchesDepartment = selectedDepartments.length === 0 || 
+              const matchesDepartment = selectedDepartments.length === 0 ||
                 selectedDepartments.includes(member.department)
-              
+
               return matchesSearch && matchesDepartment
             })
             .sort((a, b) => {
@@ -604,7 +586,7 @@ export default function MembersPage({ user, isDark }) {
 
             return scoreB - scoreA
           })
-          
+
           // 現在時刻が19:00以降かチェック
           const now = new Date()
           const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000))
@@ -654,7 +636,7 @@ export default function MembersPage({ user, isDark }) {
             if (index === 2) return { emoji: '🥉', rank: 3 } // Bronze
             return null
           }
-          
+
           return sortedMembers.map((member) => {
           const progress = taskProgress[member.id] ?? 0
           const medal = getMedal(member)
@@ -771,31 +753,25 @@ export default function MembersPage({ user, isDark }) {
               <div className="flex justify-center">
                 {(() => {
                   const attendance = attendanceStatus[member.id]
-                  
+
                   // 勤怠レコードがない場合
                   if (!attendance) {
                     return (
-                      <div className={`px-3 py-1.5 rounded-full text-xs font-bold ${
-                        isDark ? 'bg-gray-800 text-gray-500' : 'bg-gray-200 text-gray-500'
-                      }`}>
+                      <Badge variant="default" isDark={isDark}>
                         未出勤
-                      </div>
+                      </Badge>
                     )
                   }
-                  
+
                   // clock_outがある場合は退勤済
                   if (attendance.clock_out) {
                     return (
-                      <div className={`px-3 py-1.5 rounded-full text-xs font-bold ${
-                        isDark
-                          ? 'bg-blue-900/50 text-blue-300'
-                          : 'bg-blue-100 text-blue-700'
-                      }`}>
+                      <Badge variant="info" isDark={isDark}>
                         退勤済
-                      </div>
+                      </Badge>
                     )
                   }
-                  
+
                   // statusで判定
                   if (attendance.status === 'working') {
                     return (
@@ -808,7 +784,7 @@ export default function MembersPage({ user, isDark }) {
                       </div>
                     )
                   }
-                  
+
                   if (attendance.status === 'break') {
                     return (
                       <div className={`px-3 py-1.5 rounded-full text-xs font-bold ${
@@ -820,26 +796,20 @@ export default function MembersPage({ user, isDark }) {
                       </div>
                     )
                   }
-                  
+
                   if (attendance.status === 'completed') {
                     return (
-                      <div className={`px-3 py-1.5 rounded-full text-xs font-bold ${
-                        isDark
-                          ? 'bg-blue-900/50 text-blue-300'
-                          : 'bg-blue-100 text-blue-700'
-                      }`}>
+                      <Badge variant="info" isDark={isDark}>
                         退勤済
-                      </div>
+                      </Badge>
                     )
                   }
-                  
+
                   // 不明なステータス
                   return (
-                    <div className={`px-3 py-1.5 rounded-full text-xs font-bold ${
-                      isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-300 text-gray-700'
-                    }`}>
+                    <Badge variant="default" isDark={isDark}>
                       不明({attendance.status})
-                    </div>
+                    </Badge>
                   )
                 })()}
               </div>
@@ -849,19 +819,14 @@ export default function MembersPage({ user, isDark }) {
       </div>
 
       {/* モーダル */}
-      {showModal && selectedMember && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-          onClick={closeModal}
-        >
-          <div
-            className={`max-w-3xl w-full max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl border ${
-              isDark
-                ? 'bg-gray-900/95 border-gray-800/50'
-                : 'bg-white/95 border-gray-200/50'
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
+      <Modal
+        isOpen={showModal && !!selectedMember}
+        onClose={closeModal}
+        isDark={isDark}
+        className="!max-w-3xl !max-h-[90vh] !overflow-y-auto"
+      >
+        {selectedMember && (
+          <>
             {/* モーダルヘッダー */}
             <div className={`sticky top-0 z-10 backdrop-blur-xl border-b p-6 ${
               isDark ? 'bg-gray-900/80 border-gray-800/50' : 'bg-white/80 border-gray-200/50'
@@ -886,29 +851,25 @@ export default function MembersPage({ user, isDark }) {
                     </p>
                   </div>
                 </div>
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  isDark={isDark}
                   onClick={closeModal}
-                  className={`p-2 rounded-xl transition-colors ${
-                    isDark
-                      ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
-                      : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
-                  }`}
+                  aria-label="モーダルを閉じる"
+                  className="p-2 rounded-xl"
                 >
                   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                </button>
+                </Button>
               </div>
             </div>
 
             {/* モーダルコンテンツ */}
             <div className="p-6 space-y-6">
               {/* 勤怠カード */}
-              <div className={`backdrop-blur-xl rounded-3xl shadow-lg border p-6 ${
-                isDark
-                  ? 'bg-gray-800/50 border-gray-700/50'
-                  : 'bg-gray-50/50 border-gray-200/50'
-              }`}>
+              <GlassCard isDark={isDark} className={isDark ? 'bg-gray-800/50 border-gray-700/50' : 'bg-gray-50/50 border-gray-200/50'}>
                 <div className="text-center">
                   <div className={`text-sm font-medium mb-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                     {memberAttendance?.status === 'working' ? '出勤中' :
@@ -918,18 +879,18 @@ export default function MembersPage({ user, isDark }) {
                   <div className={`text-5xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
                     {(() => {
                       if (!memberAttendance?.clock_in) return '0:00'
-                      
+
                       try {
                         // 日本時間（JST）で現在時刻と今日の日付を取得
                         const today = getTodayDate()
                         const jstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-                        
-                        const clockInTime = memberAttendance.clock_in.includes('T') 
-                          ? memberAttendance.clock_in.split('T')[1] 
+
+                        const clockInTime = memberAttendance.clock_in.includes('T')
+                          ? memberAttendance.clock_in.split('T')[1]
                           : memberAttendance.clock_in
-                        
+
                         const clockIn = new Date(`${today}T${clockInTime}`)
-                        
+
                         let clockOut
                         if (memberAttendance.clock_out) {
                           const clockOutTime = memberAttendance.clock_out.includes('T')
@@ -939,10 +900,10 @@ export default function MembersPage({ user, isDark }) {
                         } else {
                           clockOut = jstNow
                         }
-                        
+
                         const diff = Math.floor((clockOut - clockIn) / 1000 / 60) // 分単位で計算
                         if (diff < 0 || isNaN(diff)) return '0:00'
-                        
+
                         const hours = Math.floor(diff / 60)
                         const minutes = diff % 60
                         return `${hours}:${minutes.toString().padStart(2, '0')}`
@@ -956,14 +917,14 @@ export default function MembersPage({ user, isDark }) {
                     勤務時間
                   </div>
                 </div>
-              </div>
+              </GlassCard>
 
               {/* TODOリスト */}
               <TodoList user={selectedMember} isDark={isDark} currentUser={currentUser} />
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
     </div>
     </>
   )

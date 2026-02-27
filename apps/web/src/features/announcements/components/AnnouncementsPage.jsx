@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../../utils/supabase'
 import { usePullToRefresh, PullToRefreshIndicator } from '../../../hooks/usePullToRefresh.jsx'
+import { Button, Input, Modal, PageHeader, Badge } from '../../../components/ui'
 
 // 画像URL最適化関数（Supabase画像変換を使用）
 const getOptimizedAvatarUrl = (url, size = 100) => {
@@ -67,6 +68,7 @@ const ImageLightbox = ({ images, initialIndex, onClose }) => {
       <button
         onClick={onClose}
         className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+        aria-label="閉じる"
       >
         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -96,6 +98,7 @@ const ImageLightbox = ({ images, initialIndex, onClose }) => {
             setCurrentIndex(prev => (prev === 0 ? images.length - 1 : prev - 1))
           }}
           className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+          aria-label="前の画像"
         >
           <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -111,6 +114,7 @@ const ImageLightbox = ({ images, initialIndex, onClose }) => {
             setCurrentIndex(prev => (prev === images.length - 1 ? 0 : prev + 1))
           }}
           className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+          aria-label="次の画像"
         >
           <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -217,6 +221,7 @@ const ImageCarousel = ({ images, alt, isDark }) => {
             className={`absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg ${
               isDark ? 'bg-gray-800/80 text-white hover:bg-gray-700' : 'bg-white/80 text-gray-800 hover:bg-white'
             }`}
+            aria-label="前の画像"
           >
             ‹
           </button>
@@ -227,6 +232,7 @@ const ImageCarousel = ({ images, alt, isDark }) => {
             className={`absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg ${
               isDark ? 'bg-gray-800/80 text-white hover:bg-gray-700' : 'bg-white/80 text-gray-800 hover:bg-white'
             }`}
+            aria-label="次の画像"
           >
             ›
           </button>
@@ -1103,32 +1109,23 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
     >
       <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} />
       {/* ヘッダー */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            タイムライン
-          </h1>
-          {unreadCount > 0 && (
-            <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500 text-white text-sm font-bold">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
-              </span>
-              {unreadCount}件の新着
-            </div>
-          )}
-        </div>
-
-        {/* 新規投稿ボタン */}
-        {currentUser && (
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 rounded-xl font-medium transition-all duration-200 bg-white text-gray-600 hover:bg-gray-100"
-          >
-            + 投稿
-          </button>
-        )}
-      </div>
+      <PageHeader
+        isDark={isDark}
+        title="タイムライン"
+        subtitle={unreadCount > 0 ? `${unreadCount}件の新着` : undefined}
+        action={
+          currentUser && (
+            <Button
+              variant="secondary"
+              size="md"
+              isDark={isDark}
+              onClick={() => setShowCreateModal(true)}
+            >
+              + 投稿
+            </Button>
+          )
+        }
+      />
 
       {/* フィルター（X風タブ） */}
       <div className={`mb-6 border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
@@ -1207,6 +1204,7 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                           : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                       }`}
                       title="メニュー"
+                      aria-label="メニュー"
                     >
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
@@ -1332,11 +1330,9 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                       })}
                     </span>
                     {announcement.category === 'event' && (
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                        isDark ? 'bg-white text-gray-900' : 'bg-gray-900 text-white'
-                      }`}>
+                      <Badge variant="default" isDark={isDark}>
                         イベント
-                      </span>
+                      </Badge>
                     )}
                   </div>
 
@@ -1666,24 +1662,19 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
 
                     {/* イベント参加ボタン */}
                     {announcement.category === 'event' && currentUser?.id !== announcement.author_id && (
-                      <button
+                      <Button
+                        variant={isUserParticipating(announcement) ? 'secondary' : 'primary'}
+                        size="sm"
+                        isDark={isDark}
                         onClick={(e) => isUserParticipating(announcement)
                           ? handleLeaveEvent(announcement.id, e)
                           : handleJoinEvent(announcement.id, e)
                         }
                         disabled={!isUserParticipating(announcement) && announcement.max_participants && announcement.participants?.length >= announcement.max_participants}
-                        className={`ml-auto px-4 py-2 rounded-full text-sm font-bold transition-all duration-200 ${
-                          isUserParticipating(announcement)
-                            ? isDark
-                              ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                            : isDark
-                            ? 'bg-white text-gray-900 hover:bg-gray-100'
-                            : 'bg-gray-900 text-white hover:bg-gray-800'
-                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        className="ml-auto"
                       >
                         {isUserParticipating(announcement) ? '参加中' : '参加する'}
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -1701,19 +1692,7 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
       )}
 
       {/* 投稿作成モーダル */}
-      {showCreateModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-          onClick={() => setShowCreateModal(false)}
-        >
-          <div
-            className={`max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl border ${
-              isDark
-                ? 'bg-gray-900/95 border-gray-800/50'
-                : 'bg-white/95 border-gray-200/50'
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
+      <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} isDark={isDark} className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <form onSubmit={handleSubmit}>
               {/* ヘッダー */}
               <div className={`sticky top-0 z-10 backdrop-blur-xl border-b p-6 ${
@@ -1723,19 +1702,18 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                   <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                     新規投稿
                   </h2>
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    isDark={isDark}
                     type="button"
                     onClick={() => setShowCreateModal(false)}
-                    className={`p-2 rounded-xl transition-colors ${
-                      isDark
-                        ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
-                        : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
-                    }`}
+                    aria-label="閉じる"
                   >
                     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -1794,6 +1772,7 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                         ? 'bg-green-500'
                         : isDark ? 'bg-gray-700' : 'bg-gray-300'
                     }`}
+                    aria-label="ポップアップ通知を切り替え"
                   >
                     <div className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform ${
                       formData.show_popup ? 'translate-x-6' : 'translate-x-1'
@@ -1821,6 +1800,7 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                             type="button"
                             onClick={() => removeImage(index)}
                             className="absolute top-2 right-2 w-7 h-7 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                            aria-label="画像を削除"
                           >
                             ✕
                           </button>
@@ -1873,23 +1853,15 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                 </div>
 
                 {/* タイトル */}
-                <div>
-                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                    タイトル <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className={`w-full px-4 py-3 rounded-xl transition-colors ${
-                      isDark
-                        ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
-                        : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
-                    } focus:outline-none`}
-                    placeholder="タイトルを入力"
-                  />
-                </div>
+                <Input
+                  isDark={isDark}
+                  label="タイトル *"
+                  type="text"
+                  required
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  placeholder="タイトルを入力"
+                />
 
                 {/* 本文 */}
                 <div>
@@ -1921,26 +1893,18 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                     </label>
                   </div>
                   <div className="space-y-3">
-                    <input
+                    <Input
+                      isDark={isDark}
                       type="url"
                       value={formData.link_url}
                       onChange={(e) => setFormData({ ...formData, link_url: e.target.value })}
-                      className={`w-full px-4 py-3 rounded-xl transition-colors ${
-                        isDark
-                          ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
-                          : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
-                      } focus:outline-none`}
                       placeholder="https://example.com"
                     />
-                    <input
+                    <Input
+                      isDark={isDark}
                       type="text"
                       value={formData.link_title}
                       onChange={(e) => setFormData({ ...formData, link_title: e.target.value })}
-                      className={`w-full px-4 py-3 rounded-xl transition-colors ${
-                        isDark
-                          ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
-                          : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
-                      } focus:outline-none`}
                       placeholder="リンクタイトル（任意）"
                     />
                   </div>
@@ -1971,22 +1935,14 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
 
                     {/* 投票期限（日程投票を使う場合） */}
                     {formData.use_date_poll && (
-                      <div>
-                        <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                          投票期限
-                        </label>
-                        <input
-                          type="datetime-local"
-                          value={formData.voting_deadline}
-                          onChange={(e) => setFormData({ ...formData, voting_deadline: e.target.value })}
-                          className={`w-full px-4 py-3 rounded-xl transition-colors ${
-                            isDark
-                              ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
-                              : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
-                          } focus:outline-none`}
-                          placeholder="投票期限を設定（任意）"
-                        />
-                      </div>
+                      <Input
+                        isDark={isDark}
+                        label="投票期限"
+                        type="datetime-local"
+                        value={formData.voting_deadline}
+                        onChange={(e) => setFormData({ ...formData, voting_deadline: e.target.value })}
+                        placeholder="投票期限を設定（任意）"
+                      />
                     )}
 
                     {/* 日程候補（投票を使う場合） */}
@@ -1996,17 +1952,15 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                           <label className={`block text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
                             日程候補
                           </label>
-                          <button
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            isDark={isDark}
                             type="button"
                             onClick={addDateOption}
-                            className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                              isDark
-                                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                            }`}
                           >
                             + 候補を追加
-                          </button>
+                          </Button>
                         </div>
                         {formData.date_options.map((option, index) => (
                           <div key={index} className={`p-3 rounded-lg space-y-2 ${
@@ -2024,17 +1978,15 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                                 } focus:outline-none`}
                                 required
                               />
-                              <button
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                isDark={isDark}
                                 type="button"
                                 onClick={() => removeDateOption(index)}
-                                className={`px-3 py-2 rounded-lg text-sm transition-colors ${
-                                  isDark
-                                    ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                                    : 'bg-red-50 text-red-600 hover:bg-red-100'
-                                }`}
                               >
                                 削除
-                              </button>
+                              </Button>
                             </div>
                             <input
                               type="text"
@@ -2057,59 +2009,35 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                       </div>
                     ) : (
                       /* 確定した日時 */
-                      <div>
-                        <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                          開催日時
-                        </label>
-                        <input
-                          type="datetime-local"
-                          value={formData.event_date}
-                          onChange={(e) => setFormData({ ...formData, event_date: e.target.value })}
-                          className={`w-full px-4 py-3 rounded-xl transition-colors ${
-                            isDark
-                              ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
-                              : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
-                          } focus:outline-none`}
-                        />
-                      </div>
+                      <Input
+                        isDark={isDark}
+                        label="開催日時"
+                        type="datetime-local"
+                        value={formData.event_date}
+                        onChange={(e) => setFormData({ ...formData, event_date: e.target.value })}
+                      />
                     )}
 
                     {/* 場所 */}
-                    <div>
-                      <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                        場所
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.event_location}
-                        onChange={(e) => setFormData({ ...formData, event_location: e.target.value })}
-                        className={`w-full px-4 py-3 rounded-xl transition-colors ${
-                          isDark
-                            ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
-                            : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
-                        } focus:outline-none`}
-                        placeholder="開催場所を入力"
-                      />
-                    </div>
+                    <Input
+                      isDark={isDark}
+                      label="場所"
+                      type="text"
+                      value={formData.event_location}
+                      onChange={(e) => setFormData({ ...formData, event_location: e.target.value })}
+                      placeholder="開催場所を入力"
+                    />
 
                     {/* 定員 */}
-                    <div>
-                      <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                        定員
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={formData.max_participants}
-                        onChange={(e) => setFormData({ ...formData, max_participants: e.target.value })}
-                        className={`w-full px-4 py-3 rounded-xl transition-colors ${
-                          isDark
-                            ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
-                            : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
-                        } focus:outline-none`}
-                        placeholder="定員を入力（任意）"
-                      />
-                    </div>
+                    <Input
+                      isDark={isDark}
+                      label="定員"
+                      type="number"
+                      min="1"
+                      value={formData.max_participants}
+                      onChange={(e) => setFormData({ ...formData, max_participants: e.target.value })}
+                      placeholder="定員を入力（任意）"
+                    />
 
                     {/* 参加者限定メッセージ */}
                     <div className={`p-4 rounded-xl ${isDark ? 'bg-purple-900/20 border border-purple-700/30' : 'bg-purple-50 border border-purple-200'}`}>
@@ -2142,51 +2070,34 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
               <div className={`sticky bottom-0 backdrop-blur-xl border-t p-6 flex gap-3 ${
                 isDark ? 'bg-gray-900/80 border-gray-800/50' : 'bg-white/80 border-gray-200/50'
               }`}>
-                <button
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  isDark={isDark}
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
-                    isDark
-                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
+                  className="flex-1"
                 >
                   キャンセル
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  isDark={isDark}
                   type="submit"
                   disabled={submitting}
-                  className={`flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-200 ${
-                    isDark
-                      ? 'bg-white text-gray-900 hover:bg-gray-100'
-                      : 'bg-gray-900 text-white hover:bg-gray-800'
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  className="flex-1"
                 >
                   {submitting ? '投稿中...' : '投稿する'}
-                </button>
+                </Button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* 投稿編集モーダル */}
-      {showEditModal && editingAnnouncement && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-          onClick={() => {
-            setShowEditModal(false)
-            setEditingAnnouncement(null)
-          }}
-        >
-          <div
-            className={`max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl border ${
-              isDark
-                ? 'bg-gray-900/95 border-gray-800/50'
-                : 'bg-white/95 border-gray-200/50'
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
+      <Modal isOpen={showEditModal && !!editingAnnouncement} onClose={() => { setShowEditModal(false); setEditingAnnouncement(null) }} isDark={isDark} className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        {editingAnnouncement && (
+          <>
             {/* ヘッダー */}
             <div className={`sticky top-0 z-10 backdrop-blur-xl border-b p-6 ${
               isDark ? 'bg-gray-900/80 border-gray-800/50' : 'bg-white/80 border-gray-200/50'
@@ -2195,45 +2106,36 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                 <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                   投稿を編集
                 </h2>
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  isDark={isDark}
                   type="button"
                   onClick={() => {
                     setShowEditModal(false)
                     setEditingAnnouncement(null)
                   }}
-                  className={`p-2 rounded-xl transition-colors ${
-                    isDark
-                      ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
-                      : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
-                  }`}
+                  aria-label="閉じる"
                 >
                   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                </button>
+                </Button>
               </div>
             </div>
 
             {/* コンテンツ */}
             <div className="p-6 space-y-4">
               {/* タイトル */}
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                  タイトル <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={editingAnnouncement.title}
-                  onChange={(e) => setEditingAnnouncement({ ...editingAnnouncement, title: e.target.value })}
-                  className={`w-full px-4 py-3 rounded-xl transition-colors ${
-                    isDark
-                      ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
-                      : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
-                  } focus:outline-none`}
-                  placeholder="タイトルを入力"
-                />
-              </div>
+              <Input
+                isDark={isDark}
+                label="タイトル *"
+                type="text"
+                required
+                value={editingAnnouncement.title}
+                onChange={(e) => setEditingAnnouncement({ ...editingAnnouncement, title: e.target.value })}
+                placeholder="タイトルを入力"
+              />
 
               {/* 本文 */}
               <div>
@@ -2277,24 +2179,16 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
 
                   {/* イベント日時（日程投票を使わない場合） */}
                   {!editingAnnouncement.use_date_poll && (
-                    <div>
-                      <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                        イベント日時
-                      </label>
-                      <input
-                        type="datetime-local"
-                        value={toJSTDatetimeLocal(editingAnnouncement.event_date)}
-                        onChange={(e) => setEditingAnnouncement({ 
-                          ...editingAnnouncement, 
-                          event_date: fromJSTDatetimeLocal(e.target.value)
-                        })}
-                        className={`w-full px-4 py-3 rounded-xl transition-colors ${
-                          isDark
-                            ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
-                            : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
-                        } focus:outline-none`}
-                      />
-                    </div>
+                    <Input
+                      isDark={isDark}
+                      label="イベント日時"
+                      type="datetime-local"
+                      value={toJSTDatetimeLocal(editingAnnouncement.event_date)}
+                      onChange={(e) => setEditingAnnouncement({
+                        ...editingAnnouncement,
+                        event_date: fromJSTDatetimeLocal(e.target.value)
+                      })}
+                    />
                   )}
 
                   {/* 日程候補（日程投票を使う場合） */}
@@ -2341,20 +2235,18 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                                   : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
                               } focus:outline-none`}
                             />
-                            <button
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              isDark={isDark}
                               type="button"
                               onClick={() => {
                                 const newOptions = editingAnnouncement.date_options.filter((_, i) => i !== index)
                                 setEditingAnnouncement({ ...editingAnnouncement, date_options: newOptions })
                               }}
-                              className={`px-3 py-2 rounded-xl ${
-                                isDark
-                                  ? 'bg-red-900 text-red-200 hover:bg-red-800'
-                                  : 'bg-red-100 text-red-700 hover:bg-red-200'
-                              }`}
                             >
                               削除
-                            </button>
+                            </Button>
                           </div>
                         ))}
                         <button
@@ -2379,62 +2271,38 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                   )}
 
                   {/* イベント場所 */}
-                  <div>
-                    <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                      場所
-                    </label>
-                    <input
-                      type="text"
-                      value={editingAnnouncement.event_location || ''}
-                      onChange={(e) => setEditingAnnouncement({ ...editingAnnouncement, event_location: e.target.value })}
-                      className={`w-full px-4 py-3 rounded-xl transition-colors ${
-                        isDark
-                          ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
-                          : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
-                      } focus:outline-none`}
-                      placeholder="場所を入力"
-                    />
-                  </div>
+                  <Input
+                    isDark={isDark}
+                    label="場所"
+                    type="text"
+                    value={editingAnnouncement.event_location || ''}
+                    onChange={(e) => setEditingAnnouncement({ ...editingAnnouncement, event_location: e.target.value })}
+                    placeholder="場所を入力"
+                  />
 
                   {/* 参加者上限 */}
-                  <div>
-                    <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                      参加者上限
-                    </label>
-                    <input
-                      type="number"
-                      value={editingAnnouncement.max_participants || ''}
-                      onChange={(e) => setEditingAnnouncement({ ...editingAnnouncement, max_participants: e.target.value })}
-                      className={`w-full px-4 py-3 rounded-xl transition-colors ${
-                        isDark
-                          ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
-                          : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
-                      } focus:outline-none`}
-                      placeholder="上限なしの場合は空欄"
-                      min="1"
-                    />
-                  </div>
+                  <Input
+                    isDark={isDark}
+                    label="参加者上限"
+                    type="number"
+                    value={editingAnnouncement.max_participants || ''}
+                    onChange={(e) => setEditingAnnouncement({ ...editingAnnouncement, max_participants: e.target.value })}
+                    placeholder="上限なしの場合は空欄"
+                    min="1"
+                  />
 
                   {/* 投票期限 */}
                   {editingAnnouncement.use_date_poll && (
-                    <div>
-                      <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                        投票期限
-                      </label>
-                      <input
-                        type="datetime-local"
-                        value={toJSTDatetimeLocal(editingAnnouncement.voting_deadline)}
-                        onChange={(e) => setEditingAnnouncement({ 
-                          ...editingAnnouncement, 
-                          voting_deadline: fromJSTDatetimeLocal(e.target.value)
-                        })}
-                        className={`w-full px-4 py-3 rounded-xl transition-colors ${
-                          isDark
-                            ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
-                            : 'bg-white text-gray-900 border border-gray-300 focus:border-gray-900'
-                        } focus:outline-none`}
-                      />
-                    </div>
+                    <Input
+                      isDark={isDark}
+                      label="投票期限"
+                      type="datetime-local"
+                      value={toJSTDatetimeLocal(editingAnnouncement.voting_deadline)}
+                      onChange={(e) => setEditingAnnouncement({
+                        ...editingAnnouncement,
+                        voting_deadline: fromJSTDatetimeLocal(e.target.value)
+                      })}
+                    />
                   )}
                 </>
               )}
@@ -2444,51 +2312,37 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
             <div className={`sticky bottom-0 backdrop-blur-xl border-t p-6 flex gap-3 justify-end ${
               isDark ? 'bg-gray-900/80 border-gray-800/50' : 'bg-white/80 border-gray-200/50'
             }`}>
-              <button
+              <Button
+                variant="ghost"
+                size="lg"
+                isDark={isDark}
                 type="button"
                 onClick={() => {
                   setShowEditModal(false)
                   setEditingAnnouncement(null)
                 }}
-                className={`px-6 py-3 rounded-xl font-medium transition-colors ${
-                  isDark
-                    ? 'text-gray-300 hover:bg-gray-800'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
               >
                 キャンセル
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
+                size="lg"
+                isDark={isDark}
                 type="button"
                 onClick={handleEditSubmit}
                 disabled={!editingAnnouncement.title.trim() || !editingAnnouncement.content.trim()}
-                className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
-                  isDark
-                    ? 'bg-white text-gray-900 hover:bg-gray-200'
-                    : 'bg-gray-900 text-white hover:bg-gray-800'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 更新する
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
 
       {/* コメントモーダル */}
-      {showCommentModal && selectedAnnouncement && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-          onClick={() => setShowCommentModal(false)}
-        >
-          <div
-            className={`max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl border ${
-              isDark
-                ? 'bg-gray-900/95 border-gray-800/50'
-                : 'bg-white/95 border-gray-200/50'
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
+      <Modal isOpen={showCommentModal && !!selectedAnnouncement} onClose={() => setShowCommentModal(false)} isDark={isDark} className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        {selectedAnnouncement && (
+          <>
             {/* ヘッダー */}
             <div className={`sticky top-0 z-10 backdrop-blur-xl border-b p-6 ${
               isDark ? 'bg-gray-900/80 border-gray-800/50' : 'bg-white/80 border-gray-200/50'
@@ -2497,18 +2351,17 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                 <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                   コメント
                 </h2>
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  isDark={isDark}
                   onClick={() => setShowCommentModal(false)}
-                  className={`p-2 rounded-xl transition-colors ${
-                    isDark
-                      ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
-                      : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
-                  }`}
+                  aria-label="閉じる"
                 >
                   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -2614,48 +2467,32 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                     currentUser?.name?.charAt(0) || currentUser?.email.charAt(0).toUpperCase()
                   )}
                 </div>
-                <input
+                <Input
+                  isDark={isDark}
                   type="text"
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
                   placeholder="コメントを入力"
-                  className={`flex-1 px-4 py-2 rounded-full transition-colors ${
-                    isDark
-                      ? 'bg-gray-800 text-white border border-gray-700 focus:border-white'
-                      : 'bg-gray-100 text-gray-900 border border-gray-300 focus:border-gray-900'
-                  } focus:outline-none`}
+                  className="flex-1 !rounded-full"
                 />
-                <button
+                <Button
+                  variant="primary"
+                  size="md"
+                  isDark={isDark}
                   type="submit"
                   disabled={!commentText.trim()}
-                  className={`px-6 py-2 rounded-full font-bold transition-all duration-200 ${
-                    isDark
-                      ? 'bg-white text-gray-900 hover:bg-gray-100'
-                      : 'bg-gray-900 text-white hover:bg-gray-800'
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   送信
-                </button>
+                </Button>
               </form>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
 
       {/* フォローアップメッセージモーダル */}
-      {showFollowUpModal && selectedAnnouncement && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-          onClick={() => setShowFollowUpModal(false)}
-        >
-          <div
-            className={`max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl border ${
-              isDark
-                ? 'bg-gray-900/95 border-gray-800/50'
-                : 'bg-white/95 border-gray-200/50'
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
+      <Modal isOpen={showFollowUpModal && !!selectedAnnouncement} onClose={() => setShowFollowUpModal(false)} isDark={isDark} className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        {selectedAnnouncement && (
             <form onSubmit={handleFollowUpSubmit}>
               {/* ヘッダー */}
               <div className={`sticky top-0 z-10 backdrop-blur-xl border-b p-6 ${
@@ -2670,19 +2507,18 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
                       {selectedAnnouncement.title}
                     </p>
                   </div>
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    isDark={isDark}
                     type="button"
                     onClick={() => setShowFollowUpModal(false)}
-                    className={`p-2 rounded-xl transition-colors ${
-                      isDark
-                        ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
-                        : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
-                    }`}
+                    aria-label="閉じる"
                   >
                     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -2783,53 +2619,47 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
               <div className={`sticky bottom-0 backdrop-blur-xl border-t p-6 flex gap-3 ${
                 isDark ? 'bg-gray-900/80 border-gray-800/50' : 'bg-white/80 border-gray-200/50'
               }`}>
-                <button
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  isDark={isDark}
                   type="button"
                   onClick={() => setShowFollowUpModal(false)}
-                  className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
-                    isDark
-                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
+                  className="flex-1"
                 >
                   キャンセル
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  isDark={isDark}
                   type="submit"
-                  className={`flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-200 ${
-                    isDark
-                      ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700'
-                      : 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600'
-                  }`}
+                  className="flex-1"
                 >
                   送信する
-                </button>
+                </Button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* 投票者表示モーダル */}
-      {showVotersModal && selectedDateOption && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-             onClick={() => setShowVotersModal(false)}>
-          <div className={`rounded-2xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto ${
-            isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white'
-          }`}
-               onClick={(e) => e.stopPropagation()}>
+      <Modal isOpen={showVotersModal && !!selectedDateOption} onClose={() => setShowVotersModal(false)} isDark={isDark}>
+        {selectedDateOption && (
+          <div className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                 投票者一覧
               </h3>
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
+                isDark={isDark}
                 onClick={() => setShowVotersModal(false)}
-                className={`p-2 rounded-lg hover:bg-gray-100 ${
-                  isDark ? 'hover:bg-gray-800 text-gray-400' : 'text-gray-600'
-                }`}
+                aria-label="閉じる"
               >
                 ✕
-              </button>
+              </Button>
             </div>
 
             <div className={`mb-4 p-3 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
@@ -2881,29 +2711,26 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
               )}
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* 参加者表示モーダル */}
-      {showParticipantsModal && selectedAnnouncement && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-             onClick={() => setShowParticipantsModal(false)}>
-          <div className={`rounded-2xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto ${
-            isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white'
-          }`}
-               onClick={(e) => e.stopPropagation()}>
+      <Modal isOpen={showParticipantsModal && !!selectedAnnouncement} onClose={() => setShowParticipantsModal(false)} isDark={isDark}>
+        {selectedAnnouncement && (
+          <div className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                 参加者一覧
               </h3>
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
+                isDark={isDark}
                 onClick={() => setShowParticipantsModal(false)}
-                className={`p-2 rounded-lg hover:bg-gray-100 ${
-                  isDark ? 'hover:bg-gray-800 text-gray-400' : 'text-gray-600'
-                }`}
+                aria-label="閉じる"
               >
                 ✕
-              </button>
+              </Button>
             </div>
 
             <div className={`mb-4 p-3 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
@@ -2947,8 +2774,8 @@ export default function AnnouncementsPage({ isDark, onUnreadCountChange }) {
               )}
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   )
 }

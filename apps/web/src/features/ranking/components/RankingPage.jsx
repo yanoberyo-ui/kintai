@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react'
 import { supabase } from '../../../utils/supabase'
+import { GlassCard, Button, PageHeader, Badge } from '../../../components/ui'
 
 export default function RankingPage({ isDark, user }) {
   const [rankings, setRankings] = useState([])
@@ -234,63 +235,48 @@ export default function RankingPage({ isDark, user }) {
 
       {/* 全画面モード時の閉じるボタン */}
       {isFullscreen && (
-        <button
+        <Button
+          variant="danger"
+          size="md"
+          isDark={isDark}
           onClick={toggleFullscreen}
-          className="fixed top-8 right-8 z-50 p-4 rounded-full bg-red-600 hover:bg-red-500 text-white font-bold transition-all duration-300 hover:scale-110 active:scale-95 shadow-2xl"
+          className="fixed top-8 right-8 z-50 !p-4 !rounded-full hover:scale-110 active:scale-95 shadow-2xl"
           title="全画面を終了 (Esc)"
+          aria-label="全画面を終了"
         >
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
           </svg>
-        </button>
+        </Button>
       )}
 
       <div className="max-w-7xl mx-auto px-4 py-12 relative z-10">
         {/* ヘッダー - シンプルで見やすく */}
-        <div className="mb-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <div className="text-5xl">🏆</div>
-              <h1 className={`text-4xl md:text-5xl font-black tracking-tight ${
-                isDark
-                  ? 'text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400'
-                  : 'text-transparent bg-clip-text bg-gradient-to-r from-yellow-600 to-orange-600'
-              }`}>
-                ランキング
-              </h1>
-            </div>
-            <p className={`text-base md:text-lg font-medium ${
-              isDark ? 'text-gray-400' : 'text-gray-600'
-            }`}>
-              ユニット別TODO達成率トップ4
-            </p>
-          </div>
-
-          {/* 全画面ボタン（通常モード時のみ表示） */}
-          {!isFullscreen && (
-            <button
-              onClick={toggleFullscreen}
-              className={`px-6 py-3 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 active:scale-95 flex items-center gap-2 ${
-                isDark
-                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white shadow-lg'
-                  : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white shadow-lg'
-              }`}
-              title="ブラウザ全画面表示 (F11)"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
-              </svg>
-              全画面表示
-            </button>
-          )}
-        </div>
+        <PageHeader
+          isDark={isDark}
+          title="🏆 ランキング"
+          subtitle="ユニット別TODO達成率トップ4"
+          action={
+            !isFullscreen && (
+              <Button
+                variant="blue"
+                size="lg"
+                isDark={isDark}
+                onClick={toggleFullscreen}
+                className="flex items-center gap-2 hover:scale-105 active:scale-95"
+                title="ブラウザ全画面表示 (F11)"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+                </svg>
+                全画面表示
+              </Button>
+            )
+          }
+        />
 
         {/* 期間選択 - シンプルに */}
-        <div className={`mb-10 p-6 rounded-2xl backdrop-blur-xl border ${
-          isDark
-            ? 'bg-gray-900/50 border-gray-700/50'
-            : 'bg-white/50 border-gray-200/50'
-        }`}>
+        <GlassCard isDark={isDark} className="mb-10">
           <div className="flex flex-col sm:flex-row gap-4 items-center">
             <label className={`font-semibold ${
               isDark ? 'text-gray-400' : 'text-gray-600'
@@ -327,7 +313,7 @@ export default function RankingPage({ isDark, user }) {
               </select>
             </div>
           </div>
-        </div>
+        </GlassCard>
 
         {/* ランキング表示 */}
         {loading ? (
@@ -423,11 +409,9 @@ export default function RankingPage({ isDark, user }) {
                     {/* トップ3バッジ */}
                     {isTop3 && (
                       <div className="absolute -top-3 -right-3">
-                        <div className={`px-4 py-2 rounded-xl font-bold text-sm ${
-                          isDark ? 'bg-yellow-500 text-gray-900' : 'bg-yellow-400 text-white'
-                        } shadow-lg`}>
+                        <Badge variant="warning" isDark={isDark} className="!px-4 !py-2 !text-sm font-bold shadow-lg">
                           TOP {index + 1}
-                        </div>
+                        </Badge>
                       </div>
                     )}
 
@@ -539,11 +523,7 @@ export default function RankingPage({ isDark, user }) {
         )}
 
         {/* フッター情報 */}
-        <div className={`mt-12 p-6 rounded-2xl backdrop-blur-xl border ${
-          isDark
-            ? 'bg-blue-900/20 border-blue-800/30'
-            : 'bg-blue-50 border-blue-200/50'
-        }`}>
+        <GlassCard isDark={isDark} className="mt-12">
           <div className="flex items-start gap-4">
             <div className="text-3xl">💡</div>
             <div className="flex-1">
@@ -560,7 +540,7 @@ export default function RankingPage({ isDark, user }) {
               </p>
             </div>
           </div>
-        </div>
+        </GlassCard>
       </div>
 
       {/* カスタムアニメーション */}
