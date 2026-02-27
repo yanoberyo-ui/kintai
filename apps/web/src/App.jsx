@@ -8,7 +8,11 @@ import SettingsPage from './features/admin/components/SettingsPage'
 import PomodoroPage from './features/pomodoro/components/PomodoroPage'
 import ReservationsPage from './features/reservations/components/ReservationsPage'
 import AnnouncementsPage from './features/announcements/components/AnnouncementsPage'
-import AdminPage from './features/admin/components/AdminPage'
+import AdminDashboard from './features/admin-v2/components/AdminDashboard'
+import SalaryViewerPage from './features/salary-viewer/components/SalaryViewerPage'
+import ExpensesPage from './features/expenses/components/ExpensesPage'
+import ChatPanel from './features/chat/components/ChatPanel'
+import ContractViewer from './features/contracts/components/ContractViewer'
 import RankingPage from './features/ranking/components/RankingPage'
 import AttendanceHistoryPage from './features/attendance/components/AttendanceHistoryPage'
 import MinigamePage from './features/minigame/components/MinigamePage'
@@ -22,6 +26,7 @@ import { Modal, Button } from './components/ui'
 import { getStreaks } from './features/pomodoro/utils/streaks'
 import { getHeatmapData } from './utils/heatmap'
 import { getRootsUserByEmail } from './utils/rootsApi'
+import { useActivityReporter } from './features/admin-v2/hooks/useActivityReporter'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -42,6 +47,9 @@ function App() {
   const [requestNotification, setRequestNotification] = useState(null)
   const [announcementsUnreadCount, setAnnouncementsUnreadCount] = useState(0)
   const [mfaRequired, setMfaRequired] = useState(false) // 管理者MFA未完了
+
+  // アクティビティ追跡（ログイン中のセッション管理）
+  useActivityReporter(user?.id)
   const [mfaSetupNeeded, setMfaSetupNeeded] = useState(false) // 管理者MFA未登録
   const [pomodoroTimer, setPomodoroTimer] = useState(null) // { timeLeft, totalTime, state }
 
@@ -1285,7 +1293,15 @@ function App() {
         ) : currentPage === 'announcements' ? (
           <AnnouncementsPage user={user} isDark={isDark} onUnreadCountChange={setAnnouncementsUnreadCount} />
         ) : currentPage === 'admin' ? (
-          <AdminPage isDark={isDark} />
+          <AdminDashboard isDark={isDark} user={user} />
+        ) : currentPage === 'salary-viewer' ? (
+          <SalaryViewerPage isDark={isDark} user={user} />
+        ) : currentPage === 'expenses' ? (
+          <ExpensesPage isDark={isDark} user={user} />
+        ) : currentPage === 'chat' ? (
+          <ChatPanel isDark={isDark} user={user} />
+        ) : currentPage === 'contracts' ? (
+          <ContractViewer isDark={isDark} user={user} />
         ) : currentPage === 'minigame' ? (
           <MinigamePage user={user} isDark={isDark} />
         ) : currentPage === 'pomodoro' ? (
@@ -1446,6 +1462,55 @@ function App() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                 </svg>
                 <span>出勤履歴</span>
+              </button>
+
+              {/* 新規ナビゲーション: 給与明細・経費申請・チャット・契約 */}
+              <button
+                onClick={() => { setCurrentPage('salary-viewer'); setUserMenuOpen(false) }}
+                className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 ${
+                  currentPage === 'salary-viewer'
+                    ? isDark ? 'bg-white/10 text-white' : 'bg-gray-900/10 text-gray-900'
+                    : isDark ? 'text-gray-300 hover:bg-gray-800/50 hover:text-white' : 'text-gray-600 hover:bg-gray-100/50 hover:text-gray-900'
+                }`}
+              >
+                <span className="w-5 h-5 flex items-center justify-center text-base">💰</span>
+                <span>給与明細</span>
+              </button>
+
+              <button
+                onClick={() => { setCurrentPage('expenses'); setUserMenuOpen(false) }}
+                className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 ${
+                  currentPage === 'expenses'
+                    ? isDark ? 'bg-white/10 text-white' : 'bg-gray-900/10 text-gray-900'
+                    : isDark ? 'text-gray-300 hover:bg-gray-800/50 hover:text-white' : 'text-gray-600 hover:bg-gray-100/50 hover:text-gray-900'
+                }`}
+              >
+                <span className="w-5 h-5 flex items-center justify-center text-base">🧾</span>
+                <span>経費申請</span>
+              </button>
+
+              <button
+                onClick={() => { setCurrentPage('chat'); setUserMenuOpen(false) }}
+                className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 ${
+                  currentPage === 'chat'
+                    ? isDark ? 'bg-white/10 text-white' : 'bg-gray-900/10 text-gray-900'
+                    : isDark ? 'text-gray-300 hover:bg-gray-800/50 hover:text-white' : 'text-gray-600 hover:bg-gray-100/50 hover:text-gray-900'
+                }`}
+              >
+                <span className="w-5 h-5 flex items-center justify-center text-base">💬</span>
+                <span>チャット</span>
+              </button>
+
+              <button
+                onClick={() => { setCurrentPage('contracts'); setUserMenuOpen(false) }}
+                className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 ${
+                  currentPage === 'contracts'
+                    ? isDark ? 'bg-white/10 text-white' : 'bg-gray-900/10 text-gray-900'
+                    : isDark ? 'text-gray-300 hover:bg-gray-800/50 hover:text-white' : 'text-gray-600 hover:bg-gray-100/50 hover:text-gray-900'
+                }`}
+              >
+                <span className="w-5 h-5 flex items-center justify-center text-base">📝</span>
+                <span>契約</span>
               </button>
 
               <button
