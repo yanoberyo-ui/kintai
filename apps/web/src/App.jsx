@@ -15,6 +15,8 @@ import AttendanceHistoryPage from './features/attendance/components/AttendanceHi
 import MinigamePage from './features/minigame/components/MinigamePage'
 import LoginScreen from './features/auth/components/LoginScreen'
 import PasswordResetPage from './features/auth/components/PasswordResetPage'
+import MFASetup from './features/admin/components/MFASetup'
+import MFAChallenge from './features/admin/components/MFAChallenge'
 import Avatar from './features/common/components/Avatar'
 import WeeklyTasksSection from './features/todo/components/WeeklyTasksSection'
 import { Modal, Button } from './components/ui'
@@ -40,6 +42,8 @@ function App() {
   const [followUpNotification, setFollowUpNotification] = useState(null)
   const [requestNotification, setRequestNotification] = useState(null)
   const [announcementsUnreadCount, setAnnouncementsUnreadCount] = useState(0)
+  const [mfaRequired, setMfaRequired] = useState(false) // 管理者MFA未完了
+  const [mfaSetupNeeded, setMfaSetupNeeded] = useState(false) // 管理者MFA未登録
   const [pomodoroTimer, setPomodoroTimer] = useState(null) // { timeLeft, totalTime, state }
 
   // Pomodoroタイマーの状態を監視
@@ -290,6 +294,27 @@ function App() {
 
             loadStreaks(session.user.id)
             loadHeatmapData(session.user.id)
+
+            // 管理者のMFAチェック
+            const currentUserData = userData || session.user
+            if (currentUserData?.role === 'admin') {
+              try {
+                const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+                const { data: factorsData } = await supabase.auth.mfa.listFactors()
+                const hasVerifiedTOTP = factorsData?.totp?.some(f => f.status === 'verified')
+
+                if (!hasVerifiedTOTP) {
+                  // TOTPが未登録 → セットアップ画面
+                  if (mounted) setMfaSetupNeeded(true)
+                } else if (aalData?.currentLevel !== 'aal2') {
+                  // TOTPは登録済みだがaal2未達 → チャレンジ画面
+                  if (mounted) setMfaRequired(true)
+                }
+              } catch (mfaErr) {
+                console.warn('MFA check failed:', mfaErr)
+                // MFAチェックが失敗してもログインは許可
+              }
+            }
           } catch (timeoutErr) {
             // タイムアウトした場合は session.user を使用
             setUser(session.user)
@@ -789,6 +814,29 @@ function App() {
 
   if (!user) {
     return <LoginScreen isDark={isDark} />
+  }
+
+  // 管理者の場合、MFAチェック
+  if (user?.role === 'admin') {
+    // MFA未登録の管理者 → セットアップ画面
+    if (mfaSetupNeeded) {
+      return (
+        <MFASetup
+          isDark={isDark}
+          onVerified={() => { setMfaSetupNeeded(false); setMfaRequired(false) }}
+          onSkip={() => { setMfaSetupNeeded(false); setMfaRequired(false) }}
+        />
+      )
+    }
+    // MFA登録済みだが未認証 → チャレンジ画面
+    if (mfaRequired) {
+      return (
+        <MFAChallenge
+          isDark={isDark}
+          onVerified={() => setMfaRequired(false)}
+        />
+      )
+    }
   }
 
   return (
