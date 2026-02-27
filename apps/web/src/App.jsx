@@ -5,7 +5,6 @@ import AttendanceCard from './features/attendance/components/AttendanceCard'
 import CalendarPage from './features/calendar/components/CalendarPage'
 import DailyCalendarPage from './features/calendar/components/DailyCalendarPage'
 import SettingsPage from './features/admin/components/SettingsPage'
-import MembersPage from './features/admin/components/MembersPage'
 import PomodoroPage from './features/pomodoro/components/PomodoroPage'
 import ReservationsPage from './features/reservations/components/ReservationsPage'
 import AnnouncementsPage from './features/announcements/components/AnnouncementsPage'
@@ -1036,26 +1035,6 @@ function App() {
               </div>
             </button>
 
-            <button
-              aria-label="メンバー"
-              onClick={() => setCurrentPage('members')}
-              className={`md:w-full text-left md:px-4 px-3 md:py-3 py-2 rounded-xl font-medium transition-all duration-200 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
-                currentPage === 'members'
-                  ? isDark
-                    ? 'bg-white text-gray-900'
-                    : 'bg-gray-900 text-white'
-                  : isDark
-                  ? 'text-gray-400 hover:text-white hover:bg-gray-800/50'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/50'
-              }`}
-            >
-              <div className="flex md:flex-row flex-col items-center md:gap-3 gap-0.5">
-                <svg className="w-6 h-6 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-                <span className="hidden md:inline text-xs md:text-base">メンバー</span>
-              </div>
-            </button>
 
             <button
               aria-label="タイムライン"
@@ -1303,8 +1282,6 @@ function App() {
           <CalendarPage user={user} isDark={isDark} />
         ) : currentPage === 'dailycalendar' ? (
           <DailyCalendarPage user={user} isDark={isDark} />
-        ) : currentPage === 'members' ? (
-          <MembersPage user={user} isDark={isDark} />
         ) : currentPage === 'announcements' ? (
           <AnnouncementsPage user={user} isDark={isDark} onUnreadCountChange={setAnnouncementsUnreadCount} />
         ) : currentPage === 'admin' ? (
